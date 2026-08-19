@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.capability.infrastructure;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kunling.scheduling.action.capability.application.CapabilityCatalog;
@@ -20,8 +22,10 @@ import com.kunling.scheduling.action.shared.JsonCodec;
 @Repository
 public class JpaCapabilityCatalog implements CapabilityCatalog, CapabilityCatalogStore {
 
-    private static final TypeReference<Map<String, ParameterSchema>> SCHEMA_TYPE = new TypeReference<>() { };
-    private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() { };
+    private static final TypeReference<Map<String, ParameterSchema>> SCHEMA_TYPE =
+            new TypeReference<Map<String, ParameterSchema>>() { };
+    private static final TypeReference<List<String>> STRING_LIST_TYPE =
+            new TypeReference<List<String>>() { };
 
     private final AtomicCapabilityRepository repository;
     private final ObjectMapper objectMapper;
@@ -38,7 +42,7 @@ public class JpaCapabilityCatalog implements CapabilityCatalog, CapabilityCatalo
     public List<CapabilityManifest> listAll() {
         return repository.findAllByActiveTrueOrderByCapabilityKeyAsc().stream()
                 .map(this::toManifest)
-                .toList();
+                .collect(ImmutableCollections.toImmutableList());
     }
 
     @Override

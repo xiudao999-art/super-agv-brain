@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.compilation;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.kunling.scheduling.action.capability.application.CapabilityCatalog;
@@ -41,10 +43,12 @@ class TianjinStandardActionCompilationTest {
                 new ActionProperties(new ActionProperties.Compiler(8, 500, 6, 524_288)),
                 new JsonCodec(objectMapper));
 
-        try (var files = Files.list(Path.of("src/main/resources/standard-actions"))) {
-            var results = files.filter(path -> path.toString().endsWith(".json"))
+        try (java.util.stream.Stream<Path> files = Files.list(
+                java.nio.file.Paths.get("src/main/resources/standard-actions"))) {
+            java.util.List<com.kunling.scheduling.action.compilation.domain.CompileResult> results =
+                    files.filter(path -> path.toString().endsWith(".json"))
                     .map(path -> compile(path, compiler))
-                    .toList();
+                    .collect(ImmutableCollections.toImmutableList());
             assertThat(results).hasSize(7);
             assertThat(results).allSatisfy(result -> assertThat(result.success())
                     .withFailMessage(() -> "标准动作编译失败：" + result.issues())
@@ -70,10 +74,10 @@ class TianjinStandardActionCompilationTest {
         ParameterSchema x = rangedNumber(-1500, 1500, "mm");
         ParameterSchema y = rangedNumber(-1500, 1500, "mm");
         ParameterSchema z = rangedNumber(0, 1500, "mm");
-        ParameterSchema inlinePose = new ParameterSchema(ParameterType.OBJECT, false, null, List.of(), Map.of(
+        ParameterSchema inlinePose = new ParameterSchema(ParameterType.OBJECT, false, null, ImmutableCollections.listOf(), ImmutableCollections.mapOf(
                 "frame", enumText("BASE"), "unit", enumText("MILLIMETER_DEGREE"),
                 "x", x, "y", y, "z", z, "rx", number, "ry", number, "rz", number), null);
-        ParameterSchema pose = new ParameterSchema(ParameterType.OBJECT, true, null, List.of(), Map.of(
+        ParameterSchema pose = new ParameterSchema(ParameterType.OBJECT, true, null, ImmutableCollections.listOf(), ImmutableCollections.mapOf(
                 "poseRef", optionalText, "inlinePose", inlinePose), null);
 
         Map<String, ParameterSchema> motion = new LinkedHashMap<>();
@@ -81,38 +85,38 @@ class TianjinStandardActionCompilationTest {
         motion.put("pose", pose); motion.put("positionToleranceMm", number); motion.put("angleToleranceDeg", number);
         motion.put("settleMs", integer); motion.put("timeoutMs", integer); motion.put("pollMs", integer);
         motion.put("speedProfile", text); motion.put("collisionProfile", text);
-        Map<String, ParameterSchema> vision = Map.of(
+        Map<String, ParameterSchema> vision = ImmutableCollections.mapOf(
                 "station", text, "recipe", text, "cameraId", text, "exposureMs", number,
                 "gain", number, "timeoutMs", integer, "outputFormat", text, "simulatedPass", bool);
 
-        return List.of(
-                manifest("chassis.move", Map.of("target", text, "port", text, "speed", number),
-                        List.of("chassis"), CapabilitySideEffect.PHYSICAL, CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, false),
-                manifest("arm.move.linear", motion, List.of("arm"), CapabilitySideEffect.PHYSICAL,
+        return ImmutableCollections.listOf(
+                manifest("chassis.move", ImmutableCollections.mapOf("target", text, "port", text, "speed", number),
+                        ImmutableCollections.listOf("chassis"), CapabilitySideEffect.PHYSICAL, CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, false),
+                manifest("arm.move.linear", motion, ImmutableCollections.listOf("arm"), CapabilitySideEffect.PHYSICAL,
                         CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, true),
-                manifest("vision.verify.material", vision, List.of("vision"), CapabilitySideEffect.NONE,
+                manifest("vision.verify.material", vision, ImmutableCollections.listOf("vision"), CapabilitySideEffect.NONE,
                         CapabilityRetrySafety.SAFE, true, false),
-                manifest("vision.verify.placement", vision, List.of("vision"), CapabilitySideEffect.NONE,
+                manifest("vision.verify.placement", vision, ImmutableCollections.listOf("vision"), CapabilitySideEffect.NONE,
                         CapabilityRetrySafety.SAFE, true, false),
-                manifest("vision.capture", vision, List.of("vision"), CapabilitySideEffect.NONE,
+                manifest("vision.capture", vision, ImmutableCollections.listOf("vision"), CapabilitySideEffect.NONE,
                         CapabilityRetrySafety.SAFE, false, false),
-                manifest("gripper.open", required(Map.of("targetWidthMm", ParameterType.NUMBER,
+                manifest("gripper.open", required(ImmutableCollections.mapOf("targetWidthMm", ParameterType.NUMBER,
                                 "holdMs", ParameterType.INTEGER, "minDetectedWidth", ParameterType.NUMBER)),
-                        List.of("gripper"), CapabilitySideEffect.PHYSICAL, CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, false),
-                manifest("gripper.close", required(Map.of("targetWidthMm", ParameterType.NUMBER,
+                        ImmutableCollections.listOf("gripper"), CapabilitySideEffect.PHYSICAL, CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, false),
+                manifest("gripper.close", required(ImmutableCollections.mapOf("targetWidthMm", ParameterType.NUMBER,
                                 "holdMs", ParameterType.INTEGER, "minDetectedWidth", ParameterType.NUMBER,
                                 "maxDetectedWidth", ParameterType.NUMBER, "gripForce", ParameterType.NUMBER)),
-                        List.of("gripper"), CapabilitySideEffect.PHYSICAL, CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, false),
-                manifest("gripper.verify.load", required(Map.of("minDetectedWidth", ParameterType.NUMBER,
+                        ImmutableCollections.listOf("gripper"), CapabilitySideEffect.PHYSICAL, CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, false),
+                manifest("gripper.verify.load", required(ImmutableCollections.mapOf("minDetectedWidth", ParameterType.NUMBER,
                                 "maxDetectedWidth", ParameterType.NUMBER, "stableForMs", ParameterType.INTEGER,
                                 "pollMs", ParameterType.INTEGER, "requireForceFeedback", ParameterType.BOOLEAN,
                                 "minForce", ParameterType.NUMBER, "expectedDetected", ParameterType.BOOLEAN)),
-                        List.of("gripper"), CapabilitySideEffect.NONE, CapabilityRetrySafety.SAFE, true, false),
-                manifest("chassis.verify.stopped", Map.of(), List.of("chassis"), CapabilitySideEffect.NONE,
+                        ImmutableCollections.listOf("gripper"), CapabilitySideEffect.NONE, CapabilityRetrySafety.SAFE, true, false),
+                manifest("chassis.verify.stopped", ImmutableCollections.mapOf(), ImmutableCollections.listOf("chassis"), CapabilitySideEffect.NONE,
                         CapabilityRetrySafety.SAFE, true, false),
-                manifest("arm.verify.home", Map.of(), List.of("arm"), CapabilitySideEffect.NONE,
+                manifest("arm.verify.home", ImmutableCollections.mapOf(), ImmutableCollections.listOf("arm"), CapabilitySideEffect.NONE,
                         CapabilityRetrySafety.SAFE, true, false),
-                manifest("system.fail", Map.of("message", text), List.of(), CapabilitySideEffect.NONE,
+                manifest("system.fail", ImmutableCollections.mapOf("message", text), ImmutableCollections.listOf(), CapabilitySideEffect.NONE,
                         CapabilityRetrySafety.SAFE, true, false));
     }
 
@@ -126,21 +130,21 @@ class TianjinStandardActionCompilationTest {
                                         CapabilitySideEffect sideEffect, CapabilityRetrySafety retrySafety,
                                         boolean safetyCritical, boolean motionSafety) {
         return new CapabilityManifest(key, "contract-" + key, input,
-                Map.of("confirmed", schema(ParameterType.BOOLEAN, false),
+                ImmutableCollections.mapOf("confirmed", schema(ParameterType.BOOLEAN, false),
                         "imageUri", schema(ParameterType.STRING, false)),
                 resources, sideEffect, retrySafety, safetyCritical, motionSafety);
     }
 
     private ParameterSchema schema(ParameterType type, boolean required) {
-        return new ParameterSchema(type, required, null, List.of(), Map.of(), null);
+        return new ParameterSchema(type, required, null, ImmutableCollections.listOf(), ImmutableCollections.mapOf(), null);
     }
 
     private ParameterSchema enumText(String value) {
-        return new ParameterSchema(ParameterType.STRING, true, null, List.of(value), Map.of(), null);
+        return new ParameterSchema(ParameterType.STRING, true, null, ImmutableCollections.listOf(value), ImmutableCollections.mapOf(), null);
     }
 
     private ParameterSchema rangedNumber(int minimum, int maximum, String unit) {
-        return new ParameterSchema(ParameterType.NUMBER, true, unit, List.of(), Map.of(), null,
+        return new ParameterSchema(ParameterType.NUMBER, true, unit, ImmutableCollections.listOf(), ImmutableCollections.mapOf(), null,
                 BigDecimal.valueOf(minimum), BigDecimal.valueOf(maximum));
     }
 }

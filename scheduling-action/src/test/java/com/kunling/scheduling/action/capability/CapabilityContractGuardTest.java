@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.capability;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.kunling.scheduling.action.capability.application.CapabilityCatalog;
 import com.kunling.scheduling.action.capability.application.CapabilityContractGuard;
 import com.kunling.scheduling.action.capability.domain.CapabilityManifest;
@@ -19,16 +21,16 @@ class CapabilityContractGuardTest {
     @Test
     void rejectsAPublishedPlanWhenTheCurrentCapabilityContractHasChanged() {
         CapabilityManifest current = new CapabilityManifest("arm.move.linear", "new-contract",
-                Map.of(), Map.of(), List.of("arm"), CapabilitySideEffect.PHYSICAL,
+                ImmutableCollections.mapOf(), ImmutableCollections.mapOf(), ImmutableCollections.listOf("arm"), CapabilitySideEffect.PHYSICAL,
                 CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, true);
         CapabilityCatalog catalog = new CapabilityCatalog() {
-            public List<CapabilityManifest> listAll() { return List.of(current); }
+            public List<CapabilityManifest> listAll() { return ImmutableCollections.listOf(current); }
             public Optional<CapabilityManifest> find(String capabilityKey) { return Optional.of(current); }
         };
 
-        var guard = new CapabilityContractGuard(catalog);
+        CapabilityContractGuard guard = new CapabilityContractGuard(catalog);
 
-        assertThatThrownBy(() -> guard.verify(List.of(
+        assertThatThrownBy(() -> guard.verify(ImmutableCollections.listOf(
                 new CapabilityRequirement("arm.move.linear", "published-contract"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("arm.move.linear")

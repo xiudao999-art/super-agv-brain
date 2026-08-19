@@ -1,5 +1,6 @@
 package com.kunling.scheduling.action.capability.application;
 
+import com.kunling.scheduling.action.config.ActionModuleDefaults;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,11 +19,13 @@ public class CapabilityCatalogRefreshJob {
         this.syncService = syncService;
     }
 
-    @Scheduled(initialDelayString = "1s",
-            fixedDelayString = "${kunling.action.upstream.catalog-refresh-interval:5m}")
+    @Scheduled(
+            initialDelay = ActionModuleDefaults.UPSTREAM_CATALOG_INITIAL_DELAY_MS,
+            fixedDelay = ActionModuleDefaults.UPSTREAM_CATALOG_REFRESH_INTERVAL_MS
+    )
     public void refresh() {
         try {
-            var result = syncService.synchronize();
+            CapabilityCatalogSyncService.CapabilitySyncResult result = syncService.synchronize();
             log.info("上游原子能力目录同步完成：收到 {}，新增 {}，契约更新 {}，未变化 {}",
                     result.received(), result.created(), result.updated(), result.unchanged());
         } catch (RuntimeException exception) {

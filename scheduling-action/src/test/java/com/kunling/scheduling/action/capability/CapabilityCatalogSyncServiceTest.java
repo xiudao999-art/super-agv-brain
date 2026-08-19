@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.capability;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.kunling.scheduling.action.capability.application.CapabilityCatalogStore;
@@ -28,17 +30,18 @@ class CapabilityCatalogSyncServiceTest {
 
     @Test
     void calculatesTheCapabilityContractHashInsideTheDownstream() {
-        Map<String, ParameterSchema> inputSchema = Map.of("target",
-                new ParameterSchema(ParameterType.STRING, true, null, List.of(), Map.of(), null));
+        Map<String, ParameterSchema> inputSchema = ImmutableCollections.mapOf("target",
+                new ParameterSchema(ParameterType.STRING, true, null, ImmutableCollections.listOf(), ImmutableCollections.mapOf(), null));
         AtomicCapabilityDescriptor descriptor = descriptor(inputSchema);
         AtomicReference<List<CapabilityManifest>> stored = new AtomicReference<>();
         CapabilityCatalogStore store = (capabilities, syncedAt) -> {
             stored.set(capabilities);
             return new CapabilityCatalogStore.CatalogStoreResult(capabilities.size(), 0, 0);
         };
-        var service = new CapabilityCatalogSyncService(() -> List.of(descriptor), store, jsonCodec);
+        CapabilityCatalogSyncService service = new CapabilityCatalogSyncService(
+                () -> ImmutableCollections.listOf(descriptor), store, jsonCodec);
 
-        var result = service.synchronize();
+        CapabilityCatalogSyncService.CapabilitySyncResult result = service.synchronize();
 
         assertThat(result.received()).isOne();
         assertThat(stored.get()).singleElement().satisfies(manifest -> {
@@ -54,17 +57,17 @@ class CapabilityCatalogSyncServiceTest {
             stored.set(capabilities);
             return new CapabilityCatalogStore.CatalogStoreResult(0, 0, 0);
         };
-        AtomicCapabilityDescriptor descriptor = descriptor(Map.of());
-        var service = new CapabilityCatalogSyncService(
-                () -> List.of(descriptor, descriptor), store, jsonCodec);
+        AtomicCapabilityDescriptor descriptor = descriptor(ImmutableCollections.mapOf());
+        CapabilityCatalogSyncService service = new CapabilityCatalogSyncService(
+                () -> ImmutableCollections.listOf(descriptor, descriptor), store, jsonCodec);
 
         assertThatThrownBy(service::synchronize).hasMessageContaining("重复 capabilityKey");
         assertThat(stored.get()).isNull();
     }
 
     private AtomicCapabilityDescriptor descriptor(Map<String, ParameterSchema> inputSchema) {
-        return new AtomicCapabilityDescriptor("test.move", inputSchema, Map.of(),
-                List.of("arm"), CapabilitySideEffect.PHYSICAL,
+        return new AtomicCapabilityDescriptor("test.move", inputSchema, ImmutableCollections.mapOf(),
+                ImmutableCollections.listOf("arm"), CapabilitySideEffect.PHYSICAL,
                 CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, false);
     }
 }

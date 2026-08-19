@@ -61,7 +61,7 @@ public class ActionExecutionService {
     @Transactional
     public ActionExecutionView start(StartActionExecutionRequest request) {
         validateRequest(request);
-        String actionInstanceId = request.actionInstanceId() == null || request.actionInstanceId().isBlank()
+        String actionInstanceId = request.actionInstanceId() == null || request.actionInstanceId().trim().isEmpty()
                 ? UUID.randomUUID().toString()
                 : request.actionInstanceId().trim();
         ActionExecutionEntity existing = executionRepository.findById(actionInstanceId).orElse(null);
@@ -86,7 +86,8 @@ public class ActionExecutionService {
         JsonNode input = request.input() == null ? JsonNodeFactory.instance.objectNode() : request.input();
         JsonNode context = request.context() == null ? JsonNodeFactory.instance.objectNode() : request.context();
         inputValidator.validate(input, release.definition().inputSchema());
-        var materializedNodes = planMaterializer.materialize(release.plan(), input, context);
+        java.util.List<com.kunling.scheduling.action.compilation.domain.ExecutionNode> materializedNodes =
+                planMaterializer.materialize(release.plan(), input, context);
         Instant now = clock.instant();
         ActionExecutionEntity execution = new ActionExecutionEntity(actionInstanceId, request.robotId(),
                 request.actionKey(), request.actionVersion(), request.workflowInstanceId(),
@@ -128,9 +129,9 @@ public class ActionExecutionService {
     }
 
     private void validateRequest(StartActionExecutionRequest request) {
-        if (request == null || request.robotId() == null || request.robotId().isBlank()
-                || request.actionKey() == null || request.actionKey().isBlank()
-                || request.actionVersion() == null || request.actionVersion().isBlank()) {
+        if (request == null || request.robotId() == null || request.robotId().trim().isEmpty()
+                || request.actionKey() == null || request.actionKey().trim().isEmpty()
+                || request.actionVersion() == null || request.actionVersion().trim().isEmpty()) {
             throw new IllegalArgumentException("robotId、actionKey 和 actionVersion 不能为空。");
         }
         if (request.actionInstanceId() != null && request.actionInstanceId().length() > 128) {

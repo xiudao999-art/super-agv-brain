@@ -1,5 +1,11 @@
 package com.kunling.scheduling.action.capability.application;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import lombok.Value;
+import lombok.experimental.Accessors;
+import java.beans.ConstructorProperties;
+
 import com.kunling.scheduling.action.shared.JsonCodec;
 import com.kunling.scheduling.action.upstream.application.AtomicCapabilityDescriptor;
 import com.kunling.scheduling.action.upstream.application.UpstreamCapabilitySource;
@@ -29,24 +35,25 @@ public class CapabilityCatalogSyncService {
     }
 
     public CapabilitySyncResult synchronize() {
-        var capabilities = source.fetchCapabilities();
+        java.util.List<com.kunling.scheduling.action.upstream.application.AtomicCapabilityDescriptor> capabilities =
+                source.fetchCapabilities();
         if (capabilities == null || capabilities.isEmpty()) {
             // 空目录通常意味着上游故障或协议错误，不能据此把本地全部能力停用。
             throw new IllegalArgumentException("上游返回空的原子能力目录，已保留上一次有效快照。");
         }
-        var keys = new HashSet<String>();
+        HashSet<String> keys = new HashSet<String>();
         capabilities.forEach(capability -> validate(capability, keys));
         List<CapabilityManifest> manifests = capabilities.stream()
                 .map(this::toManifest)
-                .toList();
+                .collect(ImmutableCollections.toImmutableList());
         Instant syncedAt = clock.instant();
-        var stored = store.upsert(manifests, syncedAt);
+        CapabilityCatalogStore.CatalogStoreResult stored = store.upsert(manifests, syncedAt);
         return new CapabilitySyncResult(capabilities.size(), stored.created(), stored.updated(),
                 stored.unchanged(), syncedAt);
     }
 
     private void validate(AtomicCapabilityDescriptor capability, HashSet<String> keys) {
-        if (capability.capabilityKey() == null || capability.capabilityKey().isBlank()) {
+        if (capability.capabilityKey() == null || capability.capabilityKey().trim().isEmpty()) {
             throw new IllegalArgumentException("上游能力目录包含缺少 capabilityKey 的记录。");
         }
         if (!keys.add(capability.capabilityKey())) {
@@ -61,11 +68,61 @@ public class CapabilityCatalogSyncService {
         return capability.toManifest(contractHash);
     }
 
-    private record ContractSnapshot(Object inputSchema, Object outputSchema, Object resources,
-                                    Object sideEffect, Object retrySafety, boolean safetyCritical,
-                                    boolean requiresMotionSafetyParameters) {
+    @Value
+    @Accessors(fluent = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    private static class ContractSnapshot {
+        Object inputSchema;
+        Object outputSchema;
+        Object resources;
+        Object sideEffect;
+        Object retrySafety;
+        boolean safetyCritical;
+        boolean requiresMotionSafetyParameters;
+        @ConstructorProperties({"inputSchema", "outputSchema", "resources", "sideEffect", "retrySafety", "safetyCritical", "requiresMotionSafetyParameters"})
+        public ContractSnapshot(
+                Object inputSchema,
+                Object outputSchema,
+                Object resources,
+                Object sideEffect,
+                Object retrySafety,
+                boolean safetyCritical,
+                boolean requiresMotionSafetyParameters
+        ) {
+            this.inputSchema = inputSchema;
+            this.outputSchema = outputSchema;
+            this.resources = resources;
+            this.sideEffect = sideEffect;
+            this.retrySafety = retrySafety;
+            this.safetyCritical = safetyCritical;
+            this.requiresMotionSafetyParameters = requiresMotionSafetyParameters;
+        }
+
     }
 
-    public record CapabilitySyncResult(int received, int created, int updated, int unchanged, Instant syncedAt) {
+    @Value
+    @Accessors(fluent = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    public static class CapabilitySyncResult {
+        int received;
+        int created;
+        int updated;
+        int unchanged;
+        Instant syncedAt;
+        @ConstructorProperties({"received", "created", "updated", "unchanged", "syncedAt"})
+        public CapabilitySyncResult(
+                int received,
+                int created,
+                int updated,
+                int unchanged,
+                Instant syncedAt
+        ) {
+            this.received = received;
+            this.created = created;
+            this.updated = updated;
+            this.unchanged = unchanged;
+            this.syncedAt = syncedAt;
+        }
+
     }
 }

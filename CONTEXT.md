@@ -1,6 +1,6 @@
 # 坤灵调度系统
 
-本项目是模块化调度主应用。当前 Action 模块拥有主 Action、组合动作、版本发布与执行实例，并通过只读上游 Adapter 逐个调用原子 Action；后续业务模块通过独立 Maven 模块和显式配置入口接入。
+本项目是模块化调度主应用。当前一期由 Action 模块保存四类固定 Action 模板，并通过 Robot Bridge 向只读上游客户端一次下发完整动作包；动态 Action、组合动作发布与逐原子编排代码暂时保留但不进入一期执行链。后续业务模块通过独立 Maven 模块和显式配置入口接入。
 
 ## Language
 
@@ -9,8 +9,16 @@
 _Avoid_: Action 编排服务、上游原子服务
 
 **Action 模块**:
-调度主应用中的业务模块，封装 Action 管理、编译、执行和上游适配，通过 `ActionModuleConfiguration` 接入主应用。
+调度主应用中的业务模块，封装 Action 管理、固定模板、执行状态机和持久化，通过 `ActionModuleConfiguration` 接入主应用。
 _Avoid_: 独立部署服务、主应用启动模块
+
+**Robot Bridge 包**:
+`scheduling-action` 内部基础设施包，负责机器人主动连接、注册、心跳、完整动作包下发、事件回传与状态查询，不承载 Action 业务状态机。
+_Avoid_: 独立 Maven 模块、Action 编排模块、厂商 SDK 适配层
+
+**固定 Action**:
+一期由下游保存、上游确认结构的 MOVE、ARM.HOME、ARM.PICK、ARM.PLACE 完整动作包模板；调用方只能提交白名单业务参数。
+_Avoid_: 动态 Action、原子 Action、调用方上传的任意 phases
 
 **原子 Action**:
 由上游能力目录发布的最小可调用动作能力，是编排节点的执行边界。

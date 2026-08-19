@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.execution.application;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionState;
@@ -141,7 +143,7 @@ public class ExecutionStateService {
     @Transactional
     public int holdInterruptedExecutions() {
         List<ActionExecutionEntity> interrupted = executionRepository.findByStateIn(
-                Set.of(ActionExecutionState.ACCEPTED, ActionExecutionState.RUNNING));
+                ImmutableCollections.setOf(ActionExecutionState.ACCEPTED, ActionExecutionState.RUNNING));
         Instant now = clock.instant();
         ExecutionError error = new ExecutionError("ORCHESTRATOR_RESTARTED",
                 "服务重启时执行尚未结束，物理结果需要人工确认。", false, false, null,
@@ -174,7 +176,7 @@ public class ExecutionStateService {
                 execution.isPhysicalResultKnown(), execution.getCurrentNodeId(), readRequired(execution.getInputJson()),
                 readRequired(execution.getContextJson()), readNullable(execution.getResultJson()),
                 readError(execution.getErrorJson()), execution.isCancelRequested(),
-                nodes.stream().map(this::toView).toList(), execution.getCreatedAt(), execution.getUpdatedAt(),
+                nodes.stream().map(this::toView).collect(ImmutableCollections.toImmutableList()), execution.getCreatedAt(), execution.getUpdatedAt(),
                 execution.getCompletedAt());
     }
 

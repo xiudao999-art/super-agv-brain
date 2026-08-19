@@ -3,6 +3,7 @@ package com.kunling.scheduling.action.interfaces.rest;
 import com.kunling.scheduling.action.execution.application.ActionExecutionService;
 import com.kunling.scheduling.action.execution.application.StartActionExecutionRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -14,6 +15,7 @@ import java.net.URI;
 
 @RestController
 @RequestMapping("/api/action-executions")
+@ConditionalOnProperty(prefix = "kunling.action.dynamic-execution", name = "enabled", havingValue = "true")
 public class ExecutionController {
 
     private final ActionExecutionService executionService;
@@ -24,7 +26,8 @@ public class ExecutionController {
 
     @PostMapping
     public ResponseEntity<?> start(@RequestBody StartActionExecutionRequest request) {
-        var execution = executionService.start(request);
+        com.kunling.scheduling.action.execution.application.ActionExecutionView execution =
+                executionService.start(request);
         return ResponseEntity.accepted()
                 .location(URI.create("/api/action-executions/" + execution.actionInstanceId()))
                 .body(execution);

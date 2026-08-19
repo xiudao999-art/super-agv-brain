@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.definition.application;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.kunling.scheduling.action.compilation.application.ActionCompiler;
 import com.kunling.scheduling.action.compilation.domain.CompileResult;
 import com.kunling.scheduling.action.compilation.domain.ExecutionPlan;
@@ -101,7 +103,7 @@ public class ActionControlPlaneService {
 
     @Transactional(readOnly = true)
     public List<ActionDraftView> listDrafts() {
-        return draftRepository.findAllByOrderByUpdatedAtDesc().stream().map(this::toView).toList();
+        return draftRepository.findAllByOrderByUpdatedAtDesc().stream().map(this::toView).collect(ImmutableCollections.toImmutableList());
     }
 
     @Transactional
@@ -123,7 +125,7 @@ public class ActionControlPlaneService {
 
     @Transactional
     public ActionReleaseView publishDraft(UUID draftId, String changeSummary) {
-        if (changeSummary == null || changeSummary.isBlank()) {
+        if (changeSummary == null || changeSummary.trim().isEmpty()) {
             throw new IllegalArgumentException("发布说明不能为空。");
         }
         if (changeSummary.length() > 1000) {
@@ -173,10 +175,10 @@ public class ActionControlPlaneService {
 
     @Transactional(readOnly = true)
     public List<ActionReleaseView> listReleases(String actionKey) {
-        List<ActionReleaseEntity> releases = actionKey == null || actionKey.isBlank()
+        List<ActionReleaseEntity> releases = actionKey == null || actionKey.trim().isEmpty()
                 ? releaseRepository.findAllByOrderByPublishedAtDesc()
                 : releaseRepository.findByActionKeyOrderByPublishedAtDesc(actionKey);
-        return releases.stream().map(this::toView).toList();
+        return releases.stream().map(this::toView).collect(ImmutableCollections.toImmutableList());
     }
 
     @Transactional
@@ -210,8 +212,8 @@ public class ActionControlPlaneService {
     }
 
     private void requireIdentity(ActionDefinition definition) {
-        if (definition == null || definition.actionKey() == null || definition.actionKey().isBlank()
-                || definition.version() == null || definition.version().isBlank()) {
+        if (definition == null || definition.actionKey() == null || definition.actionKey().trim().isEmpty()
+                || definition.version() == null || definition.version().trim().isEmpty()) {
             throw new IllegalArgumentException("actionKey 和 version 不能为空。");
         }
     }

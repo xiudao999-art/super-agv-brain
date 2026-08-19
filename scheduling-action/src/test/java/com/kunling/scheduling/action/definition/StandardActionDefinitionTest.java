@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.definition;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -20,12 +22,12 @@ class StandardActionDefinitionTest {
 
     @Test
     void allTianjinStandardActionsFollowTheDefinitionContract() throws Exception {
-        Path directory = Path.of("src/main/resources/standard-actions");
-        try (var files = Files.list(directory)) {
-            var definitions = files
+        Path directory = java.nio.file.Paths.get("src/main/resources/standard-actions");
+        try (java.util.stream.Stream<Path> files = Files.list(directory)) {
+            java.util.List<ActionDefinition> definitions = files
                     .filter(path -> path.getFileName().toString().endsWith(".json"))
                     .map(this::readDefinition)
-                    .toList();
+                    .collect(ImmutableCollections.toImmutableList());
 
             assertThat(definitions).hasSize(7);
             assertThat(definitions)

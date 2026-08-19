@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.execution.application;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -44,7 +46,7 @@ public class ExecutionPlanMaterializer {
             node.bindings().forEach((name, value) -> bindings.put(name, replaceLoopTokens(value, loopValues)));
             materialized.add(node.materialized(bindings));
         }
-        return List.copyOf(materialized);
+        return ImmutableCollections.copyList(materialized);
     }
 
     /** 返回 null 表示当前编译槽位超出了实际数组长度，该节点不参与本次执行。 */
@@ -56,7 +58,7 @@ public class ExecutionPlanMaterializer {
         for (LoopFrame loop : loops) {
             JsonNode expression = replaceLoopTokens(
                     JsonNodeFactory.instance.textNode(loop.itemsExpression()), values);
-            JsonNode items = valueResolver.resolveValue(expression, input, context, Map.of());
+            JsonNode items = valueResolver.resolveValue(expression, input, context, ImmutableCollections.mapOf());
             if (!items.isArray()) {
                 throw new IllegalArgumentException("循环节点 " + loop.stepId() + " 的 items 解析结果不是数组。");
             }
@@ -76,7 +78,7 @@ public class ExecutionPlanMaterializer {
     private List<JsonNode> orderedItems(ArrayNode items, OrderByDefinition orderBy) {
         List<JsonNode> ordered = new ArrayList<>();
         items.forEach(item -> ordered.add(item.deepCopy()));
-        if (orderBy == null || orderBy.property() == null || orderBy.property().isBlank()) {
+        if (orderBy == null || orderBy.property() == null || orderBy.property().trim().isEmpty()) {
             return ordered;
         }
         Comparator<JsonNode> comparator = (left, right) -> compare(
@@ -97,11 +99,11 @@ public class ExecutionPlanMaterializer {
         for (ConditionGuard guard : guards) {
             ConditionExpression condition = guard.condition();
             JsonNode left = valueResolver.resolveValue(
-                    replaceLoopTokens(condition.left(), loopValues), input, context, Map.of());
+                    replaceLoopTokens(condition.left(), loopValues), input, context, ImmutableCollections.mapOf());
             JsonNode right = condition.right() == null
                     ? JsonNodeFactory.instance.nullNode()
                     : valueResolver.resolveValue(
-                            replaceLoopTokens(condition.right(), loopValues), input, context, Map.of());
+                            replaceLoopTokens(condition.right(), loopValues), input, context, ImmutableCollections.mapOf());
             if (evaluate(condition, left, right) != guard.expected()) {
                 return false;
             }
@@ -110,19 +112,32 @@ public class ExecutionPlanMaterializer {
     }
 
     private boolean evaluate(ConditionExpression condition, JsonNode left, JsonNode right) {
-        return switch (condition.operator()) {
-            case EQUAL -> left.equals(right);
-            case NOT_EQUAL -> !left.equals(right);
-            case GREATER_THAN -> compare(left, right) > 0;
-            case GREATER_THAN_OR_EQUAL -> compare(left, right) >= 0;
-            case LESS_THAN -> compare(left, right) < 0;
-            case LESS_THAN_OR_EQUAL -> compare(left, right) <= 0;
-            case IS_TRUE -> left.isBoolean() && left.booleanValue();
-            case IS_FALSE -> left.isBoolean() && !left.booleanValue();
-            case IS_NULL -> left.isNull();
-            case IS_NOT_NULL -> !left.isNull();
-            case CONTAINS -> contains(left, right);
-        };
+        switch (condition.operator()) {
+            case EQUAL:
+                return left.equals(right);
+            case NOT_EQUAL:
+                return !left.equals(right);
+            case GREATER_THAN:
+                return compare(left, right) > 0;
+            case GREATER_THAN_OR_EQUAL:
+                return compare(left, right) >= 0;
+            case LESS_THAN:
+                return compare(left, right) < 0;
+            case LESS_THAN_OR_EQUAL:
+                return compare(left, right) <= 0;
+            case IS_TRUE:
+                return left.isBoolean() && left.booleanValue();
+            case IS_FALSE:
+                return left.isBoolean() && !left.booleanValue();
+            case IS_NULL:
+                return left.isNull();
+            case IS_NOT_NULL:
+                return !left.isNull();
+            case CONTAINS:
+                return contains(left, right);
+            default:
+                throw new IllegalArgumentException("不支持的条件操作符：" + condition.operator());
+        }
     }
 
     private boolean contains(JsonNode container, JsonNode expected) {
@@ -182,7 +197,7 @@ public class ExecutionPlanMaterializer {
             // 较长 token 优先，可避免嵌套循环的前缀出现歧义。
             List<String> tokens = loopValues.keySet().stream()
                     .sorted(Comparator.comparingInt(String::length).reversed())
-                    .toList();
+                    .collect(ImmutableCollections.toImmutableList());
             for (String token : tokens) {
                 if (expression.equals(token)) {
                     return loopValues.get(token).deepCopy();
@@ -195,7 +210,7 @@ public class ExecutionPlanMaterializer {
         }
         if (value.isObject()) {
             ObjectNode object = JsonNodeFactory.instance.objectNode();
-            value.properties().forEach(entry ->
+            value.fields().forEachRemaining(entry ->
                     object.set(entry.getKey(), replaceLoopTokens(entry.getValue(), loopValues)));
             return object;
         }

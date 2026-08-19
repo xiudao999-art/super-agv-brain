@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.compilation;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.kunling.scheduling.action.capability.application.CapabilityCatalog;
@@ -33,16 +35,16 @@ class ActionCompilerTest {
     @BeforeEach
     void setUp() {
         objectMapper = JsonMapper.builder().findAndAddModules().build();
-        capabilities = Map.of("test.move", new CapabilityManifest(
+        capabilities = ImmutableCollections.mapOf("test.move", new CapabilityManifest(
                 "test.move", "contract-hash-1",
-                Map.of("slot", new ParameterSchema(ParameterType.STRING, true, null, List.of(), Map.of(), null)),
-                Map.of(), List.of("arm"), CapabilitySideEffect.PHYSICAL,
+                ImmutableCollections.mapOf("slot", new ParameterSchema(ParameterType.STRING, true, null, ImmutableCollections.listOf(), ImmutableCollections.mapOf(), null)),
+                ImmutableCollections.mapOf(), ImmutableCollections.listOf("arm"), CapabilitySideEffect.PHYSICAL,
                 CapabilityRetrySafety.VERIFY_BEFORE_RETRY, true, false));
         publishedActions = new java.util.HashMap<>();
         CapabilityCatalog catalog = new CapabilityCatalog() {
             @Override
             public List<CapabilityManifest> listAll() {
-                return List.copyOf(capabilities.values());
+                return ImmutableCollections.copyList(capabilities.values());
             }
 
             @Override
@@ -59,52 +61,34 @@ class ActionCompilerTest {
 
     @Test
     void publishedCompositeIsExpandedAndGrouped() throws Exception {
-        ActionDefinition composite = read("""
-                {"actionKey":"COMBO.MOVE","version":"1.0.0","displayName":"复用移动","entryPoint":false,
-                 "inputSchema":{"slot":{"type":"STRING","required":true}},
-                 "steps":[{"kind":"CAPABILITY","stepId":"move","displayName":"移动","capabilityKey":"test.move",
-                           "with":{"slot":"$input.slot"}}]}
-                """);
-        var compositeResult = compiler.compile(composite);
+        ActionDefinition composite = read("{\"actionKey\":\"COMBO.MOVE\",\"version\":\"1.0.0\",\"displayName\":\"复用移动\",\"entryPoint\":false,\n \"inputSchema\":{\"slot\":{\"type\":\"STRING\",\"required\":true}},\n \"steps\":[{\"kind\":\"CAPABILITY\",\"stepId\":\"move\",\"displayName\":\"移动\",\"capabilityKey\":\"test.move\",\n           \"with\":{\"slot\":\"$input.slot\"}}]}\n");
+        com.kunling.scheduling.action.compilation.domain.CompileResult compositeResult = compiler.compile(composite);
         assertThat(compositeResult.success()).isTrue();
         publishedActions.put("COMBO.MOVE@1.0.0",
                 new PublishedAction(composite, compositeResult.plan(), compositeResult.planHash()));
 
-        ActionDefinition main = read("""
-                {"actionKey":"MAIN.RUN","version":"1.0.0","displayName":"主动作","entryPoint":true,
-                 "inputSchema":{"target":{"type":"STRING","required":true}},
-                 "steps":[{"kind":"ACTION_REF","stepId":"useCombo","displayName":"引用组合",
-                           "actionRef":{"actionKey":"COMBO.MOVE","version":"1.0.0"},
-                           "with":{"slot":"$input.target"}}]}
-                """);
+        ActionDefinition main = read("{\"actionKey\":\"MAIN.RUN\",\"version\":\"1.0.0\",\"displayName\":\"主动作\",\"entryPoint\":true,\n \"inputSchema\":{\"target\":{\"type\":\"STRING\",\"required\":true}},\n \"steps\":[{\"kind\":\"ACTION_REF\",\"stepId\":\"useCombo\",\"displayName\":\"引用组合\",\n           \"actionRef\":{\"actionKey\":\"COMBO.MOVE\",\"version\":\"1.0.0\"},\n           \"with\":{\"slot\":\"$input.target\"}}]}\n");
 
-        var result = compiler.compile(main);
+        com.kunling.scheduling.action.compilation.domain.CompileResult result = compiler.compile(main);
 
         assertThat(result.success()).isTrue();
         assertThat(result.plan().nodes()).hasSize(1);
-        assertThat(result.plan().nodes().getFirst().executionNodeId()).isEqualTo("useCombo/move");
-        assertThat(result.plan().nodes().getFirst().capabilityContractHash()).isEqualTo("contract-hash-1");
-        assertThat(result.plan().requiredCapabilities().getFirst().contractHash()).isEqualTo("contract-hash-1");
-        assertThat(result.plan().nodes().getFirst().groups()).hasSize(1);
+        assertThat(result.plan().nodes().get(0).executionNodeId()).isEqualTo("useCombo/move");
+        assertThat(result.plan().nodes().get(0).capabilityContractHash()).isEqualTo("contract-hash-1");
+        assertThat(result.plan().requiredCapabilities().get(0).contractHash()).isEqualTo("contract-hash-1");
+        assertThat(result.plan().nodes().get(0).groups()).hasSize(1);
         assertThat(result.dependencies()).extracting("actionKey").containsExactly("COMBO.MOVE");
     }
 
     @Test
     void mainActionCannotBeReferenced() throws Exception {
-        ActionDefinition entryPoint = read("""
-                {"actionKey":"MAIN.OTHER","version":"1.0.0","displayName":"另一个主动作","entryPoint":true,
-                 "steps":[{"kind":"CAPABILITY","stepId":"move","displayName":"移动","capabilityKey":"test.move","with":{"slot":"A"}}]}
-                """);
-        var targetPlan = compiler.compile(entryPoint);
+        ActionDefinition entryPoint = read("{\"actionKey\":\"MAIN.OTHER\",\"version\":\"1.0.0\",\"displayName\":\"另一个主动作\",\"entryPoint\":true,\n \"steps\":[{\"kind\":\"CAPABILITY\",\"stepId\":\"move\",\"displayName\":\"移动\",\"capabilityKey\":\"test.move\",\"with\":{\"slot\":\"A\"}}]}\n");
+        com.kunling.scheduling.action.compilation.domain.CompileResult targetPlan = compiler.compile(entryPoint);
         publishedActions.put("MAIN.OTHER@1.0.0",
                 new PublishedAction(entryPoint, targetPlan.plan(), targetPlan.planHash()));
-        ActionDefinition invalid = read("""
-                {"actionKey":"MAIN.INVALID","version":"1.0.0","displayName":"非法引用","entryPoint":true,
-                 "steps":[{"kind":"ACTION_REF","stepId":"illegal","displayName":"非法",
-                           "actionRef":{"actionKey":"MAIN.OTHER","version":"1.0.0"}}]}
-                """);
+        ActionDefinition invalid = read("{\"actionKey\":\"MAIN.INVALID\",\"version\":\"1.0.0\",\"displayName\":\"非法引用\",\"entryPoint\":true,\n \"steps\":[{\"kind\":\"ACTION_REF\",\"stepId\":\"illegal\",\"displayName\":\"非法\",\n           \"actionRef\":{\"actionKey\":\"MAIN.OTHER\",\"version\":\"1.0.0\"}}]}\n");
 
-        var result = compiler.compile(invalid);
+        com.kunling.scheduling.action.compilation.domain.CompileResult result = compiler.compile(invalid);
 
         assertThat(result.success()).isFalse();
         assertThat(result.issues()).extracting("code")
@@ -113,23 +97,13 @@ class ActionCompilerTest {
 
     @Test
     void stepOutputExpressionIsRewrittenToTheExpandedCompositeNodeId() throws Exception {
-        ActionDefinition composite = read("""
-                {"actionKey":"COMBO.CHAIN","version":"1.0.0","displayName":"链式组合","entryPoint":false,
-                 "steps":[
-                   {"kind":"CAPABILITY","stepId":"first","displayName":"第一步","capabilityKey":"test.move","with":{"slot":"A"}},
-                   {"kind":"CAPABILITY","stepId":"second","displayName":"第二步","capabilityKey":"test.move","with":{"slot":"$steps.first.output.slot"}}
-                 ]}
-                """);
-        var compositeResult = compiler.compile(composite);
+        ActionDefinition composite = read("{\"actionKey\":\"COMBO.CHAIN\",\"version\":\"1.0.0\",\"displayName\":\"链式组合\",\"entryPoint\":false,\n \"steps\":[\n   {\"kind\":\"CAPABILITY\",\"stepId\":\"first\",\"displayName\":\"第一步\",\"capabilityKey\":\"test.move\",\"with\":{\"slot\":\"A\"}},\n   {\"kind\":\"CAPABILITY\",\"stepId\":\"second\",\"displayName\":\"第二步\",\"capabilityKey\":\"test.move\",\"with\":{\"slot\":\"$steps.first.output.slot\"}}\n ]}\n");
+        com.kunling.scheduling.action.compilation.domain.CompileResult compositeResult = compiler.compile(composite);
         publishedActions.put("COMBO.CHAIN@1.0.0",
                 new PublishedAction(composite, compositeResult.plan(), compositeResult.planHash()));
-        ActionDefinition main = read("""
-                {"actionKey":"MAIN.CHAIN","version":"1.0.0","displayName":"链式主动作","entryPoint":true,
-                 "steps":[{"kind":"ACTION_REF","stepId":"group","displayName":"引用链式组合",
-                           "actionRef":{"actionKey":"COMBO.CHAIN","version":"1.0.0"}}]}
-                """);
+        ActionDefinition main = read("{\"actionKey\":\"MAIN.CHAIN\",\"version\":\"1.0.0\",\"displayName\":\"链式主动作\",\"entryPoint\":true,\n \"steps\":[{\"kind\":\"ACTION_REF\",\"stepId\":\"group\",\"displayName\":\"引用链式组合\",\n           \"actionRef\":{\"actionKey\":\"COMBO.CHAIN\",\"version\":\"1.0.0\"}}]}\n");
 
-        var result = compiler.compile(main);
+        com.kunling.scheduling.action.compilation.domain.CompileResult result = compiler.compile(main);
 
         assertThat(result.success()).isTrue();
         assertThat(result.plan().nodes()).hasSize(2);
@@ -144,23 +118,19 @@ class ActionCompilerTest {
                 snapshot.inputSchema(), snapshot.outputSchema(), snapshot.resources(), snapshot.sideEffect(),
                 snapshot.retrySafety(), snapshot.safetyCritical(), snapshot.requiresMotionSafetyParameters());
         CapabilityCatalog changingCatalog = new CapabilityCatalog() {
-            public List<CapabilityManifest> listAll() { return List.of(snapshot); }
+            public List<CapabilityManifest> listAll() { return ImmutableCollections.listOf(snapshot); }
             public Optional<CapabilityManifest> find(String capabilityKey) { return Optional.of(concurrentlyChanged); }
         };
         ActionCompiler snapshotCompiler = new ActionCompiler(changingCatalog, (key, version) -> Optional.empty(),
                 new ActionProperties(new ActionProperties.Compiler(8, 100, 6, 524_288)),
                 new JsonCodec(objectMapper));
-        ActionDefinition definition = read("""
-                {"actionKey":"MAIN.SNAPSHOT","version":"1.0.0","displayName":"目录快照","entryPoint":true,
-                 "steps":[{"kind":"CAPABILITY","stepId":"move","displayName":"移动",
-                           "capabilityKey":"test.move","with":{"slot":"A"}}]}
-                """);
+        ActionDefinition definition = read("{\"actionKey\":\"MAIN.SNAPSHOT\",\"version\":\"1.0.0\",\"displayName\":\"目录快照\",\"entryPoint\":true,\n \"steps\":[{\"kind\":\"CAPABILITY\",\"stepId\":\"move\",\"displayName\":\"移动\",\n           \"capabilityKey\":\"test.move\",\"with\":{\"slot\":\"A\"}}]}\n");
 
-        var result = snapshotCompiler.compile(definition);
+        com.kunling.scheduling.action.compilation.domain.CompileResult result = snapshotCompiler.compile(definition);
 
         assertThat(result.success()).isTrue();
-        assertThat(result.requiredCapabilities().getFirst().contractHash()).isEqualTo("contract-hash-1");
-        assertThat(result.plan().nodes().getFirst().capabilityContractHash()).isEqualTo("contract-hash-1");
+        assertThat(result.requiredCapabilities().get(0).contractHash()).isEqualTo("contract-hash-1");
+        assertThat(result.plan().nodes().get(0).capabilityContractHash()).isEqualTo("contract-hash-1");
     }
 
     private ActionDefinition read(String json) throws Exception {

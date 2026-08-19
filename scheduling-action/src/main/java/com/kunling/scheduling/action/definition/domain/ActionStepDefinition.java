@@ -12,8 +12,7 @@ import java.util.Map;
         @JsonSubTypes.Type(value = ConditionStepDefinition.class, name = "CONDITION"),
         @JsonSubTypes.Type(value = ForEachStepDefinition.class, name = "FOREACH")
 })
-public sealed interface ActionStepDefinition permits CapabilityStepDefinition,
-        ActionReferenceStepDefinition, ConditionStepDefinition, ForEachStepDefinition {
+public interface ActionStepDefinition {
 
     String stepId();
 

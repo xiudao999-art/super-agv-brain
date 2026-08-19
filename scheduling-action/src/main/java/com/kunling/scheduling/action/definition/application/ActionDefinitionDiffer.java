@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.definition.application;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.kunling.scheduling.action.shared.JsonCodec;
 import org.springframework.stereotype.Component;
@@ -22,7 +24,7 @@ public class ActionDefinitionDiffer {
     public List<ActionChange> compare(Object before, Object after) {
         List<ActionChange> changes = new ArrayList<>();
         walk("$", jsonCodec.readTree(jsonCodec.write(before)), jsonCodec.readTree(jsonCodec.write(after)), changes);
-        return List.copyOf(changes);
+        return ImmutableCollections.copyList(changes);
     }
 
     private void walk(String path, JsonNode before, JsonNode after, List<ActionChange> changes) {

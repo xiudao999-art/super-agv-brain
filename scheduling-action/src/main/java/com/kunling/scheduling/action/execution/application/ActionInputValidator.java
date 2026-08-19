@@ -44,7 +44,7 @@ public class ActionInputValidator {
             throw new IllegalArgumentException(path + " 不在允许值 " + schema.enumValues() + " 中。");
         }
         if (value.isNumber()) {
-            var number = value.decimalValue();
+            java.math.BigDecimal number = value.decimalValue();
             if (schema.minimum() != null && number.compareTo(schema.minimum()) < 0) {
                 throw new IllegalArgumentException(path + " 不能小于 " + schema.minimum() + "。");
             }
@@ -66,13 +66,21 @@ public class ActionInputValidator {
         if (type == null) {
             throw new IllegalArgumentException("参数 Schema 缺少 type。");
         }
-        return switch (type) {
-            case STRING -> value.isTextual();
-            case NUMBER -> value.isNumber();
-            case INTEGER -> value.isIntegralNumber();
-            case BOOLEAN -> value.isBoolean();
-            case OBJECT -> value.isObject();
-            case ARRAY -> value.isArray();
-        };
+        switch (type) {
+            case STRING:
+                return value.isTextual();
+            case NUMBER:
+                return value.isNumber();
+            case INTEGER:
+                return value.isIntegralNumber();
+            case BOOLEAN:
+                return value.isBoolean();
+            case OBJECT:
+                return value.isObject();
+            case ARRAY:
+                return value.isArray();
+            default:
+                throw new IllegalArgumentException("不支持的参数类型：" + type);
+        }
     }
 }

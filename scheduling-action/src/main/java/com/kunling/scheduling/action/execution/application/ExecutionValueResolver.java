@@ -40,7 +40,7 @@ public class ExecutionValueResolver {
         }
         if (value.isObject()) {
             ObjectNode object = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
-            value.properties().forEach(entry -> object.set(entry.getKey(),
+            value.fields().forEachRemaining(entry -> object.set(entry.getKey(),
                     resolveValue(entry.getValue(), input, context, stepOutputs)));
             return object;
         }

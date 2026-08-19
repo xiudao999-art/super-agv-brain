@@ -1,5 +1,10 @@
 package com.kunling.scheduling.action.upstream.infrastructure;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import lombok.Value;
+import lombok.experimental.Accessors;
+import java.beans.ConstructorProperties;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.kunling.scheduling.action.config.UpstreamProperties;
@@ -12,14 +17,15 @@ import com.kunling.scheduling.action.upstream.application.AtomicCapabilityDescri
 import com.kunling.scheduling.action.upstream.application.UpstreamCapabilitySource;
 import com.kunling.scheduling.action.upstream.application.UpstreamUnavailableException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 
-import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -30,33 +36,34 @@ import java.util.concurrent.TimeUnit;
 @ConditionalOnProperty(prefix = "kunling.action.upstream", name = "enabled", havingValue = "true")
 public class HttpUpstreamAdapter implements AtomicActionGateway, UpstreamCapabilitySource {
 
-    private final RestClient client;
+    private final RestTemplate client;
     private final UpstreamProperties properties;
 
-    public HttpUpstreamAdapter(RestClient.Builder builder, UpstreamProperties properties) {
-        if (properties.baseUrl().isBlank()) {
+    public HttpUpstreamAdapter(RestTemplateBuilder builder, UpstreamProperties properties) {
+        if (properties.baseUrl() == null || properties.baseUrl().trim().isEmpty()) {
             throw new IllegalArgumentException("启用上游 HTTP Adapter 时必须配置 UPSTREAM_BASE_URL。");
         }
-        HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(properties.connectTimeout())
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(toTimeoutMillis(properties.connectTimeout()));
+        requestFactory.setReadTimeout(toTimeoutMillis(properties.requestTimeout()));
+        this.client = builder.rootUri(properties.baseUrl())
+                .requestFactory(() -> requestFactory)
                 .build();
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(properties.requestTimeout());
-        this.client = builder.baseUrl(properties.baseUrl()).requestFactory(requestFactory).build();
         this.properties = properties;
     }
 
     @Override
     public List<AtomicCapabilityDescriptor> fetchCapabilities() {
         try {
-            CapabilityCatalogResponse response = client.get()
-                    .uri("/api/v1/atomic-capabilities")
-                    .retrieve()
-                    .body(CapabilityCatalogResponse.class);
+            CapabilityCatalogResponse response = client.getForObject(
+                    "/api/v1/atomic-capabilities", CapabilityCatalogResponse.class
+            );
             if (response == null || response.capabilities() == null) {
                 throw new UpstreamUnavailableException("上游返回了空的原子能力目录响应。");
             }
-            return List.copyOf(response.capabilities());
+            return Collections.unmodifiableList(
+                    new ArrayList<AtomicCapabilityDescriptor>(response.capabilities())
+            );
         } catch (RestClientException exception) {
             throw unavailable("读取上游原子能力目录失败。", exception);
         }
@@ -66,19 +73,19 @@ public class HttpUpstreamAdapter implements AtomicActionGateway, UpstreamCapabil
     public AtomicActionResult execute(AtomicActionRequest request) throws InterruptedException {
         CommandStatus status;
         try {
-            status = client.post()
-                    .uri("/api/v1/robots/{robotId}/atomic-actions", request.robotId())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(new CreateCommandRequest(request.consumeId(), request.workflowInstanceId(),
+            status = client.postForObject(
+                    "/api/v1/robots/{robotId}/atomic-actions",
+                    new CreateCommandRequest(request.consumeId(), request.workflowInstanceId(),
                             request.nodeInstanceId(), request.capabilityKey(),
-                            request.input(), request.timeoutMs()))
-                    .retrieve()
-                    .body(CommandStatus.class);
+                            request.input(), request.timeoutMs()),
+                    CommandStatus.class,
+                    request.robotId()
+            );
         } catch (RestClientException exception) {
             // POST 连接异常无法判断上游是否已经受理，调用方必须进入 HOLD。
             throw unavailable("提交原子 Action 后无法确认上游是否已受理。", exception);
         }
-        if (status == null || status.consumeId() == null || status.consumeId().isBlank()) {
+        if (status == null || status.consumeId() == null || status.consumeId().trim().isEmpty()) {
             throw new UpstreamUnavailableException("上游原子 Action 响应缺少 consumeId。");
         }
         if (!request.consumeId().equals(status.consumeId())) {
@@ -103,10 +110,9 @@ public class HttpUpstreamAdapter implements AtomicActionGateway, UpstreamCapabil
 
     private CommandStatus queryStatus(String consumeId) {
         try {
-            CommandStatus status = client.get()
-                    .uri("/api/v1/atomic-actions/{consumeId}", consumeId)
-                    .retrieve()
-                    .body(CommandStatus.class);
+            CommandStatus status = client.getForObject(
+                    "/api/v1/atomic-actions/{consumeId}", CommandStatus.class, consumeId
+            );
             if (status == null) {
                 throw new UpstreamUnavailableException("上游返回了空的原子 Action 状态。");
             }
@@ -152,27 +158,83 @@ public class HttpUpstreamAdapter implements AtomicActionGateway, UpstreamCapabil
         return new UpstreamUnavailableException(message + " " + cause.getMessage(), cause);
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record CapabilityCatalogResponse(List<AtomicCapabilityDescriptor> capabilities) {
-    }
-
-    private record CreateCommandRequest(
-            String consumeId,
-            String workflowInstanceId,
-            String workflowNodeInstanceId,
-            String capabilityKey,
-            JsonNode input,
-            int timeoutMs) {
+    private int toTimeoutMillis(Duration timeout) {
+        long millis = timeout.toMillis();
+        return (int) Math.min(Math.max(millis, 1L), Integer.MAX_VALUE);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record CommandStatus(
-            String consumeId,
-            CommandState state,
-            Boolean physicalResultKnown,
-            JsonNode output,
-            JsonNode evidence,
-            ExecutionError error) {
+    @Value
+    @Accessors(fluent = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    private static class CapabilityCatalogResponse {
+        List<AtomicCapabilityDescriptor> capabilities;
+        @ConstructorProperties({"capabilities"})
+        public CapabilityCatalogResponse(
+                List<AtomicCapabilityDescriptor> capabilities
+        ) {
+            this.capabilities = capabilities;
+        }
+
+    }
+
+    @Value
+    @Accessors(fluent = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    private static class CreateCommandRequest {
+        String consumeId;
+        String workflowInstanceId;
+        String workflowNodeInstanceId;
+        String capabilityKey;
+        JsonNode input;
+        int timeoutMs;
+        @ConstructorProperties({"consumeId", "workflowInstanceId", "workflowNodeInstanceId", "capabilityKey", "input", "timeoutMs"})
+        public CreateCommandRequest(
+                String consumeId,
+                String workflowInstanceId,
+                String workflowNodeInstanceId,
+                String capabilityKey,
+                JsonNode input,
+                int timeoutMs
+        ) {
+            this.consumeId = consumeId;
+            this.workflowInstanceId = workflowInstanceId;
+            this.workflowNodeInstanceId = workflowNodeInstanceId;
+            this.capabilityKey = capabilityKey;
+            this.input = input;
+            this.timeoutMs = timeoutMs;
+        }
+
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    @Value
+    @Accessors(fluent = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    private static class CommandStatus {
+        String consumeId;
+        CommandState state;
+        Boolean physicalResultKnown;
+        JsonNode output;
+        JsonNode evidence;
+        ExecutionError error;
+        @ConstructorProperties({"consumeId", "state", "physicalResultKnown", "output", "evidence", "error"})
+        public CommandStatus(
+                String consumeId,
+                CommandState state,
+                Boolean physicalResultKnown,
+                JsonNode output,
+                JsonNode evidence,
+                ExecutionError error
+        ) {
+            this.consumeId = consumeId;
+            this.state = state;
+            this.physicalResultKnown = physicalResultKnown;
+            this.output = output;
+            this.evidence = evidence;
+            this.error = error;
+        }
+
     }
 
     private enum CommandState {

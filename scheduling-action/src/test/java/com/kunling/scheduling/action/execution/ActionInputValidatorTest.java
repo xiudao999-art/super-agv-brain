@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.execution;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.kunling.scheduling.action.definition.domain.ParameterSchema;
 import com.kunling.scheduling.action.definition.domain.ParameterType;
@@ -16,11 +18,11 @@ class ActionInputValidatorTest {
 
     private final JsonMapper objectMapper = new JsonMapper();
     private final ActionInputValidator validator = new ActionInputValidator();
-    private final Map<String, ParameterSchema> schema = Map.of(
-            "slots", new ParameterSchema(ParameterType.ARRAY, true, null, List.of(), Map.of(),
-                    new ParameterSchema(ParameterType.OBJECT, true, null, List.of(), Map.of(
+    private final Map<String, ParameterSchema> schema = ImmutableCollections.mapOf(
+            "slots", new ParameterSchema(ParameterType.ARRAY, true, null, ImmutableCollections.listOf(), ImmutableCollections.mapOf(),
+                    new ParameterSchema(ParameterType.OBJECT, true, null, ImmutableCollections.listOf(), ImmutableCollections.mapOf(
                             "slotId", new ParameterSchema(ParameterType.STRING, true, null,
-                                    List.of("A", "B"), Map.of(), null)), null)));
+                                    ImmutableCollections.listOf("A", "B"), ImmutableCollections.mapOf(), null)), null)));
 
     @Test
     void recursivelyValidatesObjectsArraysAndEnums() throws Exception {

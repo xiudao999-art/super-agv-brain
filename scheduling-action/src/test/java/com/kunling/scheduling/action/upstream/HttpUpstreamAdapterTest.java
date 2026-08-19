@@ -10,7 +10,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -30,14 +30,7 @@ class HttpUpstreamAdapterTest {
     @BeforeEach
     void setUp() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/api/v1/atomic-capabilities", exchange -> json(exchange, 200, """
-                {"capabilities":[{
-                  "capabilityKey":"test.move",
-                  "inputSchema":{},"outputSchema":{},"resources":["arm"],
-                  "sideEffect":"PHYSICAL","retrySafety":"NEVER",
-                  "safetyCritical":false,"requiresMotionSafetyParameters":false
-                }]}
-                """));
+        server.createContext("/api/v1/atomic-capabilities", exchange -> json(exchange, 200, "{\"capabilities\":[{\n  \"capabilityKey\":\"test.move\",\n  \"inputSchema\":{},\"outputSchema\":{},\"resources\":[\"arm\"],\n  \"sideEffect\":\"PHYSICAL\",\"retrySafety\":\"NEVER\",\n  \"safetyCritical\":false,\"requiresMotionSafetyParameters\":false\n}]}\n"));
         server.createContext("/api/v1/robots/robot-1/atomic-actions", exchange -> {
             idempotencyHeader.set(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
             submittedBody.set(new JsonMapper().readTree(exchange.getRequestBody()));
@@ -45,15 +38,12 @@ class HttpUpstreamAdapterTest {
                     "{\"consumeId\":\"consume-1\",\"state\":\"ACCEPTED\",\"physicalResultKnown\":false}");
         });
         server.createContext("/api/v1/atomic-actions/consume-1", exchange ->
-                json(exchange, 200, """
-                        {"consumeId":"consume-1","state":"SUCCEEDED","physicalResultKnown":true,
-                         "output":{"confirmed":true},"evidence":{"deviceTaskId":"task-1"}}
-                        """));
+                json(exchange, 200, "{\"consumeId\":\"consume-1\",\"state\":\"SUCCEEDED\",\"physicalResultKnown\":true,\n \"output\":{\"confirmed\":true},\"evidence\":{\"deviceTaskId\":\"task-1\"}}\n"));
         server.start();
-        var properties = new UpstreamProperties(true,
+        UpstreamProperties properties = new UpstreamProperties(true,
                 "http://127.0.0.1:" + server.getAddress().getPort(), Duration.ofSeconds(1),
                 Duration.ofSeconds(1), Duration.ofMillis(1), Duration.ofMinutes(5));
-        adapter = new HttpUpstreamAdapter(RestClient.builder(), properties);
+        adapter = new HttpUpstreamAdapter(new RestTemplateBuilder(), properties);
     }
 
     @AfterEach
@@ -65,7 +55,8 @@ class HttpUpstreamAdapterTest {
     void readsVersionlessCatalogAndUsesConsumeIdForSubmissionAndStatusPolling() throws Exception {
         assertThat(adapter.fetchCapabilities()).extracting("capabilityKey").containsExactly("test.move");
 
-        var result = adapter.execute(new AtomicActionRequest("robot-1", "consume-1",
+        com.kunling.scheduling.action.upstream.application.AtomicActionResult result =
+                adapter.execute(new AtomicActionRequest("robot-1", "consume-1",
                 "workflow-1", "workflow-node-1", "test.move",
                 new JsonMapper().createObjectNode(), 1000));
 
@@ -79,7 +70,10 @@ class HttpUpstreamAdapterTest {
 
     private void json(HttpExchange exchange, int status, String body) throws IOException {
         // 读取请求体后再响应，避免 JDK HttpServer 在复用连接时提前关闭输入流。
-        exchange.getRequestBody().readAllBytes();
+        byte[] buffer = new byte[256];
+        while (exchange.getRequestBody().read(buffer) != -1) {
+            // 测试服务只需完整消费请求体，内容不在此处使用。
+        }
         respondJson(exchange, status, body);
     }
 

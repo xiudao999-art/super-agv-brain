@@ -40,11 +40,11 @@ public class StandardActionSeed implements ApplicationRunner {
         if (draftRepository.count() > 0 || releaseRepository.count() > 0) {
             return;
         }
-        var resources = new PathMatchingResourcePatternResolver()
+        org.springframework.core.io.Resource[] resources = new PathMatchingResourcePatternResolver()
                 .getResources("classpath:/standard-actions/*.json");
         Arrays.sort(resources, Comparator.comparing(resource -> resource.getFilename() == null ? "" : resource.getFilename()));
-        for (var resource : resources) {
-            try (var input = resource.getInputStream()) {
+        for (org.springframework.core.io.Resource resource : resources) {
+            try (java.io.InputStream input = resource.getInputStream()) {
                 ActionDefinition definition = objectMapper.readValue(input, ActionDefinition.class);
                 controlPlane.saveDraft(definition, null, null);
             }

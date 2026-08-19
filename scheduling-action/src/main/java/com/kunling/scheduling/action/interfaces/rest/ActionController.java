@@ -1,5 +1,11 @@
 package com.kunling.scheduling.action.interfaces.rest;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import lombok.Value;
+import lombok.experimental.Accessors;
+import java.beans.ConstructorProperties;
+
 import com.kunling.scheduling.action.compilation.domain.ExecutionNode;
 import com.kunling.scheduling.action.definition.application.ActionControlPlaneService;
 import com.kunling.scheduling.action.definition.application.ActionReleaseView;
@@ -42,7 +48,8 @@ public class ActionController {
 
     @PostMapping("/actions/drafts")
     public ResponseEntity<?> saveDraft(@RequestBody SaveDraftRequest request) {
-        var saved = controlPlane.saveDraft(request.definition(), request.draftId(), request.expectedRevision());
+        com.kunling.scheduling.action.definition.application.ActionDraftView saved =
+                controlPlane.saveDraft(request.definition(), request.draftId(), request.expectedRevision());
         return ResponseEntity.created(URI.create("/api/actions/drafts/" + saved.id())).body(saved);
     }
 
@@ -106,17 +113,17 @@ public class ActionController {
         return controlPlane.listReleases(null).stream()
                 .filter(release -> release.status() == com.kunling.scheduling.action.definition.domain.ActionReleaseStatus.PUBLISHED)
                 .filter(release -> !release.definition().entryPoint())
-                .filter(release -> scope == null || scope.isBlank()
+                .filter(release -> scope == null || scope.trim().isEmpty()
                         || release.definition().scope().equalsIgnoreCase(scope))
                 .map(this::toCatalogItem)
-                .toList();
+                .collect(ImmutableCollections.toImmutableList());
     }
 
     private ActionCatalogItem toCatalogItem(ActionReleaseView release) {
         List<ActionCatalogItem.AtomicStep> atomicSteps = release.plan().nodes().stream()
                 .map(node -> new ActionCatalogItem.AtomicStep(node.stepId(), node.displayName(),
                         node.capabilityKey(), node.capabilityContractHash(), node.groups().size()))
-                .toList();
+                .collect(ImmutableCollections.toImmutableList());
         return new ActionCatalogItem(release.actionKey(), release.actionVersion(),
                 release.definition().displayName(), release.definition().description(), release.definition().scope(),
                 release.definition().entryPoint(), release.definition().inputSchema(), release.definition().labels(),
@@ -125,10 +132,52 @@ public class ActionController {
                 release.definition().defaultPolicy().timeoutMs(), release.status(), release.publishedAt());
     }
 
-    private record ActionSnapshot(String schemaVersion, String actionKey, String actionVersion,
-                                  String planHash, Object plan, java.time.Instant publishedAt) {
+    @Value
+    @Accessors(fluent = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    private static class ActionSnapshot {
+        String schemaVersion;
+        String actionKey;
+        String actionVersion;
+        String planHash;
+        Object plan;
+        java.time.Instant publishedAt;
+        @ConstructorProperties({"schemaVersion", "actionKey", "actionVersion", "planHash", "plan", "publishedAt"})
+        public ActionSnapshot(
+                String schemaVersion,
+                String actionKey,
+                String actionVersion,
+                String planHash,
+                Object plan,
+                java.time.Instant publishedAt
+        ) {
+            this.schemaVersion = schemaVersion;
+            this.actionKey = actionKey;
+            this.actionVersion = actionVersion;
+            this.planHash = planHash;
+            this.plan = plan;
+            this.publishedAt = publishedAt;
+        }
+
     }
 
-    private record Dependencies(String actionKey, String actionVersion, Object dependencies) {
+    @Value
+    @Accessors(fluent = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    private static class Dependencies {
+        String actionKey;
+        String actionVersion;
+        Object dependencies;
+        @ConstructorProperties({"actionKey", "actionVersion", "dependencies"})
+        public Dependencies(
+                String actionKey,
+                String actionVersion,
+                Object dependencies
+        ) {
+            this.actionKey = actionKey;
+            this.actionVersion = actionVersion;
+            this.dependencies = dependencies;
+        }
+
     }
 }

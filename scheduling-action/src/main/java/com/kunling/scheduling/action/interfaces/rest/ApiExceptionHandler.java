@@ -1,9 +1,15 @@
 package com.kunling.scheduling.action.interfaces.rest;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import lombok.Value;
+import lombok.experimental.Accessors;
+import java.beans.ConstructorProperties;
+
 import com.kunling.scheduling.action.definition.application.ActionCompilationException;
 import com.kunling.scheduling.action.definition.application.ActionConflictException;
 import com.kunling.scheduling.action.definition.application.ActionNotFoundException;
 import com.kunling.scheduling.action.upstream.application.UpstreamUnavailableException;
+import com.kunling.scheduling.action.robotbridge.application.RobotUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -30,8 +36,8 @@ public class ApiExceptionHandler {
         return response(HttpStatus.UNPROCESSABLE_ENTITY, exception, exception.getIssues());
     }
 
-    @ExceptionHandler(UpstreamUnavailableException.class)
-    ResponseEntity<ApiError> unavailable(UpstreamUnavailableException exception) {
+    @ExceptionHandler({UpstreamUnavailableException.class, RobotUnavailableException.class})
+    ResponseEntity<ApiError> unavailable(RuntimeException exception) {
         return response(HttpStatus.SERVICE_UNAVAILABLE, exception, null);
     }
 
@@ -45,6 +51,23 @@ public class ApiExceptionHandler {
                 .body(new ApiError(exception.getClass().getSimpleName(), exception.getMessage(), issues));
     }
 
-    record ApiError(String error, String message, Object issues) {
+    @Value
+    @Accessors(fluent = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    static class ApiError {
+        String error;
+        String message;
+        Object issues;
+        @ConstructorProperties({"error", "message", "issues"})
+        public ApiError(
+                String error,
+                String message,
+                Object issues
+        ) {
+            this.error = error;
+            this.message = message;
+            this.issues = issues;
+        }
+
     }
 }

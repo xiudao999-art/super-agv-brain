@@ -20,7 +20,8 @@ public class CapabilityContractGuard {
 
     public void verify(List<CapabilityRequirement> requirements) {
         for (CapabilityRequirement requirement : requirements) {
-            var current = capabilityCatalog.find(requirement.capabilityKey())
+            com.kunling.scheduling.action.capability.domain.CapabilityManifest current =
+                    capabilityCatalog.find(requirement.capabilityKey())
                     .orElseThrow(() -> new IllegalArgumentException("上游目录中已不存在原子能力 "
                             + requirement.capabilityKey()));
             if (requirement.contractHash() == null

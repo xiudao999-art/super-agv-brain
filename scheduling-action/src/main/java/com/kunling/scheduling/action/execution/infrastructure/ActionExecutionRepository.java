@@ -1,7 +1,7 @@
 package com.kunling.scheduling.action.execution.infrastructure;
 
 import com.kunling.scheduling.action.execution.domain.ActionExecutionState;
-import jakarta.persistence.LockModeType;
+import javax.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;

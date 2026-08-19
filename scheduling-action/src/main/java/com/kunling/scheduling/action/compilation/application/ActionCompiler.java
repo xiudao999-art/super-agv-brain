@@ -1,5 +1,7 @@
 package com.kunling.scheduling.action.compilation.application;
 
+import com.kunling.scheduling.action.shared.ImmutableCollections;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -77,7 +79,7 @@ public class ActionCompiler {
                         + capability.capabilityKey());
             }
         }
-        CompilationSession session = new CompilationSession(definition, Map.copyOf(capabilitySnapshot));
+        CompilationSession session = new CompilationSession(definition, ImmutableCollections.copyMap(capabilitySnapshot));
         session.validateRoot();
         if (session.hasErrors()) {
             return session.failure();
@@ -86,7 +88,7 @@ public class ActionCompiler {
         Map<String, JsonNode> rootEnvironment = new HashMap<>();
         definition.inputSchema().keySet().forEach(name ->
                 rootEnvironment.put(name, TextNode.valueOf("$input." + name)));
-        session.expand(definition, rootEnvironment, List.of(), List.of(), List.of(), Map.of(), "$", 0);
+        session.expand(definition, rootEnvironment, ImmutableCollections.listOf(), ImmutableCollections.listOf(), ImmutableCollections.listOf(), ImmutableCollections.mapOf(), "$", 0);
         session.validateFinalPlan();
         return session.finish();
     }
@@ -118,7 +120,7 @@ public class ActionCompiler {
             if (root.version() == null || root.version().length() > 32 || !VERSION.matcher(root.version()).matches()) {
                 issues.add(CompileIssue.error("VERSION_INVALID", "$.version", "version 必须是完整 SemVer，例如 1.0.0。"));
             }
-            if (root.displayName() == null || root.displayName().isBlank()) {
+            if (root.displayName() == null || root.displayName().trim().isEmpty()) {
                 issues.add(CompileIssue.error("DISPLAY_NAME_REQUIRED", "$.displayName", "动作名称不能为空。"));
             }
             if (root.steps().isEmpty()) {
@@ -148,7 +150,7 @@ public class ActionCompiler {
             }
 
             expandSteps(definition, definition.steps(), inputEnvironment, groups, loops, guards,
-                    runtimeVariables, Map.of(), sourcePath, depth);
+                    runtimeVariables, ImmutableCollections.mapOf(), sourcePath, depth);
             actionStack.remove(identity);
         }
 
@@ -182,16 +184,20 @@ public class ActionCompiler {
                     continue;
                 }
 
-                if (step instanceof CapabilityStepDefinition capabilityStep) {
+                if (step instanceof CapabilityStepDefinition) {
+                    CapabilityStepDefinition capabilityStep = (CapabilityStepDefinition) step;
                     appendCapability(definition, capabilityStep, inputEnvironment, groups, loops, guards,
                             runtimeVariables, visibleStepOutputs, stepPath);
-                } else if (step instanceof ActionReferenceStepDefinition referenceStep) {
+                } else if (step instanceof ActionReferenceStepDefinition) {
+                    ActionReferenceStepDefinition referenceStep = (ActionReferenceStepDefinition) step;
                     appendReference(referenceStep, inputEnvironment, groups, loops, guards,
                             runtimeVariables, visibleStepOutputs, stepPath, depth);
-                } else if (step instanceof ConditionStepDefinition conditionStep) {
+                } else if (step instanceof ConditionStepDefinition) {
+                    ConditionStepDefinition conditionStep = (ConditionStepDefinition) step;
                     appendCondition(definition, conditionStep, inputEnvironment, groups, loops, guards,
                             runtimeVariables, visibleStepOutputs, stepPath, depth);
-                } else if (step instanceof ForEachStepDefinition forEachStep) {
+                } else if (step instanceof ForEachStepDefinition) {
+                    ForEachStepDefinition forEachStep = (ForEachStepDefinition) step;
                     appendForEach(definition, forEachStep, inputEnvironment, groups, loops, guards,
                             runtimeVariables, visibleStepOutputs, stepPath, depth);
                 }
@@ -208,14 +214,14 @@ public class ActionCompiler {
                 Map<String, JsonNode> runtimeVariables,
                 Map<String, String> visibleStepOutputs,
                 String sourcePath) {
-            if (step.capabilityKey() == null || step.capabilityKey().isBlank()) {
+            if (step.capabilityKey() == null || step.capabilityKey().trim().isEmpty()) {
                 issues.add(CompileIssue.error("CAPABILITY_IDENTITY_REQUIRED", sourcePath,
                         "原子能力节点必须配置 capabilityKey。"));
                 return;
             }
             Optional<CapabilityManifest> manifestResult = Optional.ofNullable(
                     capabilitySnapshot.get(step.capabilityKey()));
-            if (manifestResult.isEmpty()) {
+            if (!manifestResult.isPresent()) {
                 issues.add(CompileIssue.error("CAPABILITY_NOT_REGISTERED", sourcePath,
                         "上游能力目录未提供原子能力 " + step.capabilityKey() + "。"));
                 return;
@@ -269,7 +275,7 @@ public class ActionCompiler {
             }
             Optional<PublishedAction> targetResult = publishedActionLookup.findPublished(
                     step.actionRef().actionKey(), step.actionRef().version());
-            if (targetResult.isEmpty()) {
+            if (!targetResult.isPresent()) {
                 issues.add(CompileIssue.error("ACTION_REFERENCE_NOT_PUBLISHED", sourcePath + ".actionRef",
                         "引用的组合动作尚未发布：" + step.actionRef().actionKey() + "@" + step.actionRef().version()));
                 return;
@@ -347,7 +353,7 @@ public class ActionCompiler {
                         "items 必须是可解析的运行时数组表达式。"));
                 return;
             }
-            String itemVariable = step.itemVariable() == null || step.itemVariable().isBlank()
+            String itemVariable = step.itemVariable() == null || step.itemVariable().trim().isEmpty()
                     ? "$item" : step.itemVariable();
             if (!itemVariable.startsWith("$")) {
                 issues.add(CompileIssue.error("FOREACH_ITEM_VARIABLE_INVALID", sourcePath + ".itemVariable",
@@ -412,7 +418,7 @@ public class ActionCompiler {
             }
             if (value.isObject()) {
                 ObjectNode copy = ((ObjectNode) value).objectNode();
-                value.properties().forEach(entry -> copy.set(entry.getKey(),
+                value.fields().forEachRemaining(entry -> copy.set(entry.getKey(),
                         substitute(entry.getValue(), inputEnvironment, runtimeVariables, visibleStepOutputs)));
                 return copy;
             }
@@ -513,7 +519,7 @@ public class ActionCompiler {
                         "参数不在允许值 " + schema.enumValues() + " 中。"));
             }
             if (value.isNumber()) {
-                var number = value.decimalValue();
+                java.math.BigDecimal number = value.decimalValue();
                 if (schema.minimum() != null && number.compareTo(schema.minimum()) < 0) {
                     issues.add(CompileIssue.error("PARAMETER_BELOW_MINIMUM", path,
                             "参数不能小于 " + schema.minimum() + (schema.unit() == null ? "" : " " + schema.unit()) + "。"));
@@ -535,7 +541,7 @@ public class ActionCompiler {
 
         private Map<String, JsonNode> objectFields(JsonNode value) {
             Map<String, JsonNode> fields = new LinkedHashMap<>();
-            value.properties().forEach(entry -> fields.put(entry.getKey(), entry.getValue()));
+            value.fields().forEachRemaining(entry -> fields.put(entry.getKey(), entry.getValue()));
             return fields;
         }
 
@@ -544,14 +550,22 @@ public class ActionCompiler {
         }
 
         private boolean matchesType(JsonNode value, ParameterType type) {
-            return switch (type) {
-                case STRING -> value.isTextual();
-                case NUMBER -> value.isNumber();
-                case INTEGER -> value.isIntegralNumber();
-                case BOOLEAN -> value.isBoolean();
-                case OBJECT -> value.isObject();
-                case ARRAY -> value.isArray();
-            };
+            switch (type) {
+                case STRING:
+                    return value.isTextual();
+                case NUMBER:
+                    return value.isNumber();
+                case INTEGER:
+                    return value.isIntegralNumber();
+                case BOOLEAN:
+                    return value.isBoolean();
+                case OBJECT:
+                    return value.isObject();
+                case ARRAY:
+                    return value.isArray();
+                default:
+                    throw new IllegalArgumentException("不支持的参数类型：" + type);
+            }
         }
 
         private String createExecutionNodeId(List<ActionGroupReference> groups, List<LoopFrame> loops,
@@ -606,7 +620,7 @@ public class ActionCompiler {
         }
 
         private CompileResult failure() {
-            return new CompileResult(false, sortedIssues(), null, List.of(), List.of(), null, null, COMPILER_VERSION);
+            return new CompileResult(false, sortedIssues(), null, ImmutableCollections.listOf(), ImmutableCollections.listOf(), null, null, COMPILER_VERSION);
         }
 
         private CompileResult finish() {
@@ -616,11 +630,11 @@ public class ActionCompiler {
             List<CapabilityRequirement> sortedRequirements = requirements.values().stream()
                     .sorted(Comparator.comparing(CapabilityRequirement::capabilityKey)
                             .thenComparing(CapabilityRequirement::contractHash))
-                    .toList();
+                    .collect(ImmutableCollections.toImmutableList());
             List<ActionDependency> sortedDependencies = dependencies.values().stream()
                     .sorted(Comparator.comparing(ActionDependency::actionKey)
                             .thenComparing(ActionDependency::version))
-                    .toList();
+                    .collect(ImmutableCollections.toImmutableList());
             ExecutionPlan unhashed = new ExecutionPlan("1.1", COMPILER_VERSION, root.actionKey(), root.version(), "",
                     nodes, sortedRequirements, sortedDependencies, nodes.size(), nodes.size());
             String canonicalJson = jsonCodec.writeCanonical(unhashed);
@@ -638,7 +652,7 @@ public class ActionCompiler {
         private List<CompileIssue> sortedIssues() {
             return issues.stream()
                     .sorted(Comparator.comparing(CompileIssue::path).thenComparing(CompileIssue::code))
-                    .toList();
+                    .collect(ImmutableCollections.toImmutableList());
         }
     }
 }

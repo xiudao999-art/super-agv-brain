@@ -1,6 +1,31 @@
 package com.kunling.scheduling.action.compilation.domain;
 
-public record CompileIssue(String code, Severity severity, String path, String message) {
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import lombok.Value;
+import lombok.experimental.Accessors;
+import java.beans.ConstructorProperties;
+
+@Value
+@Accessors(fluent = true)
+@JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+public class CompileIssue {
+    String code;
+    Severity severity;
+    String path;
+    String message;
+    @ConstructorProperties({"code", "severity", "path", "message"})
+    public CompileIssue(
+            String code,
+            Severity severity,
+            String path,
+            String message
+    ) {
+        this.code = code;
+        this.severity = severity;
+        this.path = path;
+        this.message = message;
+    }
+
 
     public enum Severity {
         ERROR,
