@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: kunling-scheduling
+  datasource:
+    # 优先使用调度主应用变量，并兼容原 Action 服务部署环境中的旧变量名。
+    url: ${SCHEDULING_DB_URL:${ACTION_DB_URL:jdbc:mysql://127.0.0.1:3306/kunling_action?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}}
+    username: ${SCHEDULING_DB_USERNAME:${ACTION_DB_USERNAME:root}}
+    password: ${SCHEDULING_DB_PASSWORD:${ACTION_DB_PASSWORD:123456}}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: true
+
+kunling:
+  action:
+    upstream:
+      enabled: ${UPSTREAM_ENABLED:false}
+      base-url: ${UPSTREAM_BASE_URL:}
+      connect-timeout: 3s
+      request-timeout: 10s
+      poll-interval: 200ms
+      catalog-refresh-interval: 5m
+    compiler:
+      maximum-action-depth: 8
+      maximum-compiled-nodes: 500
+      maximum-for-each-iterations: 6
+      maximum-plan-bytes: 524288

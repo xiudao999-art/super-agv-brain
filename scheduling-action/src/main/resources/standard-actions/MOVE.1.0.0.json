@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0", "actionKey": "MOVE", "version": "1.0.0", "displayName": "底盘移动", "description": "海康底盘移动至位置目录中的目标点", "entryPoint": true, "scope": "TIANJIN",
+  "inputSchema": {
+    "target": { "type": "STRING", "required": true },
+    "port": { "type": "STRING", "required": true },
+    "speed": { "type": "NUMBER", "required": true, "unit": "m/s" }
+  },
+  "steps": [{
+    "kind": "CAPABILITY", "stepId": "move", "displayName": "移动至目标点", "timeoutMs": 60000,
+    "capabilityKey": "chassis.move",
+    "with": { "target": "$input.target", "port": "$input.port", "speed": "$input.speed" },
+    "onFailure": { "strategy": "VERIFY_BEFORE_RETRY", "maxRetries": 1 }, "gate": true
+  }],
+  "defaultPolicy": { "timeoutMs": 60000, "onFailure": { "strategy": "HOLD", "maxRetries": 0 } }
+}

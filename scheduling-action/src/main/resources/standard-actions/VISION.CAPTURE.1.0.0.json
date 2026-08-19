@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0", "actionKey": "VISION.CAPTURE", "version": "1.0.0", "displayName": "视觉拍照", "description": "采集图像并返回图像与检测证据，不等待外部业务处理", "entryPoint": true, "scope": "TIANJIN",
+  "inputSchema": {
+    "station": { "type": "STRING", "required": true }, "recipe": { "type": "STRING", "required": true }, "cameraId": { "type": "STRING", "required": true },
+    "exposureMs": { "type": "NUMBER", "required": true, "unit": "ms" }, "gain": { "type": "NUMBER", "required": true }, "timeoutMs": { "type": "INTEGER", "required": true, "unit": "ms" },
+    "outputFormat": { "type": "STRING", "required": true }, "simulatedPass": { "type": "BOOLEAN", "required": true }
+  },
+  "outputSchema": { "imageUri": { "type": "STRING" }, "confirmed": { "type": "BOOLEAN" } },
+  "steps": [{ "kind": "CAPABILITY", "stepId": "capture", "displayName": "采集图像", "capabilityKey": "vision.capture",
+    "with": { "station": "$input.station", "recipe": "$input.recipe", "cameraId": "$input.cameraId", "exposureMs": "$input.exposureMs", "gain": "$input.gain", "timeoutMs": "$input.timeoutMs", "outputFormat": "$input.outputFormat", "simulatedPass": "$input.simulatedPass" },
+    "onFailure": { "strategy": "RETRY", "maxRetries": 1 }, "gate": true }],
+  "defaultPolicy": { "timeoutMs": 15000, "onFailure": { "strategy": "HOLD", "maxRetries": 0 } }
+}
