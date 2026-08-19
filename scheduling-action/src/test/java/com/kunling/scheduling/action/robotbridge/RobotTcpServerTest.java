@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,9 +75,17 @@ class RobotTcpServerTest {
             assertThat(command.path("executionMode").textValue()).isEqualTo("PACKAGE");
             assertThat(command.at("/input/MainAction/actionType").textValue()).isEqualTo("MOVE");
 
-            send(writer, String.format("{\"version\":\"1.0\",\"messageType\":\"ACTION_EVENT\",\"messageId\":\"event-1\",\n \"sessionId\":\"%s\",\"robotId\":\"ROBOT-01\",\"actionInstanceId\":\"action-1\",\n \"deviceCommandId\":\"device-1\",\"sequence\":1,\"state\":\"ACCEPTED\",\n \"timestamp\":\"2026-08-19T00:00:03Z\"}\n", ack.path("sessionId").textValue()));
+            send(writer, String.format("{\"version\":\"1.0\",\"messageType\":\"ACTION_EVENT\",\"messageId\":\"event-1\",\n \"sessionId\":\"%s\",\"robotId\":\"ROBOT-01\",\"actionInstanceId\":\"action-1\",\n \"deviceCommandId\":\"device-1\",\"sequence\":1,\"state\":\"ACCEPTED\",\n \"timestamp\":\"2026-08-19T07:46:55.1269881+00:00\"}\n", ack.path("sessionId").textValue()));
 
-            assertThat(receivedEvents.take().state()).isEqualTo(RobotActionEvent.State.ACCEPTED);
+            RobotActionEvent receivedEvent = receivedEvents.poll(3, TimeUnit.SECONDS);
+            assertThat(receivedEvent).isNotNull();
+            assertThat(receivedEvent.state()).isEqualTo(RobotActionEvent.State.ACCEPTED);
+
+            // 解析客户端时间戳后，TCP 会话不能被服务端误判为异常并关闭。
+            send(writer, String.format("{\"version\":\"1.0\",\"messageType\":\"PING\",\"messageId\":\"ping-2\",\n \"sessionId\":\"%s\",\"robotId\":\"ROBOT-01\",\"sequence\":2,\n \"snapshot\":{\"state\":\"IDLE\",\"emergency\":false,\"chassisConnected\":true,\n   \"armConnected\":true,\"timestamp\":\"2026-08-19T07:46:56.1269881+00:00\"},\n \"timestamp\":\"2026-08-19T07:46:56.1269881+00:00\"}\n", ack.path("sessionId").textValue()));
+            com.fasterxml.jackson.databind.JsonNode pongAfterEvent = objectMapper.readTree(reader.readLine());
+            assertThat(pongAfterEvent.path("messageType").textValue()).isEqualTo("PONG");
+            assertThat(pongAfterEvent.path("replyTo").textValue()).isEqualTo("ping-2");
         }
     }
 

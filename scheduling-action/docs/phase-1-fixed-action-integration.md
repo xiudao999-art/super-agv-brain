@@ -19,9 +19,9 @@
 
 - HTTP API：`8081`，直接维护在主应用 `application.yml`；
 - Robot TCP Bridge：`8080`，一期默认值维护在 `ActionModuleDefaults`；
-- MySQL：默认数据库 `kunling_action`，Flyway V5 新增动作包执行与事件审计表。
+- MySQL：动作包执行与事件审计表统一收录在手工 CREATE 基线脚本中。
 
-数据源地址、用户名和密码直接维护在主应用 `application.yml`，不使用项目自定义环境变量占位。应用启动后 Flyway 会迁移该文件指向的数据库，部署前仍应核对目标地址。
+数据源地址、用户名和密码直接维护在主应用 `application.yml`，不使用项目自定义环境变量占位。应用不会自动维护数据库；部署前必须由开发人员核对目标地址，并按 `db/README.md` 手工执行已评审的 SQL。
 
 Robot Bridge 位于 `scheduling-action` 内部，只处理 `REGISTER`、心跳、`COMMAND`、`ACTION_EVENT` 和 `QUERY_ACTION` 等线协议；固定动作应用服务负责模板、幂等指纹、数据库事务与 `UNKNOWN_HOLD` 状态机。
 

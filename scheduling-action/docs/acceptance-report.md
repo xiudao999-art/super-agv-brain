@@ -17,7 +17,7 @@
 
 | 阶段 | 结论 | 验收证据 |
 |---|---|---|
-| 0 契约与骨架 | 通过 | Spring Boot 模块化单体、独立 Action 模块、三接口上游端口、防腐 Adapter、ADR、MySQL/Flyway |
+| 0 契约与骨架 | 通过 | Spring Boot 模块化单体、独立 Action 模块、三接口上游端口、防腐 Adapter、ADR、MySQL 手工脚本 |
 | 1 Compiler | 通过 | 四种节点、组合动作精确版本引用、原子目录快照、契约 Hash 固定、循环检测、参数递归校验、数值上下限、有界循环、条件白名单、计划 Hash、source path |
 | 2 Runtime 与持久化 | 软件侧通过 | 顺序执行、单机器人进程内串行、consumeId、契约失配阻断、执行/节点日志、输入物化、结果证据、UNKNOWN_HOLD、重启恢复 |
 | 3 动作迁移 | 工程侧通过 | 7 个天津动作 JSON 可解析且全部编译；Batch 固定最多 6 槽，公共进入/退出不随槽位重复配置 |
@@ -30,7 +30,7 @@
 - Canvas/前端：26 项测试通过，0 失败。
 - 上游只读工程：`dotnet build KunlingRobotClient.sln`，0 警告、0 错误。
 - Spring Boot 可执行 JAR：`scheduling-app/target/kunling-scheduling.jar` 构建成功。
-- MySQL 8.0.38：4 个 Flyway 迁移成功；7 个天津草稿自动初始化。
+- MySQL 8：提供一份全量 CREATE 脚本并包含 7 个天津标准 Action 草稿；后续由开发人员手工执行 ALTER。
 
 ## MySQL/API 集成验收
 

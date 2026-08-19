@@ -15,6 +15,7 @@ import com.kunling.scheduling.action.fixed.infrastructure.RobotActionExecutionEn
 import com.kunling.scheduling.action.fixed.infrastructure.RobotActionExecutionRepository;
 import com.kunling.scheduling.action.robotbridge.config.RobotBridgeProperties;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -43,6 +44,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         RobotActionEventRepository.class
 })
 @EnableScheduling
+@EnableConfigurationProperties(RobotBridgeProperties.class)
 public class ActionModuleConfiguration {
 
     @Bean
@@ -57,16 +59,4 @@ public class ActionModuleConfiguration {
         );
     }
 
-    @Bean
-    public RobotBridgeProperties robotBridgeProperties() {
-        return new RobotBridgeProperties(
-                ActionModuleDefaults.ROBOT_BRIDGE_ENABLED,
-                null,
-                ActionModuleDefaults.ROBOT_BRIDGE_PORT,
-                0,
-                0,
-                0,
-                null
-        );
-    }
 }

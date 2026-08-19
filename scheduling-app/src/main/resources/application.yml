@@ -1,6 +1,14 @@
 server:
-  # HTTP 与机器人 TCP 必须分端口；机器人 TCP 端口由 Action 模块常量定义为 8080。
+  # HTTP 与机器人 TCP 必须分端口。
   port: 8081
+
+kunling:
+  action:
+    robot-bridge:
+      # 下游在此地址监听，上游机器人客户端主动连接该地址与端口。
+      enabled: true
+      bind-address: 0.0.0.0
+      port: 8080
 
 spring:
   application:
@@ -18,5 +26,13 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: none
-  flyway:
+
+springdoc:
+  api-docs:
     enabled: true
+    path: /v3/api-docs
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn

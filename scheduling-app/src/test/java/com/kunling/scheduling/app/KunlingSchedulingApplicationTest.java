@@ -35,7 +35,7 @@ class KunlingSchedulingApplicationTest {
     }
 
     @Test
-    void yamlContainsOnlyDeploymentConfigurationAndUsesDirectDatasourceCredentials() throws Exception {
+    void yamlContainsDeploymentConfigurationForDatabaseTcpListenerAndApiDocs() throws Exception {
         java.util.List<org.springframework.core.env.PropertySource<?>> propertySources = new YamlPropertySourceLoader().load(
                 "application",
                 new ClassPathResource("application.yml")
@@ -47,7 +47,11 @@ class KunlingSchedulingApplicationTest {
                     .doesNotContain("${");
             assertThat((String) source.getProperty("spring.datasource.username")).isNotBlank();
             assertThat((String) source.getProperty("spring.datasource.password")).isNotBlank();
-            assertThat(source.getProperty("kunling.robot-bridge.enabled")).isNull();
+            assertThat(source.getProperty("kunling.action.robot-bridge.enabled")).isEqualTo(true);
+            assertThat(source.getProperty("kunling.action.robot-bridge.bind-address")).isEqualTo("0.0.0.0");
+            assertThat(source.getProperty("kunling.action.robot-bridge.port")).isEqualTo(8080);
+            assertThat(source.getProperty("springdoc.api-docs.path")).isEqualTo("/v3/api-docs");
+            assertThat(source.getProperty("knife4j.enable")).isEqualTo(true);
             assertThat(source.getProperty("kunling.action.compiler.maximum-action-depth")).isNull();
             assertThat(source.getProperty("kunling.action.upstream.enabled")).isNull();
         });

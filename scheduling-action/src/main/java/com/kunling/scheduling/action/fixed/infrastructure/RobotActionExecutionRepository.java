@@ -17,10 +17,19 @@ public interface RobotActionExecutionRepository extends JpaRepository<RobotActio
     @Query("select execution from RobotActionExecutionEntity execution where execution.actionInstanceId = :id")
     Optional<RobotActionExecutionEntity> findByIdForUpdate(@Param("id") String id);
 
-    List<RobotActionExecutionEntity> findByStateIn(Collection<RobotActionExecutionState> states);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select execution from RobotActionExecutionEntity execution "
+            + "where execution.state in :states order by execution.actionInstanceId")
+    List<RobotActionExecutionEntity> findByStateIn(
+            @Param("states") Collection<RobotActionExecutionState> states);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select execution from RobotActionExecutionEntity execution "
+            + "where execution.robotId = :robotId and execution.state in :states "
+            + "order by execution.actionInstanceId")
     List<RobotActionExecutionEntity> findByRobotIdAndStateIn(
-            String robotId, Collection<RobotActionExecutionState> states);
+            @Param("robotId") String robotId,
+            @Param("states") Collection<RobotActionExecutionState> states);
 
     List<RobotActionExecutionEntity> findByRobotIdAndState(
             String robotId, RobotActionExecutionState state);

@@ -34,6 +34,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -340,9 +343,25 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
                 nullableCopy(message.get("resolvedSteps")),
                 nullableCopy(message.get("physicalResult")),
                 nullableCopy(message.get("error")),
-                Instant.parse(requiredText(message, "timestamp"))
+                parseProtocolTimestamp(requiredText(message, "timestamp"))
         );
         actionEventListeners.forEach(listener -> safeNotifyEvent(listener, event));
+    }
+
+    /**
+     * 解析机器人协议时间戳。
+     *
+     * <p>.NET DateTimeOffset 默认可能输出 7 位小数和 {@code +00:00}，而 Java 8 的
+     * {@link Instant#parse(CharSequence)} 对部分非 3 位分组的小数格式不兼容。
+     * ISO_OFFSET_DATE_TIME 同时兼容 {@code Z}、显式时区及 1～9 位小数。</p>
+     */
+    private Instant parseProtocolTimestamp(String timestamp) {
+        try {
+            return OffsetDateTime.parse(timestamp, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toInstant();
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException("timestamp 必须是带时区的 ISO-8601 时间字符串: " + timestamp,
+                    exception);
+        }
     }
 
     private void validateSession(ClientSession session, JsonNode message) {
