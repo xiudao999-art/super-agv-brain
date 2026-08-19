@@ -26,6 +26,20 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.kunling</groupId>
+            <artifactId>scheduling-agvFlow</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <!-- Flyway 8 将 MySQL 数据库识别实现拆分为独立扩展，必须与 flyway-core 同时引入。 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>

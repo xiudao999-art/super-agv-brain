@@ -20,6 +20,7 @@
 
     <modules>
         <module>scheduling-action</module>
+        <module>scheduling-agvFlow</module>
         <module>scheduling-app</module>
     </modules>
 

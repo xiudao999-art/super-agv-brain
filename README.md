@@ -8,7 +8,8 @@
 kunling-scheduling/
 ├─ pom.xml                         # 聚合父工程与统一依赖基线
 ├─ scheduling-app/                 # 唯一可执行主应用、部署配置和模块装配
-└─ scheduling-action/              # Action 业务模块
+├─ scheduling-action/              # Action 业务模块
+└─ scheduling-agvFlow/             # AGV Flow 业务模块
    ├─ src/main/java/.../action/    # 领域、应用、适配器及模块配置入口
    ├─ .../action/robotbridge/      # TCP 协议、机器人会话、命令与事件路由
    ├─ src/main/resources/db/       # 手工 CREATE 基线与后续 ALTER 脚本
@@ -16,7 +17,7 @@ kunling-scheduling/
    └─ src/test/                    # Action Java 与 Canvas 测试
 ```
 
-主应用只显式装配 `ActionModuleConfiguration`。Robot Bridge 是 `scheduling-action` 内部的基础设施包，仍通过小型传输接口与固定动作应用服务隔离，业务状态机不依赖 Socket 实现。
+主应用显式装配 `ActionModuleConfiguration` 和 `AgvFlowModuleConfiguration`。Robot Bridge 是 `scheduling-action` 内部的基础设施包，仍通过小型传输接口与固定动作应用服务隔离，业务状态机不依赖 Socket 实现。
 
 详细约束见 [模块化单体架构](scheduling-action/docs/adr/0003-modularize-scheduling-application.md)。
 
