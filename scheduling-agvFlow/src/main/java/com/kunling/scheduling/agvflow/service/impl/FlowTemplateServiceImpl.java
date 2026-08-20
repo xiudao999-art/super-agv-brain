@@ -15,19 +15,19 @@ import com.kunling.scheduling.agvflow.service.FlowTemplateService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, FlowTemplate>
         implements FlowTemplateService {
-    private final FlowNodeService nodeService;
-    private final FlowActionService actionService;
+    @Resource
+    private  FlowNodeService nodeService;
+    @Resource
+    private  FlowActionService actionService;
 
-    public FlowTemplateServiceImpl(FlowNodeService nodeService, FlowActionService actionService) {
-        this.nodeService = nodeService;
-        this.actionService = actionService;
-    }
+
 
     @Override
     @Transactional

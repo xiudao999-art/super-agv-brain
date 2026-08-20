@@ -3,6 +3,7 @@ package com.kunling.scheduling.agvflow.controller;
 import com.kunling.scheduling.agvflow.domain.dto.FlowTemplateCreateRequest;
 import com.kunling.scheduling.agvflow.domain.dto.FlowTemplateDetail;
 
+import javax.annotation.Resource;
 import javax.validation.Valid;
 
 import com.kunling.scheduling.agvflow.service.FlowTemplateService;
@@ -14,7 +15,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/flow-templates")
 public class FlowTemplateController {
-    private final FlowTemplateService templateService;
+    @Resource
+    private  FlowTemplateService templateService;
 
     public FlowTemplateController(FlowTemplateService templateService) {
         this.templateService = templateService;
