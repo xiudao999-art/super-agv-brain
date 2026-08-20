@@ -13,7 +13,7 @@
 
     <artifactId>scheduling-action</artifactId>
     <name>Kunling Scheduling - Action Module</name>
-    <description>Action 配置、发布、编译及执行模块</description>
+    <description>Action 当前定义、设备联调、动态组包及整包执行模块</description>
 
     <dependencies>
         <dependency>

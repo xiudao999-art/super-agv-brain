@@ -33,7 +33,7 @@ public class RobotBridgeProperties {
                 ActionModuleDefaults.ROBOT_BRIDGE_LEASE_MS,
                 ActionModuleDefaults.ROBOT_HEARTBEAT_INTERVAL_MS,
                 ActionModuleDefaults.ROBOT_MAXIMUM_MESSAGE_BYTES,
-                ActionModuleDefaults.PHASE_ONE_ACTION_TYPES
+                ActionModuleDefaults.SUPPORTED_DOWNSTREAM_ACTION_TYPES
         );
     }
 
@@ -53,7 +53,7 @@ public class RobotBridgeProperties {
         this.maximumMessageBytes = maximumMessageBytes <= 0
                 ? ActionModuleDefaults.ROBOT_MAXIMUM_MESSAGE_BYTES : maximumMessageBytes;
         List<String> actionTypes = acceptedActionTypes == null
-                ? ActionModuleDefaults.PHASE_ONE_ACTION_TYPES : acceptedActionTypes;
+                ? ActionModuleDefaults.SUPPORTED_DOWNSTREAM_ACTION_TYPES : acceptedActionTypes;
         this.acceptedActionTypes = Collections.unmodifiableList(new ArrayList<String>(actionTypes));
     }
 

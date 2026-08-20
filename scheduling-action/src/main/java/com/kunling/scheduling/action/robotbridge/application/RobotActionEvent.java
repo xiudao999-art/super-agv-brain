@@ -61,6 +61,24 @@ public class RobotActionEvent {
         PHYSICAL_DONE,
         FAILED,
         UNKNOWN,
-        CANCELLED
+        CANCELLED;
+
+        /** 把 cnet8 MainActionState 明确收敛为上游执行证据状态。 */
+        public static State fromWireState(String value) {
+            if (value == null) throw new IllegalArgumentException("机器人动作状态不能为空。");
+            switch (value.trim().toUpperCase(java.util.Locale.ROOT)) {
+                case "ACCEPTED": return ACCEPTED;
+                case "RUNNING": return RUNNING;
+                case "FINISHED":
+                case "PHYSICAL_DONE": return PHYSICAL_DONE;
+                case "ERROR":
+                case "BUSY":
+                case "FAILED": return FAILED;
+                case "HANG":
+                case "UNKNOWN": return UNKNOWN;
+                case "CANCELLED": return CANCELLED;
+                default: throw new IllegalArgumentException("不支持的机器人动作状态：" + value);
+            }
+        }
     }
 }

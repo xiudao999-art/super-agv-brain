@@ -157,9 +157,18 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         message.put("deviceCommandId", command.deviceCommandId());
         putNullable(message, "workflowInstanceId", command.workflowInstanceId());
         putNullable(message, "nodeInstanceId", command.nodeInstanceId());
-        message.put("actionVersion", command.actionVersion());
+        // actionVersion 是 cnet8 既有线协议字段，Java 领域中明确命名为协议兼容号。
+        message.put("actionVersion", command.protocolActionVersion());
         message.put("executionMode", "PACKAGE");
         ObjectNode snapshot = objectMapper.createObjectNode();
+        snapshot.put("actionKey", command.actionKey());
+        snapshot.put("actionRevision", command.actionRevision());
+        putNullable(snapshot, "parameterSetId", command.parameterSetId());
+        if (command.parameterSetRevision() == null) {
+            snapshot.putNull("parameterSetRevision");
+        } else {
+            snapshot.put("parameterSetRevision", command.parameterSetRevision());
+        }
         snapshot.put("packageHash", command.packageHash());
         message.set("configSnapshot", snapshot);
         message.set("input", command.input());
@@ -339,7 +348,7 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
                 requiredText(message, "actionInstanceId"),
                 requiredText(message, "deviceCommandId"),
                 message.path("sequence").asLong(),
-                RobotActionEvent.State.valueOf(requiredText(message, "state")),
+                RobotActionEvent.State.fromWireState(requiredText(message, "state")),
                 nullableCopy(message.get("resolvedSteps")),
                 nullableCopy(message.get("physicalResult")),
                 nullableCopy(message.get("error")),

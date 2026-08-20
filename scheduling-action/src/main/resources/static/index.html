@@ -2,151 +2,79 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>坤灵调度系统 · Action 管理</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%230e5b62'/%3E%3Cpath d='M8 7v18h4v-7l7 7h5l-9-9 8-9h-5l-6 7V7z' fill='white'/%3E%3C/svg%3E">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>坤灵 Action 配置与设备联调</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="noise"></div>
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">KL</span>
-      <div><strong>坤灵调度 · Action 管理</strong><small>TIANJIN / ACTION MODULE</small></div>
-    </div>
-    <div class="release-state"><i></i><span id="globalStatus">连接控制面中</span></div>
-    <div class="top-actions">
-      <button class="button ghost" id="cloneButton">基于版本新建</button>
-      <button class="button danger" id="lifecycleActionButton" disabled>删除草稿</button>
-      <button class="button" id="saveButton">保存草稿</button>
-      <button class="button accent" id="compileButton">编译检查</button>
+    <div><strong>坤灵 Action 工作台</strong><small>动态组包 · 整包下发 · 执行快照</small></div>
+    <div class="actions">
+      <span id="connectionState" class="badge">正在连接</span>
+      <button id="newActionButton" class="secondary">新建 Action</button>
+      <button id="newTaskButton" class="secondary">新建联调任务</button>
+      <button id="saveActionButton">保存当前定义</button>
+      <button id="activateButton" class="primary">启用</button>
     </div>
   </header>
 
-  <main class="workspace">
-    <aside class="library panel">
-      <div class="panel-heading"><span>01</span><div><h2>步骤库</h2><p>能力与全局组合动作</p></div></div>
-      <label class="field-label" for="draftSelect">当前主 Action</label>
-      <select id="draftSelect" class="select"></select>
-      <div class="library-tabs" role="tablist" aria-label="步骤类型">
-        <button id="capabilityTab" class="library-tab active" data-library-tab="capability" role="tab" aria-selected="true" aria-controls="capabilityPanel">原子能力 <em id="capabilityCount">0</em></button>
-        <button id="actionTab" class="library-tab" data-library-tab="action" role="tab" aria-selected="false" aria-controls="actionPanel">全局组合 <em id="actionCount">0</em></button>
-      </div>
-      <div id="capabilityPanel" class="library-panel active" role="tabpanel" aria-labelledby="capabilityTab">
-        <div id="capabilityLibrary" class="library-list"></div>
-      </div>
-      <div id="actionPanel" class="library-panel" role="tabpanel" aria-labelledby="actionTab" hidden>
-        <div class="composite-management-heading">
-          <div><strong>组合动作草稿</strong><small><span id="compositeDraftCount">0</span> 个待发布</small></div>
-          <button id="newCompositeDraftButton" type="button">＋ 新建</button>
-        </div>
-        <div id="compositeDraftList" class="library-list composite-draft-list"></div>
-        <label class="catalog-search"><span class="sr-only">搜索组合动作</span><input id="actionSearch" type="search" placeholder="搜索动作名称或 Action Key" autocomplete="off"></label>
-        <div class="published-catalog-label"><span>已发布组合动作</span><small>可引用 / 查看 / 建新版本</small></div>
-        <div id="actionCatalog" class="library-list action-catalog"></div>
-        <div id="actionCatalogEmpty" class="catalog-empty">当前范围暂无可引用的已发布全局组合动作。</div>
-      </div>
-      <div class="library-section">
-        <h3>结构节点</h3>
-        <div class="control-grid">
-          <button data-kind="CONDITION">条件分支</button>
-          <button data-kind="FOREACH">有界循环</button>
-        </div>
-      </div>
-      <div class="legend"><span><i class="dot physical"></i>物理副作用</span><span><i class="dot query"></i>只读/校验</span></div>
-    </aside>
+  <div id="lockBanner" class="lock-banner" hidden>
+    当前联调任务正在执行，Action、参数集和本次入参暂时冻结；成功或物理结果明确的失败到达后将自动解冻。
+  </div>
 
-    <section class="canvas-shell panel">
-      <div id="secondaryWorkspaceBar" class="release-preview-bar" hidden>
-        <div id="secondaryWorkspaceMark" class="preview-state-mark" aria-hidden="true">VIEW</div>
-        <div class="preview-state-copy">
-          <span id="secondaryWorkspaceTitle">正在只读查看全局组合动作</span>
-          <strong id="secondaryWorkspaceIdentity"></strong>
-          <small id="secondaryWorkspaceDescription">这里展示的是独立发布版本，不会替换或挂载到进入前的 Action。</small>
-        </div>
-        <button id="leaveSecondaryWorkspaceButton" class="preview-leave-button" type="button">
-          <span aria-hidden="true">←</span><span id="secondaryWorkspaceReturnLabel">返回主 Action</span>
-        </button>
+  <main>
+    <section class="panel definition-panel">
+      <div class="section-title"><span>01</span><div><h2>Action 定义</h2><p>只维护当前定义，revision 仅用于防止并发覆盖</p></div></div>
+      <label>选择 Action<select id="actionSelect"></select></label>
+      <div class="grid two">
+        <label>Action Key<input id="actionKey" data-editable></label>
+        <label>下游动作类型<select id="downstreamActionType" data-editable></select></label>
+        <label>显示名称<input id="displayName" data-editable></label>
+        <label>超时（ms）<input id="timeoutMs" type="number" min="1" data-editable></label>
       </div>
-      <div class="action-header">
-        <div>
-          <span class="eyebrow">ACTION DEFINITION</span>
-          <input id="displayName" class="title-input" value="新动作" aria-label="动作名称">
-          <textarea id="description" class="description-input" rows="1" placeholder="说明这个动作在机器人内部完成什么"></textarea>
+      <label>说明<textarea id="description" rows="2" data-editable></textarea></label>
+      <div class="meta"><span id="actionStatus" class="badge">DRAFT</span><span id="actionRevision">revision -</span></div>
+      <details>
+        <summary>高级 Schema（JSON）</summary>
+        <div class="grid two">
+          <label>本次业务入参 Schema<textarea id="inputSchema" class="code" rows="10" data-editable>{}</textarea></label>
+          <label>设备联调参数 Schema<textarea id="parameterSchema" class="code" rows="10" data-editable>{}</textarea></label>
         </div>
-        <div class="identity-grid">
-          <label>Action Key<input id="actionKey" autocomplete="off"></label>
-          <label>Version<input id="actionVersion" autocomplete="off"></label>
-          <label>Scope<input id="scope" value="TIANJIN" autocomplete="off"></label>
-          <label class="switch-label action-type-toggle">
-            <span class="switch-copy"><strong id="actionTypeLabel">全局组合动作</strong><small id="actionTypeDescription">可被其他 Action 按精确版本引用</small></span>
-            <input id="entryPoint" type="checkbox" aria-label="可作为调度入口">
-            <span class="switch" aria-hidden="true"></span>
-          </label>
-        </div>
-      </div>
-      <div class="canvas-toolbar">
-        <div><span id="nodeCount">0 个节点</span><span id="dirtyState">已同步</span><span class="drag-guidance">拖动节点排序 · 组合引用整体移动、内部只读 · Alt + ↑/↓ 精确移动</span></div>
-        <div><button class="icon-button" id="moveUpButton" title="上移" aria-label="上移选中节点">↑</button><button class="icon-button" id="moveDownButton" title="下移" aria-label="下移选中节点">↓</button><button class="icon-button danger" id="deleteButton" title="删除" aria-label="删除选中节点">×</button></div>
-      </div>
-      <div id="canvasViewport" class="canvas-viewport">
-        <p id="canvasInstructions" class="sr-only">上下方向键选择节点；按住 Alt 再按上下方向键调整同一父级内的节点顺序；也可以直接拖动节点。</p>
-        <canvas id="workflowCanvas" class="workflow-canvas" width="800" height="420" tabindex="0" role="application" aria-label="Action 节点编排画布" aria-describedby="canvasInstructions" aria-keyshortcuts="ArrowUp ArrowDown Alt+ArrowUp Alt+ArrowDown Home End">当前浏览器不支持 Canvas，请升级浏览器。</canvas>
-        <div id="canvasLiveRegion" class="sr-only" aria-live="polite"></div>
-        <div id="emptyCanvas" class="empty-canvas">
-          <div class="target-rings"></div><strong>从左侧添加能力或组合动作</strong><p>组合动作会固定到精确发布版本</p>
-        </div>
-      </div>
+      </details>
     </section>
 
-    <aside class="inspector panel">
-      <div class="panel-heading"><span>02</span><div><h2>属性与发布</h2><p>Compiler 为最终真相</p></div></div>
-      <div id="inspectorEmpty" class="inspector-empty">选择画布中的节点以编辑参数。</div>
-      <div id="nodeInspector"></div>
-      <section class="compile-card">
-        <div class="compile-title"><h3>发布检查</h3><span id="compileBadge" class="badge neutral">未编译</span></div>
-        <div id="compileSummary" class="compile-summary">保存草稿后执行编译，查看能力依赖、节点上限和计划 Hash。</div>
-        <div id="issueList" class="issue-list"></div>
-        <label class="field-label" for="changeSummary">变更说明</label>
-        <textarea id="changeSummary" class="textarea" placeholder="必填：本版本修改了什么，为什么修改"></textarea>
-        <button id="publishButton" class="button publish" disabled>发布不可变版本</button>
+    <section class="panel phase-panel">
+      <div class="section-title"><span>02</span><div><h2>执行步骤</h2><p>可拖动思路的显式顺序：允许同一子动作重复 N 次</p></div></div>
+      <div id="phaseList" class="phase-list"></div>
+      <button id="addPhaseButton" class="dashed" data-editable>＋ 添加执行步骤</button>
+    </section>
+
+    <section class="panel commissioning-panel">
+      <div class="section-title"><span>03</span><div><h2>设备联调</h2><p>预览最终解析值，确认后一次性冻结并整包下发</p></div></div>
+      <div class="grid two">
+        <label>机器人 ID<input id="robotId" value="ROBOT-01" data-task-editable></label>
+        <label>联调参数集<select id="parameterSetSelect" data-task-editable></select></label>
+        <label>参数集名称<input id="parameterSetName" data-task-editable></label>
+        <label>工装 / 物料<input id="fixtureMaterial" placeholder="工装键 / 物料键" data-task-editable></label>
+      </div>
+      <label>设备联调参数（JSON）<textarea id="parameterValues" class="code" rows="8" data-task-editable>{}</textarea></label>
+      <button id="saveParameterSetButton" class="secondary" data-task-editable>保存参数集</button>
+      <label>本次业务入参（JSON）<textarea id="executionInput" class="code" rows="7" data-task-editable>{}</textarea></label>
+      <div class="execute-actions">
+        <button id="previewButton" data-task-editable>生成最终预览</button>
+        <button id="executeButton" class="danger" disabled>确认并执行整包</button>
+      </div>
+      <div id="previewMeta" class="preview-meta"></div>
+      <pre id="packagePreview" class="package-preview">尚未生成预览</pre>
+      <section class="execution-card">
+        <h3>执行记录</h3>
+        <div id="executionSummary" class="empty">当前联调任务尚未执行</div>
+        <div id="stepTimeline" class="timeline"></div>
       </section>
-      <section class="diff-card">
-        <h3>版本差异与依赖</h3>
-        <div class="diff-selects"><select id="fromVersion" class="select"></select><span>→</span><select id="toVersion" class="select"></select></div>
-        <button id="diffButton" class="button ghost full">比较版本</button>
-        <div id="diffResult" class="diff-result"></div>
-      </section>
-    </aside>
+    </section>
   </main>
-  <dialog id="versionDialog" class="action-dialog" aria-labelledby="versionDialogTitle">
-    <form id="versionForm">
-      <div class="dialog-kicker">VERSION WORKSPACE</div>
-      <h2 id="versionDialogTitle">基于发布版本创建草稿</h2>
-      <p id="versionSource" class="dialog-description"></p>
-      <input id="versionActionKey" type="hidden">
-      <input id="versionSourceVersion" type="hidden">
-      <label>新版本号<input id="newActionVersion" required pattern="\d+\.\d+\.\d+" autocomplete="off"></label>
-      <small>发布版本保持不可变，新修改会进入独立草稿。</small>
-      <div class="dialog-actions"><button type="button" class="button ghost" data-close-dialog="versionDialog">取消</button><button type="submit" class="button">创建并编辑</button></div>
-    </form>
-  </dialog>
-  <dialog id="lifecycleDialog" class="action-dialog danger-dialog" aria-labelledby="lifecycleDialogTitle">
-    <form id="lifecycleForm">
-      <div class="dialog-kicker">LIFECYCLE CONTROL</div>
-      <h2 id="lifecycleDialogTitle">确认操作</h2>
-      <p id="lifecycleDialogDescription" class="dialog-description"></p>
-      <div id="lifecycleDialogWarning" class="dialog-warning"></div>
-      <div class="dialog-actions"><button type="button" class="button ghost" data-close-dialog="lifecycleDialog">取消</button><button id="confirmLifecycleButton" type="submit" class="button danger">确认</button></div>
-    </form>
-  </dialog>
-  <div id="toast" class="toast" role="status"></div>
-  <script src="action-ordering.js" defer></script>
-  <script src="action-definition.js" defer></script>
-  <script src="action-preview.js" defer></script>
-  <script src="action-reference.js" defer></script>
-  <script src="action-lifecycle.js" defer></script>
-  <script src="action-canvas.js" defer></script>
-  <script src="app.js" defer></script>
+  <div id="toast" role="status"></div>
+  <script src="action-workbench-state.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

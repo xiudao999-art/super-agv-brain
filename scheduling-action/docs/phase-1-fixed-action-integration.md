@@ -1,86 +1,29 @@
-# 一期固定动作包联调说明
+# Action 动态整包联调说明
 
-## 1. 范围
+> 文件名为历史路径，内容已于 2026-08-20 更新为当前动态整包方案，不再代表“固定四类动作包”。
 
-一期只打通下游调用上游既有主 Action 的核心链路：
+## 运行链路
 
-| Action | 下游模板版本 | 上游 Action 版本 | phase 数 |
-|---|---:|---:|---:|
-| `MOVE` | `1.0.0` | `1.0` | 1 |
-| `ARM.HOME` | `1.0.0` | `1.0` | 3 |
-| `ARM.PICK` | `1.0.0` | `1.0` | 8 |
-| `ARM.PLACE` | `1.0.0` | `1.0` | 8 |
+1. 页面维护当前 Action 的有序 `phases`、参数绑定和每步异常策略。
+2. 页面选择设备联调参数集，填写少量本次业务入参。
+3. `POST /api/action-executions/preview` 解析 `$input.*` 和 `$parameters.*`，返回最终 `MainAction`、`resolvedSteps` 和 `packageHash`。
+4. 正式执行必须回传该 `packageHash`；预览后任何 Action 或参数变化都会导致后端拒绝执行。
+5. 后端先持久化定义、参数、入参与命令快照，再通过 TCP 下发整包。
+6. 下游按 `phases` 数组顺序执行；重复子动作使用不同 `phaseId`。
 
-模板位于 `scheduling-action/src/main/resources/fixed-action-packages`。调用方不能提交或替换 `phases`，只能提供各动作允许的业务参数。
+## 配置对象
 
-一期明确不包含：动态 Action 配置执行、任意并行、脚本、动作包下发后的主动取消、权限，以及真实设备验收。
+- `ActionDefinition`：动作类型、有序步骤、Schema、绑定和超时。
+- `ActionParameterSet`：机器人、工装、物料对应的位姿、速度、夹持力、视觉等细参数。
+- `ActionExecution`：一次执行的完整不可变快照、事件和结果证据。
 
-## 2. 端口与模块
+`revision` 是数据库并发控制号，不是 Action 业务版本。TCP 字段 `actionVersion=1.0` 是与 cnet8 的线协议兼容号，也不是 Action 版本。
 
-- HTTP API：`8081`，直接维护在主应用 `application.yml`；
-- Robot TCP Bridge：`8080`，一期默认值维护在 `ActionModuleDefaults`；
-- MySQL：动作包执行与事件审计表统一收录在手工 CREATE 基线脚本中。
+## 异常与安全
 
-数据源地址、用户名和密码直接维护在主应用 `application.yml`，不使用项目自定义环境变量占位。应用不会自动维护数据库；部署前必须由开发人员核对目标地址，并按 `db/README.md` 手工执行已评审的 SQL。
+每个 phase 可配置 `ABORT`、`RETRY_PHASE`、`VERIFY_BEFORE_RETRY`、`SKIP`，以及 `maxRetries`、`retryFromPhaseId`、`onExhaust`。Action 层只编码业务策略；下游原子级短重试由设备适配层内部消化。本轮不实现厂商错误码到业务异常码的映射。
 
-Robot Bridge 位于 `scheduling-action` 内部，只处理 `REGISTER`、心跳、`COMMAND`、`ACTION_EVENT` 和 `QUERY_ACTION` 等线协议；固定动作应用服务负责模板、幂等指纹、数据库事务与 `UNKNOWN_HOLD` 状态机。
-
-## 3. HTTP 调用
-
-`POST /api/v1/robot-action-executions`
-
-```json
-{
-  "actionInstanceId": "workflow-100-node-20-attempt-1",
-  "robotId": "ROBOT-01",
-  "actionType": "MOVE",
-  "workflowInstanceId": "workflow-100",
-  "workflowNodeInstanceId": "node-20",
-  "input": {
-    "pointName": "P01",
-    "speed": 0.5,
-    "pose": {"x": 12480, "y": 8220, "yaw": 90, "map": "LAB"},
-    "arrival": {
-      "positionToleranceMm": 5,
-      "angleToleranceDeg": 5,
-      "timeoutMs": 30000
-    }
-  }
-}
-```
-
-查询本地下游状态：
-
-```text
-GET /api/v1/robot-action-executions/{actionInstanceId}
-```
-
-请求上游核对状态，不会重放动作：
-
-```text
-POST /api/v1/robot-action-executions/{actionInstanceId}/query
-```
-
-查看当前已注册机器人及本会话接受的 Action：
-
-```text
-GET /api/v1/robots
-```
-
-一期不提供取消接口。旧 `/api/action-executions` 动态执行入口默认关闭。
-
-## 4. 幂等与安全
-
-1. 下游先保存最终 `commandInput`、`packageHash`、请求指纹和稳定 `deviceCommandId`，事务成功后才写 TCP；
-2. 相同 `actionInstanceId` 和相同请求重复提交时只返回已有记录，不再发送 `COMMAND`；
-3. 相同 `actionInstanceId` 对应不同动作包或工作流上下文时返回 `409 Conflict`；
-4. TCP 写入结果不确定、机器人执行中断线、上游返回 `UNKNOWN`、失败事件无法证明物理结果时进入 `UNKNOWN_HOLD`；
-5. HOLD 后迟到事件只补充证据，不自动解除 HOLD，不自动推进工作流；
-6. 重连后只对 HOLD 记录发送 `QUERY_ACTION`，绝不自动重放原动作包；
-7. 服务重启时，所有未终结动作进入 `UNKNOWN_HOLD`。
-
-## 5. 模拟验收口径
-
-一期模拟联调至少验证：四类模板完整下发并接收终态、Hash 固定为 64 位 SHA-256、重复实例不二次下发、指纹冲突返回 409、查询消息为 `QUERY_ACTION`、断线和未知结果进入 `UNKNOWN_HOLD`。
-
-模拟通过只说明下游协议、持久化和状态机闭环完成。海康 AGV、华沿机械臂的真实坐标、联锁、到位判定和物理结果确定性仍须现场验收。
+- 开始执行后当前页面只读，即使执行进入终态也不自动解锁。
+- 必须显式新建联调任务，才能基于当前 Action 再次调参。
+- 断线、超时、Socket 写入结果不确定或下游无法确认物理结果时，进入 `UNKNOWN_HOLD`。
+- `UNKNOWN_HOLD` 只允许查询和人工核对，迟到事件只补证据，不自动解锁或重放。

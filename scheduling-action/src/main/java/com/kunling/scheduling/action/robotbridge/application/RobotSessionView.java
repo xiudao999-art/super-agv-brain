@@ -22,7 +22,7 @@ public class RobotSessionView {
     String robotType;
     @Schema(description = "机器人客户端进程实例标识")
     String clientInstanceId;
-    @Schema(description = "当前机器人会话声明支持的固定动作类型")
+    @Schema(description = "当前机器人会话声明支持的下游主动作类型")
     Set<String> acceptedActionTypes;
     @Schema(description = "机器人连接并完成注册的时间")
     Instant connectedAt;

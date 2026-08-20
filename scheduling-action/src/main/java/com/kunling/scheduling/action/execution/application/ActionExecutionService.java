@@ -1,156 +1,191 @@
 package com.kunling.scheduling.action.execution.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.kunling.scheduling.action.capability.application.CapabilityContractGuard;
-import com.kunling.scheduling.action.compilation.domain.ExecutionNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.kunling.scheduling.action.commissioning.application.ActionParameterSetService;
+import com.kunling.scheduling.action.commissioning.application.ActionParameterSetView;
 import com.kunling.scheduling.action.definition.application.ActionConflictException;
-import com.kunling.scheduling.action.definition.application.ActionControlPlaneService;
-import com.kunling.scheduling.action.definition.application.ActionReleaseView;
-import com.kunling.scheduling.action.definition.domain.ActionReleaseStatus;
-import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionEntity;
-import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionNodeEntity;
-import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionNodeRepository;
-import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionRepository;
+import com.kunling.scheduling.action.definition.application.ActionDefinitionService;
+import com.kunling.scheduling.action.definition.application.ActionDefinitionView;
+import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
+import com.kunling.scheduling.action.execution.domain.CreateActionExecutionResult;
+import com.kunling.scheduling.action.execution.domain.NewActionExecution;
+import com.kunling.scheduling.action.robotbridge.application.DispatchReceipt;
+import com.kunling.scheduling.action.robotbridge.application.RobotActionCommand;
+import com.kunling.scheduling.action.robotbridge.application.RobotActionQuery;
+import com.kunling.scheduling.action.robotbridge.application.RobotActionTransport;
+import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
+import com.kunling.scheduling.action.robotbridge.application.RobotUnavailableException;
 import com.kunling.scheduling.action.shared.JsonCodec;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
+/** 预览、冻结、持久化和完整包下发的唯一入口。 */
 @Service
 public class ActionExecutionService {
 
-    private final ActionExecutionRepository executionRepository;
-    private final ActionExecutionNodeRepository nodeRepository;
-    private final ActionControlPlaneService controlPlane;
-    private final CapabilityContractGuard capabilityContractGuard;
-    private final ActionInputValidator inputValidator;
-    private final ExecutionPlanMaterializer planMaterializer;
-    private final ExecutionStateService stateService;
-    private final ExecutionCoordinator coordinator;
+    private final ActionDefinitionService definitionService;
+    private final ActionParameterSetService parameterSetService;
+    private final ActionPackageAssembler packageAssembler;
+    private final ActionExecutionStore executionStore;
+    private final RobotActionTransport transport;
     private final JsonCodec jsonCodec;
     private final Clock clock;
 
-    public ActionExecutionService(
-            ActionExecutionRepository executionRepository,
-            ActionExecutionNodeRepository nodeRepository,
-            ActionControlPlaneService controlPlane,
-            CapabilityContractGuard capabilityContractGuard,
-            ActionInputValidator inputValidator,
-            ExecutionPlanMaterializer planMaterializer,
-            ExecutionStateService stateService,
-            ExecutionCoordinator coordinator,
-            JsonCodec jsonCodec) {
-        this.executionRepository = executionRepository;
-        this.nodeRepository = nodeRepository;
-        this.controlPlane = controlPlane;
-        this.capabilityContractGuard = capabilityContractGuard;
-        this.inputValidator = inputValidator;
-        this.planMaterializer = planMaterializer;
-        this.stateService = stateService;
-        this.coordinator = coordinator;
+    @Autowired
+    public ActionExecutionService(ActionDefinitionService definitionService,
+                                  ActionParameterSetService parameterSetService,
+                                  ActionPackageAssembler packageAssembler,
+                                  ActionExecutionStore executionStore,
+                                  RobotActionTransport transport,
+                                  JsonCodec jsonCodec) {
+        this(definitionService, parameterSetService, packageAssembler, executionStore,
+                transport, jsonCodec, Clock.systemUTC());
+    }
+
+    ActionExecutionService(ActionDefinitionService definitionService,
+                           ActionParameterSetService parameterSetService,
+                           ActionPackageAssembler packageAssembler,
+                           ActionExecutionStore executionStore,
+                           RobotActionTransport transport,
+                           JsonCodec jsonCodec,
+                           Clock clock) {
+        this.definitionService = definitionService;
+        this.parameterSetService = parameterSetService;
+        this.packageAssembler = packageAssembler;
+        this.executionStore = executionStore;
+        this.transport = transport;
         this.jsonCodec = jsonCodec;
-        this.clock = Clock.systemUTC();
+        this.clock = clock;
     }
 
-    @Transactional
+    /** 草稿也可预览最终参数，但只有 ACTIVE Action 可以正式下发。 */
+    public ActionPackagePreview preview(StartActionExecutionRequest request) {
+        validateCommonRequest(request);
+        ActionDefinitionView action = definitionService.get(request.actionKey());
+        ActionParameterSetView parameterSet = findParameterSet(request);
+        return packageAssembler.assemble(action, parameterSet, request.input(), request.robotId());
+    }
+
     public ActionExecutionView start(StartActionExecutionRequest request) {
-        validateRequest(request);
-        String actionInstanceId = request.actionInstanceId() == null || request.actionInstanceId().trim().isEmpty()
-                ? UUID.randomUUID().toString()
-                : request.actionInstanceId().trim();
-        ActionExecutionEntity existing = executionRepository.findById(actionInstanceId).orElse(null);
-        if (existing != null) {
-            if (!existing.getRobotId().equals(request.robotId())
-                    || !existing.getActionKey().equals(request.actionKey())
-                    || !existing.getActionVersion().equals(request.actionVersion())) {
-                throw new ActionConflictException("actionInstanceId 已被其他动作占用。");
-            }
-            // actionInstanceId 是调度侧幂等键；重复请求只返回历史实例，不重复驱动机器人。
-            return stateService.get(actionInstanceId);
-        }
-
-        ActionReleaseView release = controlPlane.getRelease(request.actionKey(), request.actionVersion());
-        if (release.status() != ActionReleaseStatus.PUBLISHED) {
-            throw new IllegalArgumentException("已下线版本不能发起新的 Action 执行。");
-        }
-        if (!release.definition().entryPoint()) {
-            throw new IllegalArgumentException("组合动作不能作为调度入口直接执行。");
-        }
-        capabilityContractGuard.verify(release.requiredCapabilities());
-        JsonNode input = request.input() == null ? JsonNodeFactory.instance.objectNode() : request.input();
-        JsonNode context = request.context() == null ? JsonNodeFactory.instance.objectNode() : request.context();
-        inputValidator.validate(input, release.definition().inputSchema());
-        java.util.List<com.kunling.scheduling.action.compilation.domain.ExecutionNode> materializedNodes =
-                planMaterializer.materialize(release.plan(), input, context);
-        Instant now = clock.instant();
-        ActionExecutionEntity execution = new ActionExecutionEntity(actionInstanceId, request.robotId(),
-                request.actionKey(), request.actionVersion(), request.workflowInstanceId(),
-                request.workflowNodeInstanceId(), release.planHash(), jsonCodec.write(input), jsonCodec.write(context), now);
-        executionRepository.save(execution);
-        for (int ordinal = 0; ordinal < materializedNodes.size(); ordinal++) {
-            ExecutionNode node = materializedNodes.get(ordinal);
-            nodeRepository.save(new ActionExecutionNodeEntity(UUID.randomUUID().toString(), actionInstanceId,
-                    ordinal, node.executionNodeId(), node.sourcePath(), node.capabilityKey(),
-                    node.capabilityContractHash(), createConsumeId(actionInstanceId, ordinal)));
-        }
-
-        // 必须等数据库事务提交后再启动异步编排，避免执行线程先于实例数据可见。
-        scheduleAfterCommit(actionInstanceId);
-        return stateService.get(actionInstanceId);
-    }
-
-    @Transactional(readOnly = true)
-    public ActionExecutionView get(String actionInstanceId) {
-        return stateService.get(actionInstanceId);
-    }
-
-    @Transactional
-    public ActionExecutionView cancel(String actionInstanceId) {
-        return stateService.requestCancel(actionInstanceId);
-    }
-
-    private void scheduleAfterCommit(String actionInstanceId) {
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    coordinator.submit(actionInstanceId);
-                }
-            });
-        } else {
-            coordinator.submit(actionInstanceId);
-        }
-    }
-
-    private void validateRequest(StartActionExecutionRequest request) {
-        if (request == null || request.robotId() == null || request.robotId().trim().isEmpty()
-                || request.actionKey() == null || request.actionKey().trim().isEmpty()
-                || request.actionVersion() == null || request.actionVersion().trim().isEmpty()) {
-            throw new IllegalArgumentException("robotId、actionKey 和 actionVersion 不能为空。");
-        }
-        if (request.actionInstanceId() != null && request.actionInstanceId().length() > 128) {
+        validateCommonRequest(request);
+        requireText(request.expectedPackageHash(), "expectedPackageHash");
+        String actionInstanceId = request.actionInstanceId() == null
+                ? UUID.randomUUID().toString() : request.actionInstanceId();
+        if (actionInstanceId.length() > 128) {
             throw new IllegalArgumentException("actionInstanceId 长度不能超过 128。");
         }
-        if (request.robotId().length() > 128 || request.actionKey().length() > 128
-                || request.actionVersion().length() > 32
-                || length(request.workflowInstanceId()) > 128
-                || length(request.workflowNodeInstanceId()) > 128) {
-            throw new IllegalArgumentException("执行请求中的标识长度超过接口限制。");
+
+        String requestHash = requestHash(request);
+        Optional<ActionExecutionView> existing = executionStore.find(actionInstanceId);
+        if (existing.isPresent()) {
+            if (!existing.get().requestHash().equals(requestHash)) {
+                throw new ActionConflictException("actionInstanceId 已绑定到不同请求。");
+            }
+            return existing.get();
+        }
+
+        ActionDefinitionView action = definitionService.getActive(request.actionKey());
+        ActionParameterSetView parameterSet = findParameterSet(request);
+        ActionPackagePreview actionPackage = packageAssembler.assemble(
+                action, parameterSet, request.input(), request.robotId());
+        if (!actionPackage.packageHash().equals(request.expectedPackageHash())) {
+            throw new ActionConflictException("Action 或参数已发生变化，请重新预览后再执行。");
+        }
+
+        RobotSessionView session = transport.findSession(request.robotId())
+                .orElseThrow(() -> new RobotUnavailableException("机器人当前未连接：" + request.robotId()));
+        if (!session.acceptedActionTypes().contains(actionPackage.downstreamActionType())) {
+            throw new RobotUnavailableException("机器人当前会话不支持动作："
+                    + actionPackage.downstreamActionType());
+        }
+
+        Instant now = clock.instant();
+        String deviceCommandId = "dc-" + jsonCodec.sha256(actionInstanceId).substring(0, 32);
+        NewActionExecution newExecution = new NewActionExecution(actionInstanceId, request.robotId(),
+                deviceCommandId, actionPackage.actionKey(), actionPackage.actionRevision(),
+                actionPackage.downstreamActionType(), actionPackage.parameterSetId(),
+                actionPackage.parameterSetRevision(), actionPackage.protocolActionVersion(), requestHash,
+                actionPackage.packageHash(), request.workflowInstanceId(), request.workflowNodeInstanceId(),
+                actionPackage.definitionSnapshot(), actionPackage.parameterSnapshot(),
+                actionPackage.inputSnapshot(), actionPackage.commandInput(), actionPackage.timeoutMs(), now);
+
+        CreateActionExecutionResult creation = executionStore.createIfAbsent(newExecution);
+        if (!creation.created()) {
+            // 幂等请求只读取既有执行，绝不重放物理动作。
+            return creation.execution();
+        }
+
+        try {
+            DispatchReceipt receipt = transport.dispatch(new RobotActionCommand(request.robotId(),
+                    actionInstanceId, deviceCommandId, request.workflowInstanceId(),
+                    request.workflowNodeInstanceId(), actionPackage.protocolActionVersion(),
+                    actionPackage.packageHash(), actionPackage.commandInput(), actionPackage.timeoutMs(), now,
+                    actionPackage.actionKey(), actionPackage.actionRevision(), actionPackage.parameterSetId(),
+                    actionPackage.parameterSetRevision()));
+            return executionStore.markDispatched(actionInstanceId, receipt.sessionId(),
+                    receipt.messageId(), receipt.sentAt());
+        } catch (RobotUnavailableException exception) {
+            // 写失败不能证明对端是否收到，必须保持原快照并进入人工确认态。
+            return executionStore.hold(actionInstanceId, "DISPATCH_RESULT_UNKNOWN",
+                    exception.getMessage(), now);
         }
     }
 
-    private int length(String value) {
-        return value == null ? 0 : value.length();
+    public ActionExecutionView get(String actionInstanceId) {
+        return executionStore.get(actionInstanceId);
     }
 
-    private String createConsumeId(String actionInstanceId, int ordinal) {
-        String readable = actionInstanceId + ":" + ordinal;
-        return readable.length() <= 128 ? readable : "consume-" + jsonCodec.sha256(readable);
+    public Optional<ActionExecutionView> findActiveForAction(String actionKey) {
+        return executionStore.findActiveExecutionIdByActionKey(actionKey).map(executionStore::get);
+    }
+
+    public ActionExecutionView query(String actionInstanceId) {
+        ActionExecutionView execution = executionStore.get(actionInstanceId);
+        transport.query(new RobotActionQuery(execution.robotId(), execution.actionInstanceId(),
+                execution.deviceCommandId()));
+        return execution;
+    }
+
+    private ActionParameterSetView findParameterSet(StartActionExecutionRequest request) {
+        return request.parameterSetId() == null ? null
+                : parameterSetService.getEnabledForAction(request.parameterSetId(), request.actionKey());
+    }
+
+    private String requestHash(StartActionExecutionRequest request) {
+        ObjectNode fingerprint = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+        fingerprint.put("robotId", request.robotId());
+        fingerprint.put("actionKey", request.actionKey());
+        putNullable(fingerprint, "parameterSetId", request.parameterSetId());
+        fingerprint.set("input", request.input());
+        fingerprint.put("expectedPackageHash", request.expectedPackageHash());
+        putNullable(fingerprint, "workflowInstanceId", request.workflowInstanceId());
+        putNullable(fingerprint, "workflowNodeInstanceId", request.workflowNodeInstanceId());
+        return jsonCodec.sha256(jsonCodec.writeCanonical(fingerprint));
+    }
+
+    private void validateCommonRequest(StartActionExecutionRequest request) {
+        if (request == null) throw new IllegalArgumentException("执行请求不能为空。");
+        requireText(request.robotId(), "robotId");
+        requireText(request.actionKey(), "actionKey");
+        JsonNode input = request.input();
+        if (input == null || !input.isObject()) {
+            throw new IllegalArgumentException("input 必须是 JSON 对象。");
+        }
+    }
+
+    private void putNullable(ObjectNode target, String name, String value) {
+        if (value == null) target.putNull(name); else target.put(name, value);
+    }
+
+    private void requireText(String value, String field) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(field + " 不能为空。");
+        }
     }
 }

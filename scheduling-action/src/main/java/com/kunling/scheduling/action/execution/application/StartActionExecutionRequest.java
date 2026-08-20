@@ -1,53 +1,62 @@
 package com.kunling.scheduling.action.execution.application;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import lombok.Value;
-import lombok.experimental.Accessors;
-import java.beans.ConstructorProperties;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Value;
+import lombok.experimental.Accessors;
 
+import java.beans.ConstructorProperties;
+
+/** 预览和正式执行共用的请求；正式执行必须回传预览得到的 packageHash。 */
+@Schema(description = "完整动作包预览或执行请求")
 @Value
 @Accessors(fluent = true)
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
-@Schema(description = "动态动作执行请求；当前一期默认关闭")
 public class StartActionExecutionRequest {
-    @Schema(description = "动作执行实例唯一标识", required = true)
+    @Schema(description = "动作执行实例标识；预览时可为空，正式执行时必填")
     String actionInstanceId;
-    @Schema(description = "目标机器人唯一标识", required = true)
+    @Schema(description = "目标机器人标识", example = "ROBOT-01")
     String robotId;
-    @Schema(description = "已发布动作编码", required = true)
+    @Schema(description = "Action 唯一标识", example = "ARM.PICK")
     String actionKey;
-    @Schema(description = "已发布动作精确版本", example = "1.0.0", required = true)
-    String actionVersion;
-    @Schema(description = "工作流实例标识")
-    String workflowInstanceId;
-    @Schema(description = "工作流节点实例标识")
-    String workflowNodeInstanceId;
-    @Schema(description = "符合动作输入 Schema 的业务参数", required = true)
+    @Schema(description = "设备联调参数集标识；Action 无联调参数时可为空")
+    String parameterSetId;
+    @Schema(description = "本次业务输入，必须满足 Action inputSchema")
     JsonNode input;
-    @Schema(description = "由工作流传入的只读执行上下文")
-    JsonNode context;
-    @ConstructorProperties({"actionInstanceId", "robotId", "actionKey", "actionVersion", "workflowInstanceId", "workflowNodeInstanceId", "input", "context"})
-    public StartActionExecutionRequest(
-            String actionInstanceId,
-            String robotId,
-            String actionKey,
-            String actionVersion,
-            String workflowInstanceId,
-            String workflowNodeInstanceId,
-            JsonNode input,
-            JsonNode context
-    ) {
-        this.actionInstanceId = actionInstanceId;
-        this.robotId = robotId;
-        this.actionKey = actionKey;
-        this.actionVersion = actionVersion;
-        this.workflowInstanceId = workflowInstanceId;
-        this.workflowNodeInstanceId = workflowNodeInstanceId;
-        this.input = input;
-        this.context = context;
+    @Schema(description = "预览返回的 packageHash；正式执行时必填")
+    String expectedPackageHash;
+    @Schema(description = "状态机流程实例标识")
+    String workflowInstanceId;
+    @Schema(description = "状态机流程节点实例标识")
+    String workflowNodeInstanceId;
+
+    @ConstructorProperties({"actionInstanceId", "robotId", "actionKey", "parameterSetId", "input",
+            "expectedPackageHash", "workflowInstanceId", "workflowNodeInstanceId"})
+    public StartActionExecutionRequest(String actionInstanceId,
+                                       String robotId,
+                                       String actionKey,
+                                       String parameterSetId,
+                                       JsonNode input,
+                                       String expectedPackageHash,
+                                       String workflowInstanceId,
+                                       String workflowNodeInstanceId) {
+        this.actionInstanceId = normalizeToNull(actionInstanceId);
+        this.robotId = normalize(robotId);
+        this.actionKey = normalize(actionKey);
+        this.parameterSetId = normalizeToNull(parameterSetId);
+        this.input = input == null ? null : input.deepCopy();
+        this.expectedPackageHash = normalizeToNull(expectedPackageHash);
+        this.workflowInstanceId = normalizeToNull(workflowInstanceId);
+        this.workflowNodeInstanceId = normalizeToNull(workflowNodeInstanceId);
     }
 
+    private static String normalize(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private static String normalizeToNull(String value) {
+        String normalized = normalize(value);
+        return normalized == null || normalized.isEmpty() ? null : normalized;
+    }
 }
