@@ -7,6 +7,9 @@ import com.kunling.scheduling.agvflow.enums.NodeState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+import java.util.Date;
+
 @Data
 @TableName("flow")
 public class Flow extends BaseEntity {
@@ -35,10 +38,10 @@ public class Flow extends BaseEntity {
     private NodeState currentNodeState;
 
     @Schema(description = "流程开始时间")
-    private java.util.Date startedAt;
+    private LocalDateTime startedAt;
 
     @Schema(description = "流程完成时间")
-    private java.util.Date completedAt;
+    private LocalDateTime completedAt;
 
     @Version
     @Schema(description = "乐观锁版本号")

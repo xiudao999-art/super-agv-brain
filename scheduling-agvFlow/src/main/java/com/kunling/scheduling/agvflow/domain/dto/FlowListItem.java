@@ -3,6 +3,7 @@ package com.kunling.scheduling.agvflow.domain.dto;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.Date;
 import com.kunling.scheduling.agvflow.enums.NodeState;
 import com.kunling.scheduling.agvflow.enums.FlowState;
@@ -31,10 +32,10 @@ public class FlowListItem {
     private Integer nodeCount;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private Date startedAt;
+    private LocalDateTime startedAt;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private Date completedAt;
+    private LocalDateTime completedAt;
 
     private String errorCode;
 
