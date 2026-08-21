@@ -33,7 +33,7 @@ public class LocationTypeController {
 
     @GetMapping("/{id}")
     @Operation(summary = "查询库位类型详情")
-    public LocationType get(@PathVariable Integer id) {
+    public LocationType get(@PathVariable Long id) {
         return required(id);
     }
 
@@ -47,7 +47,7 @@ public class LocationTypeController {
 
     @PutMapping("/{id}")
     @Operation(summary = "修改库位类型")
-    public LocationType update(@PathVariable Integer id, @RequestBody LocationType entity) {
+    public LocationType update(@PathVariable Long id, @RequestBody LocationType entity) {
         required(id);
         entity.setId(id);
         service.updateById(entity);
@@ -56,13 +56,13 @@ public class LocationTypeController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除库位类型")
-    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         required(id);
         service.removeById(id);
         return ResponseEntity.noContent().build();
     }
 
-    private LocationType required(Integer id) {
+    private LocationType required(Long id) {
         LocationType entity = service.getById(id);
         if (entity == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "库位类型不存在: " + id);
         return entity;

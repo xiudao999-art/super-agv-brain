@@ -35,7 +35,7 @@ public class CarrierController {
 
     @GetMapping("/{id}")
     @Operation(summary = "查询载具详情")
-    public Carrier get(@PathVariable Integer id) {
+    public Carrier get(@PathVariable Long id) {
         return required(id);
     }
 
@@ -49,7 +49,7 @@ public class CarrierController {
 
     @PutMapping("/{id}")
     @Operation(summary = "修改载具")
-    public Carrier update(@PathVariable Integer id, @RequestBody Carrier entity) {
+    public Carrier update(@PathVariable Long id, @RequestBody Carrier entity) {
         required(id);
         entity.setId(id);
         service.updateById(entity);
@@ -58,13 +58,13 @@ public class CarrierController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除载具")
-    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         required(id);
         service.removeById(id);
         return ResponseEntity.noContent().build();
     }
 
-    private Carrier required(Integer id) {
+    private Carrier required(Long id) {
         Carrier entity = service.getById(id);
         if (entity == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "载具不存在: " + id);
         return entity;

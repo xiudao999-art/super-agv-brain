@@ -13,7 +13,7 @@ public class BaseEntity  implements Serializable {
     private static final long serialVersionUID = 5055857185348379411L;
 
     @TableId(type = IdType.AUTO)
-    private Integer id;
+    private Long id;
 
     @TableLogic
     private Integer isDeleted;

@@ -1,13 +1,19 @@
 package com.kunling.scheduling.agvflow.service;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.kunling.scheduling.agvflow.domain.dto.FlowTemplateCreateRequest;
-import com.kunling.scheduling.agvflow.domain.dto.FlowTemplateDetail;
+import com.kunling.scheduling.agvflow.domain.dto.*;
 import com.kunling.scheduling.agvflow.domain.entity.FlowTemplate;
 
-
 public interface FlowTemplateService extends IService<FlowTemplate> {
-    Integer createTemplate(FlowTemplateCreateRequest request);
 
-    FlowTemplateDetail getTemplateDetail(Integer id);
+    Long createTemplate(FlowTemplateCreateRequest request);
+
+    FlowTemplateDetail getTemplateDetail(Long id);
+
+    Page<FlowTemplateListItem> pageTemplates(int current, int size, String keyword);
+
+    FlowTemplateDetail updateTemplate(Long id, FlowTemplateUpdateRequest request);
+
+    void deleteTemplate(Long id);
 }

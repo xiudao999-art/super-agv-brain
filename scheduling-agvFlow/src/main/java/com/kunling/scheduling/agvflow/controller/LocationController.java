@@ -28,21 +28,21 @@ public class LocationController {
             .eq(enabled != null, Location::getEnabled, enabled).orderByAsc(Location::getId));
     }
     @GetMapping("/{id}") @Operation(summary = "查询库位详情")
-    public Location get(@PathVariable Integer id) { return required(id); }
+    public Location get(@PathVariable Long id) { return required(id); }
     @PostMapping @Operation(summary = "新增库位")
     public ResponseEntity<Location> create(@RequestBody Location entity) {
         entity.setId(null); service.save(entity);
         return ResponseEntity.status(HttpStatus.CREATED).body(required(entity.getId()));
     }
     @PutMapping("/{id}") @Operation(summary = "修改库位")
-    public Location update(@PathVariable Integer id, @RequestBody Location entity) {
+    public Location update(@PathVariable Long id, @RequestBody Location entity) {
         required(id); entity.setId(id); service.updateById(entity); return required(id);
     }
     @DeleteMapping("/{id}") @Operation(summary = "删除库位")
-    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
         required(id); service.removeById(id); return ResponseEntity.noContent().build();
     }
-    private Location required(Integer id) {
+    private Location required(Long id) {
         Location entity = service.getById(id);
         if (entity == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "库位不存在: " + id);
         return entity;
