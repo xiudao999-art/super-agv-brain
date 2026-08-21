@@ -177,11 +177,12 @@ public class ActionExecutionEntity {
         completedAt = now;
     }
 
-    public void applyEvent(RobotActionEvent event, JsonCodec jsonCodec, Instant now) {
+    /** 返回该事件是否可以继续转换为执行引擎报告。 */
+    public boolean applyEvent(RobotActionEvent event, JsonCodec jsonCodec, Instant now) {
         validateIdentity(event);
         if (event.sessionId().equals(lastEventSessionId)
                 && lastEventSequence != null && event.sequence() <= lastEventSequence) {
-            return;
+            return false;
         }
         lastEventSequence = event.sequence();
         lastEventSessionId = event.sessionId();
@@ -193,38 +194,43 @@ public class ActionExecutionEntity {
 
         // HOLD 是人工处置边界；迟到消息只补证据，不自动解除。
         if (state == ActionExecutionState.UNKNOWN_HOLD || state.terminal()) {
-            return;
+            return false;
         }
         switch (event.state()) {
             case ACCEPTED:
                 if (state == ActionExecutionState.DISPATCH_PENDING || state == ActionExecutionState.DISPATCHED) {
                     state = ActionExecutionState.ACCEPTED;
                     physicalResultKnown = false;
+                    return true;
                 }
-                break;
+                return false;
             case RUNNING:
                 state = ActionExecutionState.RUNNING;
                 physicalResultKnown = false;
-                break;
+                return true;
             case PHYSICAL_DONE:
                 finish(ActionExecutionState.PHYSICAL_DONE, true, now);
-                break;
+                return true;
+            case REJECTED:
+                // BUSY 表示设备没有接收本次动作，物理执行明确未开始，不能混同执行失败。
+                finish(ActionExecutionState.REJECTED, true, now);
+                return true;
             case FAILED:
                 boolean known = event.error() != null
                         && event.error().path("physicalResultKnown").asBoolean(false);
                 if (known) finish(ActionExecutionState.FAILED, true, now);
                 else enterUnknownHold(now);
-                break;
+                return true;
             case UNKNOWN:
                 if (errorJson == null) {
                     errorJson = jsonCodec.write(ImmutableCollections.mapOf(
                             "code", "PHYSICAL_RESULT_UNKNOWN", "message", "下游报告物理结果未知"));
                 }
                 enterUnknownHold(now);
-                break;
+                return true;
             case CANCELLED:
                 finish(ActionExecutionState.CANCELLED, true, now);
-                break;
+                return true;
             default:
                 throw new IllegalArgumentException("不支持的机器人动作事件状态：" + event.state());
         }

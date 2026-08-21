@@ -4,6 +4,7 @@ import com.kunling.scheduling.action.execution.application.ActionExecutionServic
 import com.kunling.scheduling.action.execution.application.ActionPackagePreview;
 import com.kunling.scheduling.action.execution.application.StartActionExecutionRequest;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
+import com.kunling.scheduling.action.execution.domain.ActionExecutionEventView;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.List;
 
 @Tag(name = "完整动作包执行", description = "预览、冻结、下发并查询下游完整动作包")
 @RestController
@@ -48,6 +50,15 @@ public class ExecutionController {
     public ActionExecutionView get(
             @Parameter(description = "动作执行实例标识") @PathVariable String actionInstanceId) {
         return executionService.get(actionInstanceId);
+    }
+
+    @Operation(summary = "查询动作执行事件", description = "按服务端接收顺序返回下游推送的 phase 进度、设备证据和原始异常")
+    @GetMapping("/{actionInstanceId}/events")
+    public List<ActionExecutionEventView> events(
+            @Parameter(description = "动作执行实例标识") @PathVariable String actionInstanceId,
+            @Parameter(description = "最多返回事件数，范围 1 到 1000")
+            @RequestParam(defaultValue = "500") int limit) {
+        return executionService.getEvents(actionInstanceId, limit);
     }
 
     @Operation(summary = "查询 Action 的活动执行", description = "没有活动执行时返回 204")

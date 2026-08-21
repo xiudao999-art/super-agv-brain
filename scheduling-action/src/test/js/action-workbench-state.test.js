@@ -32,6 +32,15 @@ test("物理结果明确的执行失败后自动解除冻结", () => {
   assert.equal(stateApi.canEdit(state, "MOVE.CUSTOM"), true);
 });
 
+test("机器人忙导致动作未开始时自动解除冻结", () => {
+  const state = stateApi.lockForExecution(stateApi.create(), "MOVE.CUSTOM", "execution-busy");
+
+  assert.equal(stateApi.releaseAfterSettled(state, {
+    state: "REJECTED", physicalResultKnown: true, actionInstanceId: "execution-busy"
+  }), true);
+  assert.equal(stateApi.canEdit(state, "MOVE.CUSTOM"), true);
+});
+
 test("UNKNOWN_HOLD 或物理结果未知时继续冻结", () => {
   const holdState = stateApi.lockForExecution(stateApi.create(), "MOVE.CUSTOM", "execution-4");
   const failedUnknownState = stateApi.lockForExecution(stateApi.create(), "MOVE.CUSTOM", "execution-5");

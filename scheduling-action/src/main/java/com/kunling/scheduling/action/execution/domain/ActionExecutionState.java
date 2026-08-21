@@ -7,11 +7,13 @@ public enum ActionExecutionState {
     ACCEPTED,
     RUNNING,
     PHYSICAL_DONE,
+    REJECTED,
     FAILED,
     UNKNOWN_HOLD,
     CANCELLED;
 
     public boolean terminal() {
-        return this == PHYSICAL_DONE || this == FAILED || this == UNKNOWN_HOLD || this == CANCELLED;
+        return this == PHYSICAL_DONE || this == REJECTED || this == FAILED
+                || this == UNKNOWN_HOLD || this == CANCELLED;
     }
 }

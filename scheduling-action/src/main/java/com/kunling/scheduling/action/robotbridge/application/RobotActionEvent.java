@@ -25,8 +25,46 @@ public class RobotActionEvent {
     JsonNode resolvedSteps;
     JsonNode physicalResult;
     JsonNode error;
+    JsonNode phaseEvent;
+    JsonNode reportState;
     Instant timestamp;
-    @ConstructorProperties({"messageType", "messageId", "sessionId", "robotId", "actionInstanceId", "deviceCommandId", "sequence", "state", "resolvedSteps", "physicalResult", "error", "timestamp"})
+
+    @ConstructorProperties({"messageType", "messageId", "sessionId", "robotId", "actionInstanceId",
+            "deviceCommandId", "sequence", "state", "resolvedSteps", "physicalResult", "error",
+            "phaseEvent", "reportState", "timestamp"})
+    public RobotActionEvent(
+            String messageType,
+            String messageId,
+            String sessionId,
+            String robotId,
+            String actionInstanceId,
+            String deviceCommandId,
+            long sequence,
+            State state,
+            JsonNode resolvedSteps,
+            JsonNode physicalResult,
+            JsonNode error,
+            JsonNode phaseEvent,
+            JsonNode reportState,
+            Instant timestamp
+    ) {
+        this.messageType = messageType;
+        this.messageId = messageId;
+        this.sessionId = sessionId;
+        this.robotId = robotId;
+        this.actionInstanceId = actionInstanceId;
+        this.deviceCommandId = deviceCommandId;
+        this.sequence = sequence;
+        this.state = state;
+        this.resolvedSteps = resolvedSteps;
+        this.physicalResult = physicalResult;
+        this.error = error;
+        this.phaseEvent = phaseEvent;
+        this.reportState = reportState;
+        this.timestamp = timestamp;
+    }
+
+    /** 兼容模块内既有测试和不携带结构化 phase 事件的旧客户端。 */
     public RobotActionEvent(
             String messageType,
             String messageId,
@@ -41,24 +79,15 @@ public class RobotActionEvent {
             JsonNode error,
             Instant timestamp
     ) {
-        this.messageType = messageType;
-        this.messageId = messageId;
-        this.sessionId = sessionId;
-        this.robotId = robotId;
-        this.actionInstanceId = actionInstanceId;
-        this.deviceCommandId = deviceCommandId;
-        this.sequence = sequence;
-        this.state = state;
-        this.resolvedSteps = resolvedSteps;
-        this.physicalResult = physicalResult;
-        this.error = error;
-        this.timestamp = timestamp;
+        this(messageType, messageId, sessionId, robotId, actionInstanceId, deviceCommandId,
+                sequence, state, resolvedSteps, physicalResult, error, null, null, timestamp);
     }
 
     public enum State {
         ACCEPTED,
         RUNNING,
         PHYSICAL_DONE,
+        REJECTED,
         FAILED,
         UNKNOWN,
         CANCELLED;
@@ -71,8 +100,8 @@ public class RobotActionEvent {
                 case "RUNNING": return RUNNING;
                 case "FINISHED":
                 case "PHYSICAL_DONE": return PHYSICAL_DONE;
+                case "BUSY": return REJECTED;
                 case "ERROR":
-                case "BUSY":
                 case "FAILED": return FAILED;
                 case "HANG":
                 case "UNKNOWN": return UNKNOWN;

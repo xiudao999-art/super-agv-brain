@@ -15,6 +15,8 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
 
 /** 将下游事件写入唯一执行状态机；断线和重连只查询证据，从不重放动作包。 */
 @Component
@@ -22,33 +24,41 @@ public class ActionExecutionEventProcessor implements RobotActionEventListener, 
     private static final Logger log = LoggerFactory.getLogger(ActionExecutionEventProcessor.class);
     private final ActionExecutionStore executionStore;
     private final ObjectProvider<RobotActionTransport> transportProvider;
+    private final ActionExecutionReportPublisher reportPublisher;
     private final Clock clock;
 
     // 可注入 Clock 的构造器仅供测试使用，生产环境必须明确由 Spring 选择此入口。
     @Autowired
     public ActionExecutionEventProcessor(ActionExecutionStore executionStore,
-                                         ObjectProvider<RobotActionTransport> transportProvider) {
-        this(executionStore, transportProvider, Clock.systemUTC());
+                                         ObjectProvider<RobotActionTransport> transportProvider,
+                                         ActionExecutionReportPublisher reportPublisher) {
+        this(executionStore, transportProvider, Clock.systemUTC(), reportPublisher);
     }
 
     ActionExecutionEventProcessor(ActionExecutionStore executionStore,
                                   ObjectProvider<RobotActionTransport> transportProvider,
-                                  Clock clock) {
+                                  Clock clock,
+                                  ActionExecutionReportPublisher reportPublisher) {
         this.executionStore = executionStore;
         this.transportProvider = transportProvider;
         this.clock = clock;
+        this.reportPublisher = reportPublisher;
     }
 
     @Override
     public void onEvent(RobotActionEvent event) {
-        executionStore.applyEvent(event);
+        executionStore.applyEvent(event).ifPresent(execution -> reportPublisher.publish(execution, event));
     }
 
     @Override
     public void onDisconnected(RobotSessionView session) {
-        java.util.List<ActionExecutionView> held = executionStore.holdActiveExecutionsForRobot(
+        Instant occurredAt = clock.instant();
+        List<ActionExecutionView> held = executionStore.holdActiveExecutionsForRobot(
                 session.robotId(), "ROBOT_CONNECTION_LOST",
-                "动作执行期间机器人连接中断，物理结果无法确认", clock.instant());
+                "动作执行期间机器人连接中断，物理结果无法确认", occurredAt);
+        for (ActionExecutionView execution : held) {
+            reportPublisher.publishLocalState(execution, "ROBOT_CONNECTION_LOST", occurredAt);
+        }
         if (!held.isEmpty()) {
             log.warn("机器人 {} 离线，{} 个未完成动作进入 UNKNOWN_HOLD", session.robotId(), held.size());
         }

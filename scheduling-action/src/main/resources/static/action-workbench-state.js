@@ -27,7 +27,7 @@
    */
   function releaseAfterSettled(state, execution) {
     if (!state || !execution || execution.physicalResultKnown !== true) return false;
-    const terminalStates = ["PHYSICAL_DONE", "COMPLETED", "FAILED", "CANCELLED"];
+    const terminalStates = ["PHYSICAL_DONE", "COMPLETED", "REJECTED", "FAILED", "CANCELLED"];
     if (!terminalStates.includes(execution.state)) return false;
     state.executionLocked = false;
     state.executionId = execution.actionInstanceId || state.executionId;

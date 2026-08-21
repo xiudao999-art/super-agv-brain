@@ -7,5 +7,7 @@
 .env
 /.mvn/
 /scheduling-action/docs/
-/scheduling-action/src/test/java/
 /scheduling-app/src/test/
+
+/scheduling-app/src/test/java/
+/scheduling-action/src/test/java/

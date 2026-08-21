@@ -352,6 +352,8 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
                 nullableCopy(message.get("resolvedSteps")),
                 nullableCopy(message.get("physicalResult")),
                 nullableCopy(message.get("error")),
+                nullableCopy(message.get("phaseEvent")),
+                nullableCopy(message.get("reportState")),
                 parseProtocolTimestamp(requiredText(message, "timestamp"))
         );
         actionEventListeners.forEach(listener -> safeNotifyEvent(listener, event));

@@ -8,6 +8,7 @@ import com.kunling.scheduling.action.definition.application.ActionConflictExcept
 import com.kunling.scheduling.action.definition.application.ActionDefinitionService;
 import com.kunling.scheduling.action.definition.application.ActionDefinitionView;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
+import com.kunling.scheduling.action.execution.domain.ActionExecutionEventView;
 import com.kunling.scheduling.action.execution.domain.CreateActionExecutionResult;
 import com.kunling.scheduling.action.execution.domain.NewActionExecution;
 import com.kunling.scheduling.action.robotbridge.application.DispatchReceipt;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 /** 预览、冻结、持久化和完整包下发的唯一入口。 */
@@ -35,6 +37,7 @@ public class ActionExecutionService {
     private final ActionExecutionStore executionStore;
     private final RobotActionTransport transport;
     private final JsonCodec jsonCodec;
+    private final ActionExecutionReportPublisher reportPublisher;
     private final Clock clock;
 
     @Autowired
@@ -43,9 +46,10 @@ public class ActionExecutionService {
                                   ActionPackageAssembler packageAssembler,
                                   ActionExecutionStore executionStore,
                                   RobotActionTransport transport,
-                                  JsonCodec jsonCodec) {
+                                  JsonCodec jsonCodec,
+                                  ActionExecutionReportPublisher reportPublisher) {
         this(definitionService, parameterSetService, packageAssembler, executionStore,
-                transport, jsonCodec, Clock.systemUTC());
+                transport, jsonCodec, reportPublisher, Clock.systemUTC());
     }
 
     ActionExecutionService(ActionDefinitionService definitionService,
@@ -54,6 +58,7 @@ public class ActionExecutionService {
                            ActionExecutionStore executionStore,
                            RobotActionTransport transport,
                            JsonCodec jsonCodec,
+                           ActionExecutionReportPublisher reportPublisher,
                            Clock clock) {
         this.definitionService = definitionService;
         this.parameterSetService = parameterSetService;
@@ -61,6 +66,7 @@ public class ActionExecutionService {
         this.executionStore = executionStore;
         this.transport = transport;
         this.jsonCodec = jsonCodec;
+        this.reportPublisher = reportPublisher;
         this.clock = clock;
     }
 
@@ -132,13 +138,20 @@ public class ActionExecutionService {
                     receipt.messageId(), receipt.sentAt());
         } catch (RobotUnavailableException exception) {
             // 写失败不能证明对端是否收到，必须保持原快照并进入人工确认态。
-            return executionStore.hold(actionInstanceId, "DISPATCH_RESULT_UNKNOWN",
+            ActionExecutionView held = executionStore.hold(actionInstanceId, "DISPATCH_RESULT_UNKNOWN",
                     exception.getMessage(), now);
+            reportPublisher.publishLocalState(held, "DISPATCH_RESULT_UNKNOWN", now);
+            return held;
         }
     }
 
     public ActionExecutionView get(String actionInstanceId) {
         return executionStore.get(actionInstanceId);
+    }
+
+    /** 返回按服务端接收顺序排列的下游执行事实，供联调页面还原完整时间线。 */
+    public List<ActionExecutionEventView> getEvents(String actionInstanceId, int limit) {
+        return executionStore.getEvents(actionInstanceId, limit);
     }
 
     public Optional<ActionExecutionView> findActiveForAction(String actionKey) {

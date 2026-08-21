@@ -80,11 +80,16 @@ class RobotTcpServerTest {
             assertThat(command.path("actionVersion").textValue()).isEqualTo("1.0");
             assertThat(command.at("/configSnapshot/actionKey").textValue()).isEqualTo("WAREHOUSE.MOVE");
 
-            send(writer, String.format("{\"version\":\"1.0\",\"messageType\":\"ACTION_EVENT\",\"messageId\":\"event-1\",\n \"sessionId\":\"%s\",\"robotId\":\"ROBOT-01\",\"actionInstanceId\":\"action-1\",\n \"deviceCommandId\":\"device-1\",\"sequence\":1,\"state\":\"ACCEPTED\",\n \"timestamp\":\"2026-08-19T07:46:55.1269881+00:00\"}\n", ack.path("sessionId").textValue()));
+            send(writer, String.format("{\"version\":\"1.0\",\"messageType\":\"ACTION_EVENT\",\"messageId\":\"event-1\",\n \"sessionId\":\"%s\",\"robotId\":\"ROBOT-01\",\"actionInstanceId\":\"action-1\",\n \"deviceCommandId\":\"device-1\",\"sequence\":1,\"state\":\"ACCEPTED\",\n \"phaseEvent\":{\"eventType\":\"PHASE_STARTED\",\"stepSequence\":1,\"phaseId\":\"move-1\",\"subAction\":\"MOVE_TO_MAP_POINT\",\"stepState\":\"RUNNING\",\"occurredAt\":\"2026-08-19T07:46:55Z\",\"attempt\":1},\n \"reportState\":{\"robotName\":\"ROBOT-01\",\"robotState\":\"EXECUTING\",\"actionInstanceId\":\"action-1\"},\n \"timestamp\":\"2026-08-19T07:46:55.1269881+00:00\"}\n", ack.path("sessionId").textValue()));
 
             RobotActionEvent receivedEvent = receivedEvents.poll(3, TimeUnit.SECONDS);
             assertThat(receivedEvent).isNotNull();
             assertThat(receivedEvent.state()).isEqualTo(RobotActionEvent.State.ACCEPTED);
+            assertThat(receivedEvent.phaseEvent().path("eventType").textValue())
+                    .isEqualTo("PHASE_STARTED");
+            assertThat(receivedEvent.phaseEvent().path("phaseId").textValue()).isEqualTo("move-1");
+            assertThat(receivedEvent.reportState().path("robotState").textValue())
+                    .isEqualTo("EXECUTING");
 
             // 解析客户端时间戳后，TCP 会话不能被服务端误判为异常并关闭。
             send(writer, String.format("{\"version\":\"1.0\",\"messageType\":\"PING\",\"messageId\":\"ping-2\",\n \"sessionId\":\"%s\",\"robotId\":\"ROBOT-01\",\"sequence\":2,\n \"snapshot\":{\"state\":\"IDLE\",\"emergency\":false,\"chassisConnected\":true,\n   \"armConnected\":true,\"timestamp\":\"2026-08-19T07:46:56.1269881+00:00\"},\n \"timestamp\":\"2026-08-19T07:46:56.1269881+00:00\"}\n", ack.path("sessionId").textValue()));
@@ -103,7 +108,7 @@ class RobotTcpServerTest {
         assertThat(RobotActionEvent.State.fromWireState("Hang"))
                 .isEqualTo(RobotActionEvent.State.UNKNOWN);
         assertThat(RobotActionEvent.State.fromWireState("Busy"))
-                .isEqualTo(RobotActionEvent.State.FAILED);
+                .isEqualTo(RobotActionEvent.State.REJECTED);
     }
 
     private void send(BufferedWriter writer, String json) throws Exception {

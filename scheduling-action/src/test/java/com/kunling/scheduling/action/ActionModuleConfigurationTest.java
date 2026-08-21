@@ -1,6 +1,8 @@
 package com.kunling.scheduling.action;
 
 import com.kunling.scheduling.action.execution.application.ActionExecutionEventProcessor;
+import com.kunling.scheduling.action.execution.application.ActionExecutionReportMapper;
+import com.kunling.scheduling.action.execution.application.ActionExecutionReportPublisher;
 import com.kunling.scheduling.action.execution.application.ActionExecutionStore;
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionEventRepository;
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionRepository;
@@ -83,7 +85,8 @@ class ActionModuleConfigurationTest {
     void executionEventProcessorCanBeCreatedBySpringConstructorInjection() {
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
         context.getBeanFactory().registerSingleton("actionExecutionStore", mock(ActionExecutionStore.class));
-        context.register(ActionExecutionEventProcessor.class);
+        context.register(ActionExecutionReportMapper.class, ActionExecutionReportPublisher.class,
+                ActionExecutionEventProcessor.class);
 
         try {
             assertThatCode(context::refresh).doesNotThrowAnyException();
@@ -123,7 +126,7 @@ class ActionModuleConfigurationTest {
                 documentedEndpointCount++;
             }
         }
-        assertThat(documentedEndpointCount).isEqualTo(19);
+        assertThat(documentedEndpointCount).isEqualTo(20);
 
         Schema<?> actionDefinitionSchema = ModelConverters.getInstance()
                 .read(ActionDefinition.class)

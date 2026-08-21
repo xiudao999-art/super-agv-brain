@@ -5,6 +5,7 @@ import com.kunling.scheduling.action.definition.application.ActionNotFoundExcept
 import com.kunling.scheduling.action.execution.application.ActionExecutionStore;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionState;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
+import com.kunling.scheduling.action.execution.domain.ActionExecutionEventView;
 import com.kunling.scheduling.action.execution.domain.CreateActionExecutionResult;
 import com.kunling.scheduling.action.execution.domain.NewActionExecution;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEvent;
@@ -13,6 +14,7 @@ import com.kunling.scheduling.action.shared.JsonCodec;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -89,22 +91,39 @@ public class JpaActionExecutionStore implements ActionExecutionStore {
     }
 
     @Override
-    public ActionExecutionView applyEvent(RobotActionEvent event) {
+    public Optional<ActionExecutionView> applyEvent(RobotActionEvent event) {
         return inTransaction(() -> {
             ActionExecutionEntity entity = requiredForUpdate(event.actionInstanceId());
             if (eventRepository.existsById(event.messageId())) {
-                return entity.toView(jsonCodec);
+                return Optional.empty();
             }
             Instant receivedAt = clock.instant();
             eventRepository.save(new ActionExecutionEventEntity(event, jsonCodec, receivedAt));
-            entity.applyEvent(event, jsonCodec, receivedAt);
-            return executionRepository.save(entity).toView(jsonCodec);
+            boolean reportable = entity.applyEvent(event, jsonCodec, receivedAt);
+            ActionExecutionView view = executionRepository.save(entity).toView(jsonCodec);
+            return reportable ? Optional.of(view) : Optional.empty();
         });
     }
 
     @Override
     public ActionExecutionView get(String actionInstanceId) {
         return inTransaction(() -> required(actionInstanceId).toView(jsonCodec));
+    }
+
+    @Override
+    public List<ActionExecutionEventView> getEvents(String actionInstanceId, int limit) {
+        if (limit < 1 || limit > 1000) {
+            throw new IllegalArgumentException("limit 必须在 1 到 1000 之间。");
+        }
+        return inTransaction(() -> {
+            // 先确认执行实例存在，使不存在和“暂时还没有事件”具有明确不同的 API 语义。
+            required(actionInstanceId);
+            return eventRepository
+                    .findByActionInstanceIdOrderByReceivedAtAscEventSequenceAsc(
+                            actionInstanceId, PageRequest.of(0, limit))
+                    .stream().map(entity -> entity.toView(jsonCodec))
+                    .collect(ImmutableCollections.toImmutableList());
+        });
     }
 
     @Override

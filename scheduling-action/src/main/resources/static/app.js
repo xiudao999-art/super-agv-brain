@@ -6,7 +6,7 @@
   const state = {
     catalog: { actionTypes: [], subActions: [], failureActions: [], retryExhaustedActions: [] },
     actions: [], current: null, phases: [], parameterSets: [], parameterSet: null,
-    preview: null, execution: null,
+    preview: null, execution: null, executionEvents: [],
     workbench: ActionWorkbenchState.create(readSessionTask()), pollTimer: null
   };
 
@@ -279,6 +279,7 @@
       const request = executionRequest(state.preview.packageHash);
       request.actionInstanceId = window.crypto.randomUUID();
       state.execution = await api("/api/action-executions", { method: "POST", body: request });
+      state.executionEvents = [];
       ActionWorkbenchState.lockForExecution(state.workbench, state.current.actionKey, state.execution.actionInstanceId);
       sessionStorage.setItem(TASK_KEY, JSON.stringify(state.workbench));
       applyLocks(); renderExecution(); schedulePoll();
@@ -289,7 +290,7 @@
     if (state.workbench.executionLocked && !window.confirm("将新建一个联调任务。旧任务的快照与执行记录仍会保留，是否继续？")) return;
     clearTimeout(state.pollTimer);
     state.workbench = ActionWorkbenchState.newTask();
-    state.execution = null; state.preview = null;
+    state.execution = null; state.executionEvents = []; state.preview = null;
     sessionStorage.removeItem(TASK_KEY);
     renderExecution(); renderPreview();
     if (state.current) selectAction(state.current.actionKey).catch(report);
@@ -298,8 +299,7 @@
 
   function restoreExecutionIfNeeded(actionKey) {
     if (!state.workbench.executionId) { renderExecution(); return; }
-    api(`/api/action-executions/${state.workbench.executionId}`).then(execution => {
-      state.execution = execution;
+    refreshExecution(state.workbench.executionId).then(() => {
       const released = releaseExecutionLockIfSettled();
       renderExecution();
       if (!released && state.workbench.executionLocked) schedulePoll();
@@ -312,13 +312,23 @@
     state.pollTimer = setTimeout(async () => {
       let released = false;
       try {
-        state.execution = await api(`/api/action-executions/${state.execution.actionInstanceId}`);
+        await refreshExecution(state.execution.actionInstanceId);
         released = releaseExecutionLockIfSettled();
         renderExecution();
       }
       catch (error) { report(error); }
       if (!released && state.workbench.executionLocked) schedulePoll();
     }, 1200);
+  }
+
+  async function refreshExecution(actionInstanceId) {
+    const encodedId = encodeURIComponent(actionInstanceId);
+    const [execution, events] = await Promise.all([
+      api("/api/action-executions/" + encodedId),
+      api("/api/action-executions/" + encodedId + "/events?limit=500")
+    ]);
+    state.execution = execution;
+    state.executionEvents = Array.isArray(events) ? events : [];
   }
 
   function releaseExecutionLockIfSettled() {
@@ -339,14 +349,13 @@
     const error = state.execution.error || {};
     const errorMessage = error.message || error.detail && error.detail.message;
     $("executionSummary").innerHTML = `<strong>${escapeHtml(state.execution.state)}</strong> · ${escapeHtml(state.execution.actionInstanceId)} · 物理结果${state.execution.physicalResultKnown ? "已确认" : "未确认"}`
-      + (errorMessage ? `<div class="execution-error"><b>失败原因：</b>${escapeHtml(errorMessage)}</div>` : "");
+      + (errorMessage ? `<div class="execution-error"><b>失败原因：</b>${escapeHtml(errorMessage)}</div>` : "")
+      + (state.execution.physicalResult
+        ? `<details class="execution-result"><summary>查看整包物理结果</summary><pre>${escapeHtml(pretty(state.execution.physicalResult))}</pre></details>` : "");
     const steps = Array.isArray(state.execution.resolvedSteps) ? state.execution.resolvedSteps
       : state.preview && Array.isArray(state.preview.resolvedSteps) ? state.preview.resolvedSteps : [];
-    $("stepTimeline").innerHTML = steps.map((step, index) => {
-      const stepState = String(step.state || "待执行");
-      const failed = stepState.includes("FAILED") || stepState === "ERROR";
-      return `<div class="timeline-step ${failed ? "failed" : ""}"><b>${index + 1}</b><span>${escapeHtml(step.phaseId || step.subAction || "步骤")}</span><small>${escapeHtml(stepState)}</small></div>`;
-    }).join("");
+    $("stepTimeline").innerHTML = ActionExecutionTimeline.render(
+      state.executionEvents, steps, state.execution.commandInput);
   }
 
   function applyLocks() {
