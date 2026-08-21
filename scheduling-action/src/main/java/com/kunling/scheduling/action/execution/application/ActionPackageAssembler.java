@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.kunling.scheduling.action.commissioning.application.ActionParameterValueValidator;
 import com.kunling.scheduling.action.commissioning.application.ActionParameterSetView;
 import com.kunling.scheduling.action.definition.application.ActionDefinitionValidator;
 import com.kunling.scheduling.action.definition.application.ActionDefinitionView;
@@ -17,7 +18,7 @@ import java.util.Iterator;
 import java.util.Map;
 
 /**
- * 把当前 Action、联调参数和本次业务输入一次性物化为 cnet8 可执行的完整动作包。
+ * 把当前 Action 和设备联调参数一次性物化为 cnet8 可执行的完整动作包。
  *
  * <p>该模块是协议转换的唯一 seam；执行模块只保存和发送它的不可变结果。</p>
  */
@@ -29,21 +30,20 @@ public class ActionPackageAssembler {
     private final ObjectMapper objectMapper;
     private final JsonCodec jsonCodec;
     private final ActionDefinitionValidator definitionValidator;
-    private final ActionInputValidator inputValidator;
+    private final ActionParameterValueValidator parameterValueValidator;
 
     public ActionPackageAssembler(ObjectMapper objectMapper,
                                   JsonCodec jsonCodec,
                                   ActionDefinitionValidator definitionValidator,
-                                  ActionInputValidator inputValidator) {
+                                  ActionParameterValueValidator parameterValueValidator) {
         this.objectMapper = objectMapper;
         this.jsonCodec = jsonCodec;
         this.definitionValidator = definitionValidator;
-        this.inputValidator = inputValidator;
+        this.parameterValueValidator = parameterValueValidator;
     }
 
     public ActionPackagePreview assemble(ActionDefinitionView action,
                                          ActionParameterSetView parameterSet,
-                                         JsonNode input,
                                          String robotId) {
         if (action == null) {
             throw new IllegalArgumentException("Action 不能为空。");
@@ -51,13 +51,11 @@ public class ActionPackageAssembler {
         ActionDefinition definition = action.definition();
         definitionValidator.validateExecutable(definition);
 
-        ObjectNode safeInput = requireObject(input, "input");
-        inputValidator.validate(safeInput, definition.inputSchema());
         ObjectNode parameters = resolveParameterValues(definition, parameterSet, robotId);
 
         ArrayNode phases = objectMapper.createArrayNode();
         for (ActionPhaseDefinition phase : definition.phases()) {
-            phases.add(encodePhase(phase, safeInput, parameters));
+            phases.add(encodePhase(phase, parameters));
         }
 
         ObjectNode mainAction = objectMapper.createObjectNode();
@@ -79,7 +77,7 @@ public class ActionPackageAssembler {
                 parameterSet == null ? null : parameterSet.revision(),
                 PROTOCOL_ACTION_VERSION, packageHash, definition.timeoutMs(),
                 objectMapper.valueToTree(definition), parameterSnapshot,
-                safeInput.deepCopy(), commandInput, phases.deepCopy());
+                commandInput, phases.deepCopy());
     }
 
     private ObjectNode resolveParameterValues(ActionDefinition definition,
@@ -102,17 +100,17 @@ public class ActionPackageAssembler {
                     + "，不能用于 " + robotId + "。");
         }
         ObjectNode values = requireObject(parameterSet.values(), "parameterSet.values");
-        inputValidator.validate(values, definition.parameterSchema());
+        parameterValueValidator.validate(values, definition.parameterSchema());
         return values;
     }
 
-    private ObjectNode encodePhase(ActionPhaseDefinition phase, ObjectNode input, ObjectNode parameters) {
+    private ObjectNode encodePhase(ActionPhaseDefinition phase, ObjectNode parameters) {
         ObjectNode encoded = objectMapper.createObjectNode();
         encoded.put("phaseId", phase.phaseId());
         encoded.put("subAction", phase.subAction().wireName());
         encoded.put("enabled", phase.enabled());
         ObjectNode resolvedParameters = requireObject(
-                resolveNode(phase.parameters(), input, parameters, "$phase." + phase.phaseId() + ".params"),
+                resolveNode(phase.parameters(), parameters, "$phase." + phase.phaseId() + ".params"),
                 "phase " + phase.phaseId() + ".params");
         resolvedParameters.put("maxRetries", phase.maxRetries());
         if (phase.retryFromPhaseId() != null) {
@@ -126,7 +124,6 @@ public class ActionPackageAssembler {
     }
 
     private JsonNode resolveNode(JsonNode source,
-                                 ObjectNode input,
                                  ObjectNode parameters,
                                  String path) {
         if (source == null || source.isNull()) {
@@ -135,7 +132,8 @@ public class ActionPackageAssembler {
         if (source.isTextual()) {
             String value = source.textValue();
             if (value.startsWith("$input.")) {
-                return requiredBinding(input, value.substring("$input.".length()), value, path);
+                throw new IllegalArgumentException(path
+                        + " 使用了已移除的 $input 绑定，请改用 $parameters。");
             }
             if (value.startsWith("$parameters.")) {
                 return requiredBinding(parameters, value.substring("$parameters.".length()), value, path);
@@ -145,7 +143,7 @@ public class ActionPackageAssembler {
         if (source.isArray()) {
             ArrayNode target = objectMapper.createArrayNode();
             for (int index = 0; index < source.size(); index++) {
-                target.add(resolveNode(source.get(index), input, parameters, path + "[" + index + "]"));
+                target.add(resolveNode(source.get(index), parameters, path + "[" + index + "]"));
             }
             return target;
         }
@@ -154,7 +152,7 @@ public class ActionPackageAssembler {
             Iterator<Map.Entry<String, JsonNode>> fields = source.fields();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> field = fields.next();
-                target.set(field.getKey(), resolveNode(field.getValue(), input, parameters,
+                target.set(field.getKey(), resolveNode(field.getValue(), parameters,
                         path + "." + field.getKey()));
             }
             return target;

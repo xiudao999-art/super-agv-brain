@@ -34,8 +34,6 @@ public class ActionPackagePreview {
     JsonNode definitionSnapshot;
     @Schema(description = "执行时冻结的联调参数快照")
     JsonNode parameterSnapshot;
-    @Schema(description = "执行时冻结的业务输入快照")
-    JsonNode inputSnapshot;
     @Schema(description = "下发给 cnet8 的 MainAction 完整内容")
     JsonNode commandInput;
     @Schema(description = "按顺序解析后的阶段及最终参数")
@@ -43,7 +41,7 @@ public class ActionPackagePreview {
 
     @ConstructorProperties({"actionKey", "actionRevision", "downstreamActionType", "parameterSetId",
             "parameterSetRevision", "protocolActionVersion", "packageHash", "timeoutMs",
-            "definitionSnapshot", "parameterSnapshot", "inputSnapshot", "commandInput", "resolvedSteps"})
+            "definitionSnapshot", "parameterSnapshot", "commandInput", "resolvedSteps"})
     public ActionPackagePreview(String actionKey,
                                 long actionRevision,
                                 String downstreamActionType,
@@ -54,7 +52,6 @@ public class ActionPackagePreview {
                                 int timeoutMs,
                                 JsonNode definitionSnapshot,
                                 JsonNode parameterSnapshot,
-                                JsonNode inputSnapshot,
                                 JsonNode commandInput,
                                 JsonNode resolvedSteps) {
         this.actionKey = actionKey;
@@ -67,7 +64,6 @@ public class ActionPackagePreview {
         this.timeoutMs = timeoutMs;
         this.definitionSnapshot = definitionSnapshot;
         this.parameterSnapshot = parameterSnapshot;
-        this.inputSnapshot = inputSnapshot;
         this.commandInput = commandInput;
         this.resolvedSteps = resolvedSteps;
     }

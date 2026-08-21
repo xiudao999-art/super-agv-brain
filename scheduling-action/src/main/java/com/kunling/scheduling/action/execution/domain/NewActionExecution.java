@@ -28,7 +28,6 @@ public class NewActionExecution {
     String workflowNodeInstanceId;
     JsonNode definitionSnapshot;
     JsonNode parameterSnapshot;
-    JsonNode inputSnapshot;
     JsonNode commandInput;
     int timeoutMs;
     Instant createdAt;
@@ -36,7 +35,7 @@ public class NewActionExecution {
     @ConstructorProperties({"actionInstanceId", "robotId", "deviceCommandId", "actionKey",
             "actionRevision", "downstreamActionType", "parameterSetId", "parameterSetRevision",
             "protocolActionVersion", "requestHash", "packageHash", "workflowInstanceId",
-            "workflowNodeInstanceId", "definitionSnapshot", "parameterSnapshot", "inputSnapshot",
+            "workflowNodeInstanceId", "definitionSnapshot", "parameterSnapshot",
             "commandInput", "timeoutMs", "createdAt"})
     public NewActionExecution(String actionInstanceId,
                               String robotId,
@@ -53,7 +52,6 @@ public class NewActionExecution {
                               String workflowNodeInstanceId,
                               JsonNode definitionSnapshot,
                               JsonNode parameterSnapshot,
-                              JsonNode inputSnapshot,
                               JsonNode commandInput,
                               int timeoutMs,
                               Instant createdAt) {
@@ -72,7 +70,6 @@ public class NewActionExecution {
         this.workflowNodeInstanceId = workflowNodeInstanceId;
         this.definitionSnapshot = definitionSnapshot;
         this.parameterSnapshot = parameterSnapshot;
-        this.inputSnapshot = inputSnapshot;
         this.commandInput = commandInput;
         this.timeoutMs = timeoutMs;
         this.createdAt = createdAt;

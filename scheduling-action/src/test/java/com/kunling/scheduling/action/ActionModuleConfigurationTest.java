@@ -5,6 +5,7 @@ import com.kunling.scheduling.action.execution.application.ActionExecutionEventP
 import com.kunling.scheduling.action.execution.application.ActionExecutionReportMapper;
 import com.kunling.scheduling.action.execution.application.ActionExecutionReportPublisher;
 import com.kunling.scheduling.action.execution.application.ActionExecutionStore;
+import com.kunling.scheduling.action.execution.application.StartActionExecutionRequest;
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionEventRepository;
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionRepository;
 import com.kunling.scheduling.action.execution.infrastructure.JpaActionExecutionStore;
@@ -148,5 +149,12 @@ class ActionModuleConfigurationTest {
         assertThat(actionDefinitionSchema.getDescription()).isEqualTo("当前 Action 的动态配置定义");
         assertThat(actionDefinitionSchema.getProperties().get("actionKey").getDescription())
                 .isEqualTo("Action 唯一标识");
+        assertThat(actionDefinitionSchema.getProperties()).doesNotContainKey("inputSchema");
+
+        Schema<?> executionRequestSchema = ModelConverters.getInstance()
+                .read(StartActionExecutionRequest.class)
+                .get("StartActionExecutionRequest");
+        assertThat(executionRequestSchema).isNotNull();
+        assertThat(executionRequestSchema.getProperties()).doesNotContainKey("input");
     }
 }

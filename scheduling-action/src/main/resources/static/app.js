@@ -33,6 +33,7 @@
     $("parameterSetSelect").addEventListener("change", selectParameterSet);
     $("previewButton").addEventListener("click", previewPackage);
     $("executeButton").addEventListener("click", startExecution);
+    $("releaseUnknownHoldButton").addEventListener("click", releaseUnknownHoldForCommissioning);
     $("downstreamActionType").addEventListener("change", () => {
       state.phases = readPhases();
       renderPhases();
@@ -61,7 +62,6 @@
     $("displayName").value = definition.displayName || "";
     $("description").value = definition.description || "";
     $("timeoutMs").value = definition.timeoutMs;
-    $("inputSchema").value = pretty(definition.inputSchema || {});
     $("parameterSchema").value = pretty(definition.parameterSchema || {});
     state.phases = clone(definition.phases || []);
     renderPhases();
@@ -85,7 +85,6 @@
     $("displayName").value = "";
     $("description").value = "";
     $("timeoutMs").value = "60000";
-    $("inputSchema").value = "{}";
     $("parameterSchema").value = "{}";
     $("downstreamActionType").value = state.catalog.actionTypes[0] ? state.catalog.actionTypes[0].name : "MOVE";
     state.phases = [];
@@ -127,7 +126,6 @@
       schemaVersion: "1.0", actionKey,
       downstreamActionType: $("downstreamActionType").value,
       displayName: $("displayName").value.trim(), description: $("description").value.trim(),
-      inputSchema: parseJson($("inputSchema").value, "业务入参 Schema"),
       parameterSchema: parseJson($("parameterSchema").value, "联调参数 Schema"),
       phases: readPhases(), timeoutMs: Number($("timeoutMs").value)
     };
@@ -160,7 +158,7 @@
         </div>
         <label class="check"><input class="phase-enabled" type="checkbox" ${phase.enabled !== false ? "checked" : ""} data-editable> 启用</label>
         <label class="check"><input class="phase-gate" type="checkbox" ${phase.gate ? "checked" : ""} data-editable> 验收门禁步骤</label>
-        <label>子动作参数（JSON，可用 $input.xxx / $parameters.xxx）<textarea class="phase-params code params" data-editable>${escapeHtml(pretty(phase.params || {}))}</textarea></label>`;
+        <label>子动作参数（JSON，可用 $parameters.xxx）<textarea class="phase-params code params" data-editable>${escapeHtml(pretty(phase.params || {}))}</textarea></label>`;
       card.addEventListener("click", event => handlePhaseOperation(event, index));
       list.appendChild(card);
     });
@@ -253,7 +251,6 @@
     if (!state.current) throw new Error("请先选择 Action。");
     return { actionInstanceId: null, robotId: $("robotId").value.trim(), actionKey: state.current.actionKey,
       parameterSetId: state.parameterSet ? state.parameterSet.id : null,
-      input: parseJson($("executionInput").value, "本次业务入参"),
       expectedPackageHash: expectedPackageHash || null, workflowInstanceId: null, workflowNodeInstanceId: null };
   }
 
@@ -274,7 +271,7 @@
 
   async function startExecution() {
     if (!state.preview) return;
-    if (!window.confirm("执行期间 Action、参数集和入参将冻结；成功或物理结果明确的失败后自动解冻，结果未知时继续冻结。确认下发？")) return;
+    if (!window.confirm("执行期间 Action 和设备联调参数将冻结；成功或物理结果明确的失败后自动解冻，结果未知时继续冻结。确认下发？")) return;
     try {
       const request = executionRequest(state.preview.packageHash);
       request.actionInstanceId = window.crypto.randomUUID();
@@ -287,7 +284,9 @@
   }
 
   function newCommissioningTask() {
-    if (state.workbench.executionLocked && !window.confirm("将新建一个联调任务。旧任务的快照与执行记录仍会保留，是否继续？")) return;
+    if (state.workbench.executionLocked) {
+      return toast("当前执行尚未得到确定结果；如已进入 UNKNOWN_HOLD，请使用执行记录中的“调试解冻”。");
+    }
     clearTimeout(state.pollTimer);
     state.workbench = ActionWorkbenchState.newTask();
     state.execution = null; state.executionEvents = []; state.preview = null;
@@ -295,6 +294,25 @@
     renderExecution(); renderPreview();
     if (state.current) selectAction(state.current.actionKey).catch(report);
     else applyLocks();
+  }
+
+  /**
+   * 只解除当前浏览器联调任务的编辑锁；服务端执行记录仍保持 UNKNOWN_HOLD，
+   * 后续再次执行会生成新的动作实例，便于调试同时保留完整追溯证据。
+   */
+  function releaseUnknownHoldForCommissioning() {
+    if (!state.execution) return;
+    const warning = "该操作只解除页面编辑锁，不会确认物理结果，也不会撤销设备端可能仍在进行的动作。\n\n"
+      + "请先确认机器人已停止且现场安全。继续调试解冻？";
+    if (!window.confirm(warning)) return;
+    const released = ActionWorkbenchState.releaseUnknownHoldForCommissioning(
+      state.workbench, state.execution);
+    if (!released) return toast("当前状态不允许调试解冻，仅 UNKNOWN_HOLD 可以人工解除页面锁。");
+    clearTimeout(state.pollTimer);
+    sessionStorage.setItem(TASK_KEY, JSON.stringify(state.workbench));
+    applyLocks();
+    renderExecution();
+    toast("页面已解冻；原执行仍保留 UNKNOWN_HOLD，再次执行将创建新的动作实例。");
   }
 
   function restoreExecutionIfNeeded(actionKey) {
@@ -343,8 +361,12 @@
   }
 
   function renderExecution() {
+    const releaseButton = $("releaseUnknownHoldButton");
     if (!state.execution) {
-      $("executionSummary").textContent = "当前联调任务尚未执行"; $("stepTimeline").innerHTML = ""; return;
+      $("executionSummary").textContent = "当前联调任务尚未执行";
+      $("stepTimeline").innerHTML = "";
+      releaseButton.hidden = true;
+      return;
     }
     const error = state.execution.error || {};
     const errorMessage = error.message || error.detail && error.detail.message;
@@ -356,6 +378,8 @@
       : state.preview && Array.isArray(state.preview.resolvedSteps) ? state.preview.resolvedSteps : [];
     $("stepTimeline").innerHTML = ActionExecutionTimeline.render(
       state.executionEvents, steps, state.execution.commandInput);
+    releaseButton.hidden = !ActionWorkbenchState.canReleaseUnknownHoldForCommissioning(
+      state.workbench, state.execution);
   }
 
   function applyLocks() {

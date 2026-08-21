@@ -1,7 +1,6 @@
 package com.kunling.scheduling.action.execution.application;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Value;
 import lombok.experimental.Accessors;
 
@@ -19,24 +18,21 @@ public class ExecuteActionCommand {
     String actionKey;
     /** 当前阶段由执行引擎明确选择；Action 不声明设备参数时允许为空。 */
     String parameterSetId;
-    JsonNode input;
 
     @ConstructorProperties({"workflowInstanceId", "workflowNodeInstanceId", "actionInstanceId",
-            "robotId", "actionKey", "parameterSetId", "input"})
+            "robotId", "actionKey", "parameterSetId"})
     public ExecuteActionCommand(String workflowInstanceId,
                                 String workflowNodeInstanceId,
                                 String actionInstanceId,
                                 String robotId,
                                 String actionKey,
-                                String parameterSetId,
-                                JsonNode input) {
+                                String parameterSetId) {
         this.workflowInstanceId = normalize(workflowInstanceId);
         this.workflowNodeInstanceId = normalize(workflowNodeInstanceId);
         this.actionInstanceId = normalize(actionInstanceId);
         this.robotId = normalize(robotId);
         this.actionKey = normalize(actionKey);
         this.parameterSetId = normalizeToNull(parameterSetId);
-        this.input = input == null ? null : input.deepCopy();
     }
 
     private static String normalize(String value) {

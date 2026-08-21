@@ -1,4 +1,4 @@
-package com.kunling.scheduling.action.execution.application;
+package com.kunling.scheduling.action.commissioning.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.kunling.scheduling.action.definition.domain.ParameterSchema;
@@ -7,15 +7,15 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
-/** 在任何机器人命令发出前校验主 Action 输入，避免把配置错误带入物理执行。 */
+/** 在保存参数集和生成动作包前校验设备联调参数，避免无效参数进入物理执行。 */
 @Component
-public class ActionInputValidator {
+public class ActionParameterValueValidator {
 
-    public void validate(JsonNode input, Map<String, ParameterSchema> schema) {
-        if (input == null || !input.isObject()) {
-            throw new IllegalArgumentException("Action input 必须是 JSON 对象。");
+    public void validate(JsonNode parameters, Map<String, ParameterSchema> schema) {
+        if (parameters == null || !parameters.isObject()) {
+            throw new IllegalArgumentException("设备联调参数必须是 JSON 对象。");
         }
-        validateObject(input, schema, "$input");
+        validateObject(parameters, schema, "$parameters");
     }
 
     private void validateObject(JsonNode value, Map<String, ParameterSchema> schema, String path) {

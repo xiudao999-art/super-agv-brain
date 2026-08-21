@@ -74,11 +74,15 @@ class ProjectStructureTest {
         java.nio.file.Path dynamicActionAlterScript = Paths.get(
                 "../scheduling-action/src/main/resources/db/alter/20260820_01_dynamic_action_package.sql"
         );
+        java.nio.file.Path removeBusinessInputAlterScript = Paths.get(
+                "../scheduling-action/src/main/resources/db/alter/20260821_01_remove_action_business_input.sql"
+        );
 
         assertThat(appPom.toLowerCase()).doesNotContain("flyway");
         assertThat(applicationYaml.toLowerCase()).doesNotContain("flyway");
         assertThat(createScript).isRegularFile();
         assertThat(dynamicActionAlterScript).isRegularFile();
+        assertThat(removeBusinessInputAlterScript).isRegularFile();
         assertThat(Paths.get("../scheduling-action/src/main/resources/db/alter")).isDirectory();
         assertThat(Paths.get(
                 "../scheduling-action/src/main/java/com/kunling/scheduling/action/definition/application/StandardActionSeed.java"
@@ -87,6 +91,10 @@ class ProjectStructureTest {
         String schema = new String(Files.readAllBytes(createScript), StandardCharsets.UTF_8);
         String dynamicActionAlter = new String(
                 Files.readAllBytes(dynamicActionAlterScript),
+                StandardCharsets.UTF_8
+        ).toLowerCase();
+        String removeBusinessInputAlter = new String(
+                Files.readAllBytes(removeBusinessInputAlterScript),
                 StandardCharsets.UTF_8
         ).toLowerCase();
 
@@ -127,6 +135,14 @@ class ProjectStructureTest {
                 .isLessThan(dynamicActionAlter.indexOf("drop table action_execution;"));
         assertThat(dynamicActionAlter.indexOf("drop table robot_action_event;"))
                 .isLessThan(dynamicActionAlter.indexOf("drop table robot_action_execution;"));
+
+        // 业务入参迁移必须保留旧配置含义，再通过追加式 DDL 清理冗余快照列。
+        assertThat(removeBusinessInputAlter)
+                .contains("json_merge_patch")
+                .contains("json_remove(cast(definition_json as json), '$.inputschema')")
+                .contains("'$input.'")
+                .contains("'$parameters.'")
+                .contains("drop column input_snapshot_json");
     }
 
     private String normalizedSha256(String content) throws Exception {

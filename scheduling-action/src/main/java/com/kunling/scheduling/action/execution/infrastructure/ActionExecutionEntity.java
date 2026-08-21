@@ -81,10 +81,6 @@ public class ActionExecutionEntity {
     private String parameterSnapshotJson;
 
     @Lob
-    @Column(name = "input_snapshot_json", nullable = false, columnDefinition = "longtext")
-    private String inputSnapshotJson;
-
-    @Lob
     @Column(name = "command_input_json", nullable = false, columnDefinition = "longtext")
     private String commandInputJson;
 
@@ -150,7 +146,6 @@ public class ActionExecutionEntity {
         this.timeoutMs = execution.timeoutMs();
         this.definitionSnapshotJson = jsonCodec.write(execution.definitionSnapshot());
         this.parameterSnapshotJson = jsonCodec.write(execution.parameterSnapshot());
-        this.inputSnapshotJson = jsonCodec.write(execution.inputSnapshot());
         this.commandInputJson = jsonCodec.write(execution.commandInput());
         this.createdAt = execution.createdAt();
         this.updatedAt = execution.createdAt();
@@ -241,8 +236,8 @@ public class ActionExecutionEntity {
                 actionRevision, downstreamActionType, parameterSetId, parameterSetRevision,
                 protocolActionVersion, requestHash, packageHash, state, physicalResultKnown,
                 workflowInstanceId, workflowNodeInstanceId, jsonCodec.readTree(definitionSnapshotJson),
-                jsonCodec.readTree(parameterSnapshotJson), jsonCodec.readTree(inputSnapshotJson),
-                jsonCodec.readTree(commandInputJson), readNullable(jsonCodec, resolvedStepsJson),
+                jsonCodec.readTree(parameterSnapshotJson), jsonCodec.readTree(commandInputJson),
+                readNullable(jsonCodec, resolvedStepsJson),
                 readNullable(jsonCodec, physicalResultJson), readNullable(jsonCodec, errorJson),
                 createdAt, updatedAt, completedAt);
     }

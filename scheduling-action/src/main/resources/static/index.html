@@ -20,7 +20,7 @@
   </header>
 
   <div id="lockBanner" class="lock-banner" hidden>
-    当前联调任务正在执行，Action、参数集和本次入参暂时冻结；成功或物理结果明确的失败到达后将自动解冻。
+    当前联调任务正在执行，Action 和设备联调参数暂时冻结；成功或物理结果明确的失败到达后将自动解冻。
   </div>
 
   <main>
@@ -37,10 +37,7 @@
       <div class="meta"><span id="actionStatus" class="badge">DRAFT</span><span id="actionRevision">revision -</span></div>
       <details>
         <summary>高级 Schema（JSON）</summary>
-        <div class="grid two">
-          <label>本次业务入参 Schema<textarea id="inputSchema" class="code" rows="10" data-editable>{}</textarea></label>
-          <label>设备联调参数 Schema<textarea id="parameterSchema" class="code" rows="10" data-editable>{}</textarea></label>
-        </div>
+        <label>设备联调参数 Schema<textarea id="parameterSchema" class="code" rows="10" data-editable>{}</textarea></label>
       </details>
     </section>
 
@@ -60,7 +57,6 @@
       </div>
       <label>设备联调参数（JSON）<textarea id="parameterValues" class="code" rows="8" data-task-editable>{}</textarea></label>
       <button id="saveParameterSetButton" class="secondary" data-task-editable>保存参数集</button>
-      <label>本次业务入参（JSON）<textarea id="executionInput" class="code" rows="7" data-task-editable>{}</textarea></label>
       <div class="execute-actions">
         <button id="previewButton" data-task-editable>生成最终预览</button>
         <button id="executeButton" class="danger" disabled>确认并执行整包</button>
@@ -70,6 +66,9 @@
       <section class="execution-card">
         <h3>执行记录</h3>
         <div id="executionSummary" class="empty">当前联调任务尚未执行</div>
+        <button id="releaseUnknownHoldButton" class="secondary" hidden>
+          调试解冻（保留 UNKNOWN_HOLD 记录）
+        </button>
         <div id="stepTimeline" class="timeline"></div>
       </section>
     </section>

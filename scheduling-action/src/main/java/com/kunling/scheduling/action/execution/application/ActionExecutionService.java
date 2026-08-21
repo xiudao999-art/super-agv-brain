@@ -1,6 +1,5 @@
 package com.kunling.scheduling.action.execution.application;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.kunling.scheduling.action.commissioning.application.ActionParameterSetService;
 import com.kunling.scheduling.action.commissioning.application.ActionParameterSetView;
@@ -75,7 +74,7 @@ public class ActionExecutionService implements ActionExecutionGateway {
         validateCommonRequest(request);
         ActionDefinitionView action = definitionService.get(request.actionKey());
         ActionParameterSetView parameterSet = findParameterSet(request);
-        return packageAssembler.assemble(action, parameterSet, request.input(), request.robotId());
+        return packageAssembler.assemble(action, parameterSet, request.robotId());
     }
 
     /**
@@ -86,12 +85,11 @@ public class ActionExecutionService implements ActionExecutionGateway {
         validateEngineCommand(command);
         StartActionExecutionRequest previewRequest = new StartActionExecutionRequest(
                 command.actionInstanceId(), command.robotId(), command.actionKey(), command.parameterSetId(),
-                command.input(), null, command.workflowInstanceId(), command.workflowNodeInstanceId());
+                null, command.workflowInstanceId(), command.workflowNodeInstanceId());
         ActionPackagePreview actionPackage = preview(previewRequest);
         StartActionExecutionRequest executionRequest = new StartActionExecutionRequest(
                 command.actionInstanceId(), command.robotId(), command.actionKey(), command.parameterSetId(),
-                command.input(), actionPackage.packageHash(),
-                command.workflowInstanceId(), command.workflowNodeInstanceId());
+                actionPackage.packageHash(), command.workflowInstanceId(), command.workflowNodeInstanceId());
         ActionExecutionView execution = start(executionRequest);
         return new ActionExecutionReceipt(execution.actionInstanceId(), execution.createdAt());
     }
@@ -117,7 +115,7 @@ public class ActionExecutionService implements ActionExecutionGateway {
         ActionDefinitionView action = definitionService.getActive(request.actionKey());
         ActionParameterSetView parameterSet = findParameterSet(request);
         ActionPackagePreview actionPackage = packageAssembler.assemble(
-                action, parameterSet, request.input(), request.robotId());
+                action, parameterSet, request.robotId());
         if (!actionPackage.packageHash().equals(request.expectedPackageHash())) {
             throw new ActionConflictException("Action 或参数已发生变化，请重新预览后再执行。");
         }
@@ -137,7 +135,7 @@ public class ActionExecutionService implements ActionExecutionGateway {
                 actionPackage.parameterSetRevision(), actionPackage.protocolActionVersion(), requestHash,
                 actionPackage.packageHash(), request.workflowInstanceId(), request.workflowNodeInstanceId(),
                 actionPackage.definitionSnapshot(), actionPackage.parameterSnapshot(),
-                actionPackage.inputSnapshot(), actionPackage.commandInput(), actionPackage.timeoutMs(), now);
+                actionPackage.commandInput(), actionPackage.timeoutMs(), now);
 
         CreateActionExecutionResult creation = executionStore.createIfAbsent(newExecution);
         if (!creation.created()) {
@@ -193,7 +191,6 @@ public class ActionExecutionService implements ActionExecutionGateway {
         fingerprint.put("robotId", request.robotId());
         fingerprint.put("actionKey", request.actionKey());
         putNullable(fingerprint, "parameterSetId", request.parameterSetId());
-        fingerprint.set("input", request.input());
         fingerprint.put("expectedPackageHash", request.expectedPackageHash());
         putNullable(fingerprint, "workflowInstanceId", request.workflowInstanceId());
         putNullable(fingerprint, "workflowNodeInstanceId", request.workflowNodeInstanceId());
@@ -204,10 +201,6 @@ public class ActionExecutionService implements ActionExecutionGateway {
         if (request == null) throw new IllegalArgumentException("执行请求不能为空。");
         requireText(request.robotId(), "robotId");
         requireText(request.actionKey(), "actionKey");
-        JsonNode input = request.input();
-        if (input == null || !input.isObject()) {
-            throw new IllegalArgumentException("input 必须是 JSON 对象。");
-        }
     }
 
     private void validateEngineCommand(ExecuteActionCommand command) {

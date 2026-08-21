@@ -54,3 +54,44 @@ test("UNKNOWN_HOLD 或物理结果未知时继续冻结", () => {
   assert.equal(stateApi.canEdit(holdState, "MOVE.CUSTOM"), false);
   assert.equal(stateApi.canEdit(failedUnknownState, "MOVE.CUSTOM"), false);
 });
+
+test("开发联调可人工放弃 UNKNOWN_HOLD 的页面锁，但不能解锁运行中动作", () => {
+  const holdState = stateApi.lockForExecution(stateApi.create(), "ARM.PICK", "execution-hold");
+  const runningState = stateApi.lockForExecution(stateApi.create(), "ARM.PICK", "execution-running");
+  const mismatchedState = stateApi.lockForExecution(stateApi.create(), "ARM.PICK", "execution-other");
+
+  assert.equal(stateApi.releaseUnknownHoldForCommissioning(holdState, {
+    state: "UNKNOWN_HOLD", physicalResultKnown: false, actionInstanceId: "execution-hold"
+  }), true);
+  assert.equal(stateApi.canEdit(holdState, "ARM.PICK"), true);
+  assert.equal(holdState.executionId, "execution-hold");
+
+  assert.equal(stateApi.releaseUnknownHoldForCommissioning(runningState, {
+    state: "RUNNING", physicalResultKnown: false, actionInstanceId: "execution-running"
+  }), false);
+  assert.equal(stateApi.canEdit(runningState, "ARM.PICK"), false);
+
+  assert.equal(stateApi.releaseUnknownHoldForCommissioning(mismatchedState, {
+    state: "UNKNOWN_HOLD", physicalResultKnown: false, actionInstanceId: "execution-hold"
+  }), true);
+  assert.equal(mismatchedState.executionId, "execution-hold");
+  assert.equal(stateApi.canEdit(mismatchedState, "ARM.PICK"), true);
+});
+
+test("页面锁已丢失但仍展示 UNKNOWN_HOLD 记录时也提供一次调试确认", () => {
+  const restoredState = stateApi.create({
+    actionKey: "ARM.PICK",
+    executionId: "execution-restored",
+    executionLocked: false
+  });
+  const execution = {
+    state: "UNKNOWN_HOLD",
+    physicalResultKnown: false,
+    actionInstanceId: "execution-restored"
+  };
+
+  assert.equal(stateApi.canReleaseUnknownHoldForCommissioning(restoredState, execution), true);
+  assert.equal(stateApi.releaseUnknownHoldForCommissioning(restoredState, execution), true);
+  assert.equal(stateApi.canReleaseUnknownHoldForCommissioning(restoredState, execution), false);
+  assert.equal(stateApi.canEdit(restoredState, "ARM.PICK"), true);
+});

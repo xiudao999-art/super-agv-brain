@@ -1,6 +1,6 @@
 # Kunling Scheduling
 
-坤灵机器人调度主应用，采用 Maven 模块化单体架构。Action 模块维护“当前 Action 定义”，将它与设备联调参数、本次业务入参解析为不可变执行包，再一次性下发给设备适配层。
+坤灵机器人调度主应用，采用 Maven 模块化单体架构。Action 模块维护“当前 Action 定义”，将它与设备联调参数集解析为不可变执行包，再一次性下发给设备适配层。
 
 ## 核心边界
 
@@ -34,9 +34,10 @@ create database kunling character set utf8mb4 collate utf8mb4_0900_ai_ci;
 use kunling;
 source scheduling-action/src/main/resources/db/create/kunling_action_schema.sql;
 source scheduling-action/src/main/resources/db/alter/20260820_01_dynamic_action_package.sql;
+source scheduling-action/src/main/resources/db/alter/20260821_01_remove_action_business_input.sql;
 ```
 
-已有库执行前先备份，再人工审核并执行尚未应用的 `db/alter/20260820_01_dynamic_action_package.sql`。脚本会直接删除旧 Action 表及数据，不会转换旧 JSON；备份是唯一恢复来源。应用保持 `ddl-auto=none`，不使用 Flyway，不在启动时写初始数据。
+已有库执行前先备份，再人工审核并按文件名顺序执行尚未应用的 `db/alter/` 脚本。`20260821_01_remove_action_business_input.sql` 会将旧 `inputSchema` 和 `$input.*` 绑定迁移到设备联调参数，并删除执行表中的旧输入快照列。应用保持 `ddl-auto=none`，不使用 Flyway，不在启动时写初始数据。
 
 ## 构建与运行
 

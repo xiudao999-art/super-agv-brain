@@ -8,7 +8,6 @@ import com.kunling.scheduling.action.definition.application.ActionDefinitionServ
 import com.kunling.scheduling.action.definition.application.ActionDefinitionView;
 import com.kunling.scheduling.action.definition.application.ActionExecutionLock;
 import com.kunling.scheduling.action.definition.application.ActionNotFoundException;
-import com.kunling.scheduling.action.execution.application.ActionInputValidator;
 import com.kunling.scheduling.action.config.ImmutableCollections;
 import com.kunling.scheduling.action.config.JsonCodec;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +26,7 @@ public class ActionParameterSetService {
 
     private final ActionParameterSetRepository repository;
     private final ActionDefinitionService definitionService;
-    private final ActionInputValidator inputValidator;
+    private final ActionParameterValueValidator parameterValueValidator;
     private final ActionExecutionLock executionLock;
     private final JsonCodec jsonCodec;
     private final Clock clock;
@@ -35,21 +34,21 @@ public class ActionParameterSetService {
     @Autowired
     public ActionParameterSetService(ActionParameterSetRepository repository,
                                      ActionDefinitionService definitionService,
-                                     ActionInputValidator inputValidator,
+                                     ActionParameterValueValidator parameterValueValidator,
                                      ActionExecutionLock executionLock,
                                      JsonCodec jsonCodec) {
-        this(repository, definitionService, inputValidator, executionLock, jsonCodec, Clock.systemUTC());
+        this(repository, definitionService, parameterValueValidator, executionLock, jsonCodec, Clock.systemUTC());
     }
 
     ActionParameterSetService(ActionParameterSetRepository repository,
                               ActionDefinitionService definitionService,
-                              ActionInputValidator inputValidator,
+                              ActionParameterValueValidator parameterValueValidator,
                               ActionExecutionLock executionLock,
                               JsonCodec jsonCodec,
                               Clock clock) {
         this.repository = repository;
         this.definitionService = definitionService;
-        this.inputValidator = inputValidator;
+        this.parameterValueValidator = parameterValueValidator;
         this.executionLock = executionLock;
         this.jsonCodec = jsonCodec;
         this.clock = clock;
@@ -118,7 +117,7 @@ public class ActionParameterSetService {
         requireText(request.actionKey(), "actionKey");
         requireText(request.name(), "name");
         ActionDefinitionView action = definitionService.get(request.actionKey());
-        inputValidator.validate(request.values() == null
+        parameterValueValidator.validate(request.values() == null
                         ? JsonNodeFactory.instance.objectNode() : request.values(),
                 action.definition().parameterSchema());
     }

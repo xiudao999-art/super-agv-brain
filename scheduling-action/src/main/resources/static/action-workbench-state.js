@@ -10,6 +10,7 @@
       actionKey: savedTask && savedTask.actionKey || null,
       executionId: savedTask && savedTask.executionId || null,
       executionLocked: Boolean(savedTask && savedTask.executionLocked),
+      acknowledgedUnknownHoldId: savedTask && savedTask.acknowledgedUnknownHoldId || null,
       serverLocked: false
     };
   }
@@ -18,6 +19,7 @@
     state.actionKey = actionKey;
     state.executionId = executionId;
     state.executionLocked = true;
+    state.acknowledgedUnknownHoldId = null;
     return state;
   }
 
@@ -31,6 +33,26 @@
     if (!terminalStates.includes(execution.state)) return false;
     state.executionLocked = false;
     state.executionId = execution.actionInstanceId || state.executionId;
+    state.acknowledgedUnknownHoldId = null;
+    return true;
+  }
+
+  /**
+   * 开发联调时允许人工放弃 UNKNOWN_HOLD 对页面造成的编辑锁。
+   * 该操作只改变浏览器工作台状态，不会伪造物理结果，也不会修改服务端执行记录。
+   */
+  function canReleaseUnknownHoldForCommissioning(state, execution) {
+    if (!state || !execution) return false;
+    if (execution.state !== "UNKNOWN_HOLD" || execution.physicalResultKnown === true) return false;
+    if (!execution.actionInstanceId) return false;
+    return state.acknowledgedUnknownHoldId !== execution.actionInstanceId;
+  }
+
+  function releaseUnknownHoldForCommissioning(state, execution) {
+    if (!canReleaseUnknownHoldForCommissioning(state, execution)) return false;
+    state.executionId = execution.actionInstanceId;
+    state.executionLocked = false;
+    state.acknowledgedUnknownHoldId = execution.actionInstanceId;
     return true;
   }
 
@@ -42,5 +64,13 @@
     return !state.executionLocked && !state.serverLocked;
   }
 
-  return { create, lockForExecution, releaseAfterSettled, newTask, canEdit };
+  return {
+    create,
+    lockForExecution,
+    releaseAfterSettled,
+    canReleaseUnknownHoldForCommissioning,
+    releaseUnknownHoldForCommissioning,
+    newTask,
+    canEdit
+  };
 });

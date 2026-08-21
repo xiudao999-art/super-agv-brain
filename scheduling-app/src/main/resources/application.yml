@@ -13,6 +13,12 @@ kunling:
 spring:
   application:
     name: kunling-scheduling
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # Action 工作台处于高频联调阶段，禁止浏览器继续执行旧版静态脚本。
+          no-store: true
   datasource:
     url: jdbc:mysql://39.105.68.15:50013/kunling?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: sunder

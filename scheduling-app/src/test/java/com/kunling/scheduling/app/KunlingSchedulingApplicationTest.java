@@ -56,6 +56,8 @@ class KunlingSchedulingApplicationTest {
             assertThat(source.getProperty("kunling.action.robot-bridge.port")).isEqualTo(8080);
             assertThat(source.getProperty("springdoc.api-docs.path")).isEqualTo("/v3/api-docs");
             assertThat(source.getProperty("knife4j.enable")).isEqualTo(true);
+            assertThat(source.getProperty("spring.web.resources.cache.cachecontrol.no-store"))
+                    .isEqualTo(true);
             assertThat(source.getProperty("kunling.action.compiler.maximum-action-depth")).isNull();
             assertThat(source.getProperty("kunling.action.upstream.enabled")).isNull();
         });

@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const timeline = require("../../main/resources/static/action-execution-timeline.js");
 
-test("renders structured phase evidence and resolved input parameters", () => {
+test("renders structured phase evidence and resolved device parameters", () => {
   const events = [{
     state: "RUNNING",
     timestamp: "2026-08-20T12:37:39Z",

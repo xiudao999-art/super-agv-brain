@@ -49,8 +49,6 @@ public class ActionExecutionView {
     JsonNode definitionSnapshot;
     @Schema(description = "联调参数执行快照")
     JsonNode parameterSnapshot;
-    @Schema(description = "业务输入执行快照")
-    JsonNode inputSnapshot;
     @Schema(description = "下发给 cnet8 的 MainAction 完整内容")
     JsonNode commandInput;
     @Schema(description = "逐阶段最终参数与执行证据")
@@ -70,7 +68,7 @@ public class ActionExecutionView {
             "actionRevision", "downstreamActionType", "parameterSetId", "parameterSetRevision",
             "protocolActionVersion", "requestHash", "packageHash", "state", "physicalResultKnown",
             "workflowInstanceId", "workflowNodeInstanceId", "definitionSnapshot", "parameterSnapshot",
-            "inputSnapshot", "commandInput", "resolvedSteps", "physicalResult", "error",
+            "commandInput", "resolvedSteps", "physicalResult", "error",
             "createdAt", "updatedAt", "completedAt"})
     public ActionExecutionView(String actionInstanceId,
                                String robotId,
@@ -89,7 +87,6 @@ public class ActionExecutionView {
                                String workflowNodeInstanceId,
                                JsonNode definitionSnapshot,
                                JsonNode parameterSnapshot,
-                               JsonNode inputSnapshot,
                                JsonNode commandInput,
                                JsonNode resolvedSteps,
                                JsonNode physicalResult,
@@ -114,7 +111,6 @@ public class ActionExecutionView {
         this.workflowNodeInstanceId = workflowNodeInstanceId;
         this.definitionSnapshot = definitionSnapshot;
         this.parameterSnapshot = parameterSnapshot;
-        this.inputSnapshot = inputSnapshot;
         this.commandInput = commandInput;
         this.resolvedSteps = resolvedSteps;
         this.physicalResult = physicalResult;

@@ -25,7 +25,7 @@ public class ActionPhaseDefinition {
     DownstreamSubAction subAction;
     @Schema(description = "是否执行该阶段")
     boolean enabled;
-    @Schema(description = "子动作最终参数；支持 $input.* 和 $parameters.* 绑定")
+    @Schema(description = "子动作最终参数；支持 $parameters.* 绑定设备联调参数")
     @JsonProperty("params") JsonNode parameters;
     @Schema(description = "是否为验收门禁；门禁阶段不能配置跳过失败")
     boolean gate;

@@ -20,7 +20,7 @@ public class ActionDefinitionValidator {
 
     private static final Pattern ACTION_KEY = Pattern.compile("[A-Z0-9][A-Z0-9._-]{1,127}");
     private static final Pattern PHASE_ID = Pattern.compile("[A-Za-z][A-Za-z0-9._-]{0,127}");
-    private static final Pattern BINDING = Pattern.compile("^\\$(input|parameters)\\.([A-Za-z0-9_.-]+)$");
+    private static final Pattern BINDING = Pattern.compile("^\\$parameters\\.([A-Za-z0-9_.-]+)$");
     private static final Set<String> POLICY_PARAMETER_NAMES = new HashSet<String>();
 
     static {
@@ -133,18 +133,19 @@ public class ActionDefinitionValidator {
     private void validateBindings(JsonNode node, ActionDefinition definition, String path) {
         if (node.isTextual()) {
             String value = node.textValue();
-            if (!value.startsWith("$input.") && !value.startsWith("$parameters.")) {
+            if (value.startsWith("$input.")) {
+                throw new IllegalArgumentException(path
+                        + " 使用了已移除的 $input 绑定，请改用 $parameters 并在设备联调参数 Schema 中声明。");
+            }
+            if (!value.startsWith("$parameters.")) {
                 return;
             }
             Matcher matcher = BINDING.matcher(value);
             if (!matcher.matches()) {
                 throw new IllegalArgumentException(path + " 包含无效绑定：" + value);
             }
-            String root = matcher.group(2).split("\\.", 2)[0];
-            boolean declared = "input".equals(matcher.group(1))
-                    ? definition.inputSchema().containsKey(root)
-                    : definition.parameterSchema().containsKey(root);
-            if (!declared) {
+            String root = matcher.group(1).split("\\.", 2)[0];
+            if (!definition.parameterSchema().containsKey(root)) {
                 throw new IllegalArgumentException(path + " 引用了未声明参数：" + value);
             }
             return;

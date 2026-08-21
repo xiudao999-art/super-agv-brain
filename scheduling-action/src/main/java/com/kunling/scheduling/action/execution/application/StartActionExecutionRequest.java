@@ -1,7 +1,6 @@
 package com.kunling.scheduling.action.execution.application;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Value;
 import lombok.experimental.Accessors;
@@ -22,8 +21,6 @@ public class StartActionExecutionRequest {
     String actionKey;
     @Schema(description = "设备联调参数集标识；Action 无联调参数时可为空")
     String parameterSetId;
-    @Schema(description = "本次业务输入，必须满足 Action inputSchema")
-    JsonNode input;
     @Schema(description = "预览返回的 packageHash；正式执行时必填")
     String expectedPackageHash;
     @Schema(description = "状态机流程实例标识")
@@ -31,13 +28,12 @@ public class StartActionExecutionRequest {
     @Schema(description = "状态机流程节点实例标识")
     String workflowNodeInstanceId;
 
-    @ConstructorProperties({"actionInstanceId", "robotId", "actionKey", "parameterSetId", "input",
+    @ConstructorProperties({"actionInstanceId", "robotId", "actionKey", "parameterSetId",
             "expectedPackageHash", "workflowInstanceId", "workflowNodeInstanceId"})
     public StartActionExecutionRequest(String actionInstanceId,
                                        String robotId,
                                        String actionKey,
                                        String parameterSetId,
-                                       JsonNode input,
                                        String expectedPackageHash,
                                        String workflowInstanceId,
                                        String workflowNodeInstanceId) {
@@ -45,7 +41,6 @@ public class StartActionExecutionRequest {
         this.robotId = normalize(robotId);
         this.actionKey = normalize(actionKey);
         this.parameterSetId = normalizeToNull(parameterSetId);
-        this.input = input == null ? null : input.deepCopy();
         this.expectedPackageHash = normalizeToNull(expectedPackageHash);
         this.workflowInstanceId = normalizeToNull(workflowInstanceId);
         this.workflowNodeInstanceId = normalizeToNull(workflowNodeInstanceId);
