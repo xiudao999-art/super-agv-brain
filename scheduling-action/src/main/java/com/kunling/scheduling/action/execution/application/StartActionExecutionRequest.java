@@ -16,7 +16,7 @@ import java.beans.ConstructorProperties;
 public class StartActionExecutionRequest {
     @Schema(description = "动作执行实例标识；预览时可为空，正式执行时必填")
     String actionInstanceId;
-    @Schema(description = "目标机器人标识", example = "ROBOT-01")
+    @Schema(description = "目标机器人标识", example = "R01")
     String robotId;
     @Schema(description = "Action 唯一标识", example = "ARM.PICK")
     String actionKey;

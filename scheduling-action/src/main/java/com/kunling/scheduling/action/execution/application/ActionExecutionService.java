@@ -17,7 +17,7 @@ import com.kunling.scheduling.action.robotbridge.application.RobotActionQuery;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionTransport;
 import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
 import com.kunling.scheduling.action.robotbridge.application.RobotUnavailableException;
-import com.kunling.scheduling.action.shared.JsonCodec;
+import com.kunling.scheduling.action.config.JsonCodec;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -29,7 +29,7 @@ import java.util.UUID;
 
 /** 预览、冻结、持久化和完整包下发的唯一入口。 */
 @Service
-public class ActionExecutionService {
+public class ActionExecutionService implements ActionExecutionGateway {
 
     private final ActionDefinitionService definitionService;
     private final ActionParameterSetService parameterSetService;
@@ -76,6 +76,24 @@ public class ActionExecutionService {
         ActionDefinitionView action = definitionService.get(request.actionKey());
         ActionParameterSetView parameterSet = findParameterSet(request);
         return packageAssembler.assemble(action, parameterSet, request.input(), request.robotId());
+    }
+
+    /**
+     * 执行引擎本地调用入口。packageHash 仅在本模块内产生和消费，调用方无需理解预览协议。
+     */
+    @Override
+    public ActionExecutionReceipt execute(ExecuteActionCommand command) {
+        validateEngineCommand(command);
+        StartActionExecutionRequest previewRequest = new StartActionExecutionRequest(
+                command.actionInstanceId(), command.robotId(), command.actionKey(), command.parameterSetId(),
+                command.input(), null, command.workflowInstanceId(), command.workflowNodeInstanceId());
+        ActionPackagePreview actionPackage = preview(previewRequest);
+        StartActionExecutionRequest executionRequest = new StartActionExecutionRequest(
+                command.actionInstanceId(), command.robotId(), command.actionKey(), command.parameterSetId(),
+                command.input(), actionPackage.packageHash(),
+                command.workflowInstanceId(), command.workflowNodeInstanceId());
+        ActionExecutionView execution = start(executionRequest);
+        return new ActionExecutionReceipt(execution.actionInstanceId(), execution.createdAt());
     }
 
     public ActionExecutionView start(StartActionExecutionRequest request) {
@@ -140,7 +158,7 @@ public class ActionExecutionService {
             // 写失败不能证明对端是否收到，必须保持原快照并进入人工确认态。
             ActionExecutionView held = executionStore.hold(actionInstanceId, "DISPATCH_RESULT_UNKNOWN",
                     exception.getMessage(), now);
-            reportPublisher.publishLocalState(held, "DISPATCH_RESULT_UNKNOWN", now);
+            reportPublisher.publishLocalState(held, now);
             return held;
         }
     }
@@ -189,6 +207,22 @@ public class ActionExecutionService {
         JsonNode input = request.input();
         if (input == null || !input.isObject()) {
             throw new IllegalArgumentException("input 必须是 JSON 对象。");
+        }
+    }
+
+    private void validateEngineCommand(ExecuteActionCommand command) {
+        if (command == null) throw new IllegalArgumentException("Action 执行命令不能为空。");
+        requireText(command.workflowInstanceId(), "workflowInstanceId");
+        requireText(command.workflowNodeInstanceId(), "workflowNodeInstanceId");
+        requireText(command.actionInstanceId(), "actionInstanceId");
+        requireMaximumLength(command.workflowInstanceId(), "workflowInstanceId", 128);
+        requireMaximumLength(command.workflowNodeInstanceId(), "workflowNodeInstanceId", 128);
+        requireMaximumLength(command.actionInstanceId(), "actionInstanceId", 128);
+    }
+
+    private void requireMaximumLength(String value, String field, int maximumLength) {
+        if (value.length() > maximumLength) {
+            throw new IllegalArgumentException(field + " 长度不能超过 " + maximumLength + "。");
         }
     }
 

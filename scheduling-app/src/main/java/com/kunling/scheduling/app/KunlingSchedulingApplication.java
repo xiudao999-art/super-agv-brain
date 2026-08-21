@@ -1,6 +1,6 @@
 package com.kunling.scheduling.app;
 
-import com.kunling.scheduling.action.ActionModuleConfiguration;
+import com.kunling.scheduling.action.config.ActionModuleConfiguration;
 import com.kunling.scheduling.agvflow.AgvFlowModuleConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

@@ -41,7 +41,7 @@ public class InterruptedActionExecutionRecovery implements ApplicationRunner {
                 executionStore.holdInterruptedExecutions("SCHEDULING_SERVICE_RESTARTED",
                         "调度服务重启，无法证明中断期间的物理执行结果", occurredAt);
         for (ActionExecutionView execution : held) {
-            reportPublisher.publishLocalState(execution, "SCHEDULING_SERVICE_RESTARTED", occurredAt);
+            reportPublisher.publishLocalState(execution, occurredAt);
         }
         int count = held.size();
         if (count > 0) {

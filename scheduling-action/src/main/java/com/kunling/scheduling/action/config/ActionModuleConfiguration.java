@@ -1,5 +1,6 @@
-package com.kunling.scheduling.action;
+package com.kunling.scheduling.action.config;
 
+import com.kunling.scheduling.action.ActionModulePackage;
 import com.kunling.scheduling.action.commissioning.infrastructure.ActionParameterSetEntity;
 import com.kunling.scheduling.action.commissioning.infrastructure.ActionParameterSetRepository;
 import com.kunling.scheduling.action.definition.infrastructure.ActionDefinitionEntity;
@@ -22,7 +23,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  * <p>主应用只需要导入本配置，不需要了解模块内部的领域对象、仓储或上游适配实现。</p>
  */
 @Configuration(proxyBeanMethods = false)
-@ComponentScan(basePackageClasses = ActionModuleConfiguration.class)
+@ComponentScan(basePackageClasses = ActionModulePackage.class)
 @EntityScan(basePackageClasses = {
         ActionDefinitionEntity.class,
         ActionParameterSetEntity.class,

@@ -2,7 +2,7 @@ package com.kunling.scheduling.action.execution.infrastructure;
 
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEvent;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionEventView;
-import com.kunling.scheduling.action.shared.JsonCodec;
+import com.kunling.scheduling.action.config.JsonCodec;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;

@@ -5,8 +5,8 @@ import com.kunling.scheduling.action.execution.domain.ActionExecutionState;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
 import com.kunling.scheduling.action.execution.domain.NewActionExecution;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEvent;
-import com.kunling.scheduling.action.shared.ImmutableCollections;
-import com.kunling.scheduling.action.shared.JsonCodec;
+import com.kunling.scheduling.action.config.ImmutableCollections;
+import com.kunling.scheduling.action.config.JsonCodec;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;

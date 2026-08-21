@@ -1,6 +1,6 @@
 package com.kunling.scheduling.action.robotbridge.infrastructure;
 
-import com.kunling.scheduling.action.shared.ImmutableCollections;
+import com.kunling.scheduling.action.config.ImmutableCollections;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -18,7 +18,7 @@ import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
 import com.kunling.scheduling.action.robotbridge.application.RobotUnavailableException;
 import com.kunling.scheduling.action.robotbridge.config.RobotBridgeProperties;
 import com.kunling.scheduling.action.config.ActionModuleDefaults;
-import com.kunling.scheduling.action.shared.NamedDaemonThreadFactory;
+import com.kunling.scheduling.action.config.NamedDaemonThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;

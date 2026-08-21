@@ -44,7 +44,7 @@ public class ActionExecutionTimeoutMonitor {
         java.time.Instant occurredAt = clock.instant();
         for (ActionExecutionView execution : executionStore.holdTimedOutExecutions(occurredAt)) {
             log.warn("动作执行超时并进入 UNKNOWN_HOLD: actionInstanceId={}", execution.actionInstanceId());
-            reportPublisher.publishLocalState(execution, "ACTION_TIMEOUT", occurredAt);
+            reportPublisher.publishLocalState(execution, occurredAt);
             try {
                 if (transport.findSession(execution.robotId()).isPresent()) {
                     transport.query(new RobotActionQuery(execution.robotId(), execution.actionInstanceId(),

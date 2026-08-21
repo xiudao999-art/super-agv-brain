@@ -10,7 +10,7 @@ import com.kunling.scheduling.action.definition.application.ActionDefinitionVali
 import com.kunling.scheduling.action.definition.application.ActionDefinitionView;
 import com.kunling.scheduling.action.definition.domain.ActionDefinition;
 import com.kunling.scheduling.action.definition.domain.ActionPhaseDefinition;
-import com.kunling.scheduling.action.shared.JsonCodec;
+import com.kunling.scheduling.action.config.JsonCodec;
 import org.springframework.stereotype.Component;
 
 import java.util.Iterator;

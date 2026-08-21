@@ -1,4 +1,4 @@
-package com.kunling.scheduling.action.shared;
+package com.kunling.scheduling.action.config;
 
 import java.util.ArrayList;
 import java.util.Arrays;

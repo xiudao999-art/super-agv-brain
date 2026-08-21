@@ -3,7 +3,7 @@ package com.kunling.scheduling.action.commissioning.infrastructure;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.kunling.scheduling.action.commissioning.application.ActionParameterSetView;
 import com.kunling.scheduling.action.commissioning.application.SaveParameterSetRequest;
-import com.kunling.scheduling.action.shared.JsonCodec;
+import com.kunling.scheduling.action.config.JsonCodec;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;

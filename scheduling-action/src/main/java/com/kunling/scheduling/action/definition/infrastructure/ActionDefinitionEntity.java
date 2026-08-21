@@ -2,7 +2,7 @@ package com.kunling.scheduling.action.definition.infrastructure;
 
 import com.kunling.scheduling.action.definition.domain.ActionDefinition;
 import com.kunling.scheduling.action.definition.domain.ActionDefinitionStatus;
-import com.kunling.scheduling.action.shared.JsonCodec;
+import com.kunling.scheduling.action.config.JsonCodec;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;

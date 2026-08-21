@@ -1,7 +1,7 @@
 package com.kunling.scheduling.action.definition.domain;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.kunling.scheduling.action.shared.ImmutableCollections;
+import com.kunling.scheduling.action.config.ImmutableCollections;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Value;
 import lombok.experimental.Accessors;

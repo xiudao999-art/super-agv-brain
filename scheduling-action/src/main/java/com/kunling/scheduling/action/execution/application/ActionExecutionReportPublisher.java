@@ -24,21 +24,30 @@ public class ActionExecutionReportPublisher {
     }
 
     public void publish(ActionExecutionView execution, RobotActionEvent event) {
-        publish(mapper.fromRobotEvent(execution, event));
+        mapper.fromTerminalRobotEvent(execution, event).ifPresent(this::publish);
     }
 
-    public void publishLocalState(ActionExecutionView execution, String reasonCode, Instant occurredAt) {
-        publish(mapper.fromLocalState(execution, reasonCode, occurredAt));
+    public void publishLocalState(ActionExecutionView execution, Instant occurredAt) {
+        publish(mapper.fromLocalState(execution, occurredAt));
     }
 
     public void publish(ActionExecutionReport report) {
+        log.info("Action 最终结果: actionInstanceId={}, workflowInstanceId={}, workflowNodeInstanceId={}, " +
+                        "actionKey={}, robotId={}, success={}, physicalResultKnown={}, completedAt={}, " +
+                        "businessCode={}, handling={}, output={}, failure={}",
+                report.actionInstanceId(), report.workflowInstanceId(), report.workflowNodeInstanceId(),
+                report.actionKey(), report.robotId(), report.success(), report.physicalResultKnown(),
+                report.completedAt(),
+                report.failure() == null ? "-" : report.failure().businessCode(),
+                report.failure() == null ? "-" : report.failure().handling(),
+                report.output(), report.failure());
         for (ActionExecutionReportSink sink : sinks) {
             try {
                 sink.accept(report);
             } catch (RuntimeException exception) {
                 // 设备事件已经持久化。执行引擎接收失败只记录，不得伪造设备执行失败或回滚状态。
-                log.error("Action 执行报告交付失败: actionInstanceId={}, eventId={}",
-                        report.correlation().actionInstanceId(), report.eventId(), exception);
+                log.error("Action 最终结果交付失败: actionInstanceId={}",
+                        report.actionInstanceId(), exception);
             }
         }
     }

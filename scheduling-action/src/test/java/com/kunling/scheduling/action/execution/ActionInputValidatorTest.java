@@ -1,6 +1,6 @@
 package com.kunling.scheduling.action.execution;
 
-import com.kunling.scheduling.action.shared.ImmutableCollections;
+import com.kunling.scheduling.action.config.ImmutableCollections;
 
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.kunling.scheduling.action.definition.domain.ParameterSchema;
@@ -8,7 +8,6 @@ import com.kunling.scheduling.action.definition.domain.ParameterType;
 import com.kunling.scheduling.action.execution.application.ActionInputValidator;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThatNoException;

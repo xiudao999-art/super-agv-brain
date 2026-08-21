@@ -1,5 +1,6 @@
 package com.kunling.scheduling.action.execution.application;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEvent;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEventListener;
@@ -47,7 +48,33 @@ public class ActionExecutionEventProcessor implements RobotActionEventListener, 
 
     @Override
     public void onEvent(RobotActionEvent event) {
-        executionStore.applyEvent(event).ifPresent(execution -> reportPublisher.publish(execution, event));
+        executionStore.applyEvent(event).ifPresent(execution -> {
+            logProgress(execution, event);
+            reportPublisher.publish(execution, event);
+        });
+    }
+
+    /** 每个被持久化的下游事件都输出一行，联调时可直接观察逐步骤执行过程。 */
+    private void logProgress(ActionExecutionView execution, RobotActionEvent event) {
+        JsonNode phase = event.phaseEvent();
+        log.info("Action 执行进度: workflowInstanceId={}, workflowNodeInstanceId={}, " +
+                        "actionInstanceId={}, actionKey={}, robotId={}, actionState={}, " +
+                        "sequence={}, phaseEventType={}, phaseId={}, subAction={}, stepState={}, attempt={}, phaseEvent={}",
+                execution.workflowInstanceId(), execution.workflowNodeInstanceId(),
+                execution.actionInstanceId(), execution.actionKey(), execution.robotId(), execution.state(),
+                event.sequence(), text(phase, "eventType"), text(phase, "phaseId"),
+                text(phase, "subAction"), text(phase, "stepState"), integer(phase, "attempt"),
+                phase == null ? "-" : phase);
+    }
+
+    private String text(JsonNode node, String field) {
+        JsonNode value = node == null ? null : node.get(field);
+        return value == null || value.isNull() ? "-" : value.asText();
+    }
+
+    private String integer(JsonNode node, String field) {
+        JsonNode value = node == null ? null : node.get(field);
+        return value == null || !value.canConvertToInt() ? "-" : String.valueOf(value.intValue());
     }
 
     @Override
@@ -57,7 +84,7 @@ public class ActionExecutionEventProcessor implements RobotActionEventListener, 
                 session.robotId(), "ROBOT_CONNECTION_LOST",
                 "动作执行期间机器人连接中断，物理结果无法确认", occurredAt);
         for (ActionExecutionView execution : held) {
-            reportPublisher.publishLocalState(execution, "ROBOT_CONNECTION_LOST", occurredAt);
+            reportPublisher.publishLocalState(execution, occurredAt);
         }
         if (!held.isEmpty()) {
             log.warn("机器人 {} 离线，{} 个未完成动作进入 UNKNOWN_HOLD", session.robotId(), held.size());

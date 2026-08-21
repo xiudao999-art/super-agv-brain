@@ -1,4 +1,4 @@
-package com.kunling.scheduling.action.shared;
+package com.kunling.scheduling.action.config;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;

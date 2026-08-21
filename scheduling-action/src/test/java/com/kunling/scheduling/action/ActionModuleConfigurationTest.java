@@ -1,5 +1,6 @@
 package com.kunling.scheduling.action;
 
+import com.kunling.scheduling.action.config.ActionModuleConfiguration;
 import com.kunling.scheduling.action.execution.application.ActionExecutionEventProcessor;
 import com.kunling.scheduling.action.execution.application.ActionExecutionReportMapper;
 import com.kunling.scheduling.action.execution.application.ActionExecutionReportPublisher;
@@ -15,7 +16,7 @@ import com.kunling.scheduling.action.controller.ParameterSetController;
 import com.kunling.scheduling.action.controller.RobotSessionController;
 import com.kunling.scheduling.action.robotbridge.config.Knife4jConfiguration;
 import com.kunling.scheduling.action.robotbridge.config.RobotBridgeProperties;
-import com.kunling.scheduling.action.shared.JsonCodec;
+import com.kunling.scheduling.action.config.JsonCodec;
 import io.swagger.v3.oas.annotations.OpenAPIDefinition;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,6 +38,17 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.mock;
 
 class ActionModuleConfigurationTest {
+
+    @Test
+    void componentScanCoversTheWholeActionModule() {
+        ComponentScan componentScan = AnnotatedElementUtils.findMergedAnnotation(
+                ActionModuleConfiguration.class,
+                ComponentScan.class
+        );
+
+        assertThat(componentScan).isNotNull();
+        assertThat(componentScan.basePackageClasses()).containsExactly(ActionModulePackage.class);
+    }
 
     @Test
     void businessDefaultsStayInModuleWhileTcpDeploymentSettingsAreExternallyConfigurable() {
