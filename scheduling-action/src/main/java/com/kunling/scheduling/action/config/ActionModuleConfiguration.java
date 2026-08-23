@@ -9,6 +9,8 @@ import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionEve
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionEventRepository;
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionEntity;
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionRepository;
+import com.kunling.scheduling.action.exceptionmapping.infrastructure.ActionErrorMappingRuleEntity;
+import com.kunling.scheduling.action.exceptionmapping.infrastructure.ActionErrorMappingRuleRepository;
 import com.kunling.scheduling.action.robotbridge.config.RobotBridgeProperties;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -28,13 +30,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         ActionDefinitionEntity.class,
         ActionParameterSetEntity.class,
         ActionExecutionEntity.class,
-        ActionExecutionEventEntity.class
+        ActionExecutionEventEntity.class,
+        ActionErrorMappingRuleEntity.class
 })
 @EnableJpaRepositories(basePackageClasses = {
         ActionDefinitionRepository.class,
         ActionParameterSetRepository.class,
         ActionExecutionRepository.class,
-        ActionExecutionEventRepository.class
+        ActionExecutionEventRepository.class,
+        ActionErrorMappingRuleRepository.class
 })
 @EnableScheduling
 @EnableConfigurationProperties(RobotBridgeProperties.class)

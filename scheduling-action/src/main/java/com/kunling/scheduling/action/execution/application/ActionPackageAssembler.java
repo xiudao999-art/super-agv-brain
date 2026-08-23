@@ -12,6 +12,9 @@ import com.kunling.scheduling.action.definition.application.ActionDefinitionView
 import com.kunling.scheduling.action.definition.domain.ActionDefinition;
 import com.kunling.scheduling.action.definition.domain.ActionPhaseDefinition;
 import com.kunling.scheduling.action.config.JsonCodec;
+import com.kunling.scheduling.action.exceptionmapping.application.ErrorPolicySnapshotCompiler;
+import com.kunling.scheduling.action.exceptionmapping.application.ErrorPolicySnapshotProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Iterator;
@@ -31,15 +34,29 @@ public class ActionPackageAssembler {
     private final JsonCodec jsonCodec;
     private final ActionDefinitionValidator definitionValidator;
     private final ActionParameterValueValidator parameterValueValidator;
+    private final ErrorPolicySnapshotProvider errorPolicySnapshotProvider;
 
+    @Autowired
     public ActionPackageAssembler(ObjectMapper objectMapper,
                                   JsonCodec jsonCodec,
                                   ActionDefinitionValidator definitionValidator,
-                                  ActionParameterValueValidator parameterValueValidator) {
+                                  ActionParameterValueValidator parameterValueValidator,
+                                  ErrorPolicySnapshotProvider errorPolicySnapshotProvider) {
         this.objectMapper = objectMapper;
         this.jsonCodec = jsonCodec;
         this.definitionValidator = definitionValidator;
         this.parameterValueValidator = parameterValueValidator;
+        this.errorPolicySnapshotProvider = errorPolicySnapshotProvider;
+    }
+
+    /** 仅供不加载 Spring 的模块测试使用，生产环境始终注入配置化快照 Provider。 */
+    public ActionPackageAssembler(ObjectMapper objectMapper,
+                                  JsonCodec jsonCodec,
+                                  ActionDefinitionValidator definitionValidator,
+                                  ActionParameterValueValidator parameterValueValidator) {
+        this(objectMapper, jsonCodec, definitionValidator, parameterValueValidator,
+                definition -> new ErrorPolicySnapshotCompiler(objectMapper, jsonCodec)
+                        .compile(definition, java.util.Collections.emptyList()));
     }
 
     public ActionPackagePreview assemble(ActionDefinitionView action,
@@ -63,9 +80,12 @@ public class ActionPackageAssembler {
         mainAction.put("actionType", definition.downstreamActionType().wireName());
         mainAction.set("phases", phases);
 
+        ObjectNode errorPolicySnapshot = errorPolicySnapshotProvider.compile(definition);
+
         ObjectNode commandInput = objectMapper.createObjectNode();
         // MainAction 的首字母大写是双方既有线协议的一部分。
         commandInput.set("MainAction", mainAction);
+        commandInput.set("errorPolicySnapshot", errorPolicySnapshot);
         String packageHash = jsonCodec.sha256(jsonCodec.writeCanonical(commandInput));
 
         JsonNode parameterSnapshot = parameterSet == null
@@ -77,7 +97,7 @@ public class ActionPackageAssembler {
                 parameterSet == null ? null : parameterSet.revision(),
                 PROTOCOL_ACTION_VERSION, packageHash, definition.timeoutMs(),
                 objectMapper.valueToTree(definition), parameterSnapshot,
-                commandInput, phases.deepCopy());
+                commandInput, phases.deepCopy(), errorPolicySnapshot.deepCopy());
     }
 
     private ObjectNode resolveParameterValues(ActionDefinition definition,

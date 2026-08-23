@@ -5,6 +5,8 @@ import lombok.Value;
 
 import com.kunling.scheduling.action.definition.application.ActionConflictException;
 import com.kunling.scheduling.action.definition.application.ActionNotFoundException;
+import com.kunling.scheduling.action.exceptionmapping.application.ErrorMappingRuleConflictException;
+import com.kunling.scheduling.action.exceptionmapping.application.ErrorMappingRuleNotFoundException;
 import com.kunling.scheduling.action.robotbridge.application.RobotUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,13 +17,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
-    @ExceptionHandler(ActionNotFoundException.class)
-    ResponseEntity<ApiError> notFound(ActionNotFoundException exception) {
+    @ExceptionHandler({ActionNotFoundException.class, ErrorMappingRuleNotFoundException.class})
+    ResponseEntity<ApiError> notFound(RuntimeException exception) {
         return response(HttpStatus.NOT_FOUND, exception, null);
     }
 
-    @ExceptionHandler(ActionConflictException.class)
-    ResponseEntity<ApiError> conflict(ActionConflictException exception) {
+    @ExceptionHandler({ActionConflictException.class, ErrorMappingRuleConflictException.class})
+    ResponseEntity<ApiError> conflict(RuntimeException exception) {
         return response(HttpStatus.CONFLICT, exception, null);
     }
 

@@ -9,8 +9,10 @@ import com.kunling.scheduling.action.execution.application.StartActionExecutionR
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionEventRepository;
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionRepository;
 import com.kunling.scheduling.action.execution.infrastructure.JpaActionExecutionStore;
+import com.kunling.scheduling.action.exceptionmapping.application.BusinessErrorMappingEngine;
 import com.kunling.scheduling.action.definition.domain.ActionDefinition;
 import com.kunling.scheduling.action.controller.ActionController;
+import com.kunling.scheduling.action.controller.ActionErrorMappingController;
 import com.kunling.scheduling.action.controller.ActionProtocolCatalogController;
 import com.kunling.scheduling.action.controller.ExecutionController;
 import com.kunling.scheduling.action.controller.ParameterSetController;
@@ -99,7 +101,8 @@ class ActionModuleConfigurationTest {
     void executionEventProcessorCanBeCreatedBySpringConstructorInjection() {
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
         context.getBeanFactory().registerSingleton("actionExecutionStore", mock(ActionExecutionStore.class));
-        context.register(ActionExecutionReportMapper.class, ActionExecutionReportPublisher.class,
+        context.register(BusinessErrorMappingEngine.class, ActionExecutionReportMapper.class,
+                ActionExecutionReportPublisher.class,
                 ActionExecutionEventProcessor.class);
 
         try {
@@ -117,6 +120,7 @@ class ActionModuleConfigurationTest {
 
         Class<?>[] controllers = {
                 ActionController.class,
+                ActionErrorMappingController.class,
                 ParameterSetController.class,
                 ExecutionController.class,
                 ActionProtocolCatalogController.class,
@@ -140,7 +144,7 @@ class ActionModuleConfigurationTest {
                 documentedEndpointCount++;
             }
         }
-        assertThat(documentedEndpointCount).isEqualTo(20);
+        assertThat(documentedEndpointCount).isEqualTo(27);
 
         Schema<?> actionDefinitionSchema = ModelConverters.getInstance()
                 .read(ActionDefinition.class)

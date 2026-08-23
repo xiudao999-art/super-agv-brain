@@ -38,10 +38,13 @@ public class ActionPackagePreview {
     JsonNode commandInput;
     @Schema(description = "按顺序解析后的阶段及最终参数")
     JsonNode resolvedSteps;
+    @Schema(description = "本次执行冻结的厂家异常映射与业务策略快照")
+    JsonNode errorPolicySnapshot;
 
     @ConstructorProperties({"actionKey", "actionRevision", "downstreamActionType", "parameterSetId",
             "parameterSetRevision", "protocolActionVersion", "packageHash", "timeoutMs",
-            "definitionSnapshot", "parameterSnapshot", "commandInput", "resolvedSteps"})
+            "definitionSnapshot", "parameterSnapshot", "commandInput", "resolvedSteps",
+            "errorPolicySnapshot"})
     public ActionPackagePreview(String actionKey,
                                 long actionRevision,
                                 String downstreamActionType,
@@ -53,7 +56,8 @@ public class ActionPackagePreview {
                                 JsonNode definitionSnapshot,
                                 JsonNode parameterSnapshot,
                                 JsonNode commandInput,
-                                JsonNode resolvedSteps) {
+                                JsonNode resolvedSteps,
+                                JsonNode errorPolicySnapshot) {
         this.actionKey = actionKey;
         this.actionRevision = actionRevision;
         this.downstreamActionType = downstreamActionType;
@@ -66,5 +70,25 @@ public class ActionPackagePreview {
         this.parameterSnapshot = parameterSnapshot;
         this.commandInput = commandInput;
         this.resolvedSteps = resolvedSteps;
+        this.errorPolicySnapshot = errorPolicySnapshot;
+    }
+
+    /** 兼容未显式传入异常策略快照的既有模块测试和调用方。 */
+    public ActionPackagePreview(String actionKey,
+                                long actionRevision,
+                                String downstreamActionType,
+                                String parameterSetId,
+                                Long parameterSetRevision,
+                                String protocolActionVersion,
+                                String packageHash,
+                                int timeoutMs,
+                                JsonNode definitionSnapshot,
+                                JsonNode parameterSnapshot,
+                                JsonNode commandInput,
+                                JsonNode resolvedSteps) {
+        this(actionKey, actionRevision, downstreamActionType, parameterSetId, parameterSetRevision,
+                protocolActionVersion, packageHash, timeoutMs, definitionSnapshot, parameterSnapshot,
+                commandInput, resolvedSteps,
+                commandInput == null ? null : commandInput.path("errorPolicySnapshot").deepCopy());
     }
 }
