@@ -64,8 +64,7 @@ public class FlowServiceImpl extends ServiceImpl<FlowMapper, Flow>
         flow.setStartedAt(LocalDateTime.now());
         flow.setVersion(1);
         flow.setAttempt(0);
-        FlowNode currentNode = resolveCurrentNode(request.getTemplateId(), request.getCurrentNodeId(),
-                StringUtils.isNotBlank(template.getBpmnXml()));
+        FlowNode currentNode = resolveCurrentNode(request.getTemplateId(), request.getCurrentNodeId());
         flow.setCurrentNodeId(currentNode == null ? null : currentNode.getId());
         flow.setCurrentNodeState(request.getCurrentNodeState() == null ? NodeState.PENDING : request.getCurrentNodeState());
         save(flow);
@@ -148,8 +147,7 @@ public class FlowServiceImpl extends ServiceImpl<FlowMapper, Flow>
         flow.setOrderNumber(request.getOrderNumber());
         flow.setTemplateId(request.getTemplateId());
         flow.setTemplateVersion(template.getVersion());
-        FlowNode currentNode = resolveCurrentNode(request.getTemplateId(), request.getCurrentNodeId(),
-                StringUtils.isNotBlank(template.getBpmnXml()));
+        FlowNode currentNode = resolveCurrentNode(request.getTemplateId(), request.getCurrentNodeId());
         flow.setCurrentNodeId(currentNode == null ? null : currentNode.getId());
         flow.setCurrentNodeState(request.getCurrentNodeState() == null
                 ? flow.getCurrentNodeState() : request.getCurrentNodeState());
@@ -180,7 +178,7 @@ public class FlowServiceImpl extends ServiceImpl<FlowMapper, Flow>
                 && request.getEventId() <= flow.getLastEventId()) {
             return toFlowDetail(flow);
         }
-        FlowNode currentNode = resolveCurrentNode(flow.getTemplateId(), request.getCurrentNodeId(), false);
+        FlowNode currentNode = resolveCurrentNode(flow.getTemplateId(), request.getCurrentNodeId());
         flow.setCurrentNodeId(currentNode.getId());
         flow.setCurrentNodeState(request.getCurrentNodeState());
         FlowState nextState = request.getFlowState() == null
@@ -227,8 +225,6 @@ public class FlowServiceImpl extends ServiceImpl<FlowMapper, Flow>
         detail.setErrorCode(flow.getErrorCode());
         detail.setErrorMessage(flow.getErrorMessage());
         detail.setAttempt(flow.getAttempt());
-        detail.setProcessDefinitionId(flow.getProcessDefinitionId());
-        detail.setProcessInstanceId(flow.getProcessInstanceId());
         detail.setCreateTime(flow.getCreateTime());
         detail.setUpdateTime(flow.getUpdateTime());
 
@@ -267,8 +263,6 @@ public class FlowServiceImpl extends ServiceImpl<FlowMapper, Flow>
         item.setErrorCode(flow.getErrorCode());
         item.setErrorMessage(flow.getErrorMessage());
         item.setAttempt(flow.getAttempt());
-        item.setProcessDefinitionId(flow.getProcessDefinitionId());
-        item.setProcessInstanceId(flow.getProcessInstanceId());
         item.setUpdateTime(flow.getUpdateTime());
 
         FlowTemplate template = templateMap.get(flow.getTemplateId());
@@ -287,7 +281,7 @@ public class FlowServiceImpl extends ServiceImpl<FlowMapper, Flow>
         return item;
     }
 
-    private FlowNode resolveCurrentNode(Long templateId, Long currentNodeId, boolean allowMissingNode) {
+    private FlowNode resolveCurrentNode(Long templateId, Long currentNodeId) {
         FlowNode node;
         if (currentNodeId == null) {
             node = nodeService.getOne(Wrappers.<FlowNode>lambdaQuery()
@@ -295,12 +289,6 @@ public class FlowServiceImpl extends ServiceImpl<FlowMapper, Flow>
                     .orderByAsc(FlowNode::getSort)
                     .orderByAsc(FlowNode::getId)
                     .last("limit 1"));
-            if (node == null) {
-                if (allowMissingNode) {
-                    return null;
-                }
-                throw new IllegalArgumentException("流程模板没有可执行节点: " + templateId);
-            }
             return node;
         }
 
