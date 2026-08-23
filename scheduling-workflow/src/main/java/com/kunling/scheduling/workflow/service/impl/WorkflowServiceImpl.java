@@ -1,7 +1,8 @@
-package com.kunling.scheduling.workflow.service;
+package com.kunling.scheduling.workflow.service.impl;
 
 import com.kunling.scheduling.workflow.dto.WorkflowRequests;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
+import com.kunling.scheduling.workflow.service.WorkflowService;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
@@ -17,7 +18,6 @@ import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.CollectionUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -96,16 +96,6 @@ public class WorkflowServiceImpl implements WorkflowService {
         ProcessInstance instance = byId
                 ? runtimeService.startProcessInstanceById(request.getProcessDefinitionId(), request.getBusinessKey())
                 : runtimeService.startProcessInstanceByKey(request.getProcessDefinitionKey(), request.getBusinessKey());
-        //查询当前节点
-//        List<WorkflowResponses.ActiveNode> activeNodes = listActiveNodes(instance.getId());
-//
-//        if (!CollectionUtils.isEmpty(children)){
-//            Execution execution = children.get(0);
-//            String activityId = execution.getActivityId();
-//            String modeId = activityId.split("node_")[2];
-//            //拿到模版id调用小邓接口
-//
-//        }
         return toInstance(instance);
 
 

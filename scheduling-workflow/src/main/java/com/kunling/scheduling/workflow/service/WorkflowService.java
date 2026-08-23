@@ -9,6 +9,7 @@ public interface WorkflowService {
     WorkflowResponses.Definition deploy(WorkflowRequests.DeployDefinition request);
     List<WorkflowResponses.Definition> listDefinitions(String key);
     String getDefinitionXml(String processDefinitionId);
+    //启动
     WorkflowResponses.Instance start(WorkflowRequests.StartInstance request);
     WorkflowResponses.Instance getInstance(String processInstanceId);
     WorkflowResponses.Instance suspend(String processInstanceId);

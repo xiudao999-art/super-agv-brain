@@ -15,6 +15,7 @@
         <flowable.version>6.8.1</flowable.version>
         <mybatis.version>3.5.16</mybatis.version>
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
+        <scheduling-action.version>1.0.0</scheduling-action.version>
     </properties>
     <dependencies>
         <dependency>
@@ -55,6 +56,15 @@
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.kunling</groupId>
+            <artifactId>scheduling-agvFlow</artifactId>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
 </project>
