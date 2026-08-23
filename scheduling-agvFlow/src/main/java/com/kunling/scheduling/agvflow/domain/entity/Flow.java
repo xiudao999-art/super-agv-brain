@@ -58,4 +58,8 @@ public class Flow extends BaseEntity {
 
     @Schema(description = "已重试次数")
     private Integer attempt;
+
+    private String processDefinitionId;
+
+    private Long processInstanceId;
 }

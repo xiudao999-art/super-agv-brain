@@ -5,6 +5,9 @@ import com.kunling.scheduling.agvflow.domain.dto.*;
 import com.kunling.scheduling.agvflow.service.FlowTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,9 +19,8 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/flow-templates")
-@Tag(name = "流程模板管理")
+@Tag(name = "流程模板管理", description = "创建流程模板并查询模板、节点及动作明细")
 public class FlowTemplateController {
-
     @Resource
     private FlowTemplateService templateService;
 
@@ -59,4 +61,14 @@ public class FlowTemplateController {
         templateService.deleteTemplate(id);
         return ResponseEntity.noContent().build();
     }
+
+
+    @GetMapping("/startDemo")
+    @Operation(summary = "测试流程开始", description = "用于和下游联调测试,非正式环境内容,后续根据上游实际功能代码")
+    public Map<String, Integer> start(@RequestParam Long id) {
+        templateService.startFlow(id);
+        return java.util.Collections.singletonMap("id", 200);
+    }
+
+
 }

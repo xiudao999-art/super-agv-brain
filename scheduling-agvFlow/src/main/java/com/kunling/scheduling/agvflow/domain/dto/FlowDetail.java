@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 import java.util.Date;
+
 import com.kunling.scheduling.agvflow.enums.NodeState;
 import com.kunling.scheduling.agvflow.enums.FlowState;
 
@@ -54,4 +55,7 @@ public class FlowDetail {
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date updateTime;
+
+    private String processDefinitionId;
+    private Long processInstanceId;
 }

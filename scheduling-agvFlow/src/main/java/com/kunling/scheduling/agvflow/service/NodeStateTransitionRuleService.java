@@ -20,5 +20,5 @@ public interface NodeStateTransitionRuleService extends IService<NodeStateTransi
 
     void deleteRule(Long id);
 
-    void statusChanged(List<StatusChangedDto> dto);
+    void statusChanged(StatusChangedDto dto);
 }

@@ -4,15 +4,31 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.kunling.scheduling.action.commissioning.application.ActionParameterSetService;
+import com.kunling.scheduling.action.commissioning.application.ActionParameterSetView;
+import com.kunling.scheduling.action.definition.application.ActionDefinitionService;
+import com.kunling.scheduling.action.definition.application.ActionDefinitionView;
+import com.kunling.scheduling.action.execution.application.ExecuteActionCommand;
+import com.kunling.scheduling.action.execution.application.StartActionExecutionRequest;
+import com.kunling.scheduling.agvflow.action.AgvFlowActionGateway;
+import com.kunling.scheduling.agvflow.action.AgvFlowExecutionsGateway;
+import com.kunling.scheduling.agvflow.domain.dto.FlowTemplateCreateRequest;
+import com.kunling.scheduling.agvflow.domain.dto.FlowTemplateDetail;
 import com.kunling.scheduling.agvflow.domain.dto.*;
 import com.kunling.scheduling.agvflow.domain.entity.FlowAction;
 import com.kunling.scheduling.agvflow.domain.entity.FlowNode;
 import com.kunling.scheduling.agvflow.domain.entity.FlowTemplate;
+import com.kunling.scheduling.agvflow.enums.NodeState;
+import com.kunling.scheduling.agvflow.mapper.FlowNodeMapper;
 import com.kunling.scheduling.agvflow.mapper.FlowTemplateMapper;
 import com.kunling.scheduling.agvflow.service.FlowActionService;
 import com.kunling.scheduling.agvflow.service.FlowNodeService;
 import com.kunling.scheduling.agvflow.service.FlowTemplateService;
 import org.apache.commons.lang3.StringUtils;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -21,7 +37,10 @@ import javax.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static com.kunling.scheduling.agvflow.enums.NodeState.RUNNING;
+
 @Service
+@Slf4j
 public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, FlowTemplate>
         implements FlowTemplateService {
 
@@ -30,6 +49,19 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
 
     @Resource
     private FlowActionService actionService;
+
+    @Resource
+    private AgvFlowActionGateway actionGateway;
+
+    @Resource
+    private AgvFlowExecutionsGateway executionsGateway;
+
+
+    @Resource
+    private ObjectMapper objectMapper;
+    @Autowired
+    private FlowNodeMapper flowNodeMapper;
+
 
     /**
      * 创建流程模板
@@ -435,4 +467,39 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
     }
 
 
+
+    @Override
+    public void startFlow(Long flowId) {
+        FlowTemplate template = baseMapper.selectById(flowId);
+        log.info("流程---{}---开始启动", template.getTemplateName());
+        template.setStatus(1);
+        List<FlowNode> list = nodeService.lambdaQuery().eq(FlowNode::getTemplateId, template.getId()).eq(FlowNode::getStatus, NodeState.PENDING).orderByAsc(FlowNode::getSort).list();
+        startFlowNode(list.get(0).getId());
+        baseMapper.updateById(template);
+    }
+
+    @Override
+    public void startFlowNode(Long nodeId) {
+        FlowNode node = nodeService.getById(nodeId);
+        List<ActionParameterSetView> actions = actionGateway.actions(node.getNodeCode());
+
+        if (!CollectionUtils.isEmpty(actions)) {
+            ActionParameterSetView action = actions.get(0);
+            log.info("流程节点----{}--开始进行", node.getNodeName());
+            ObjectNode input = objectMapper.createObjectNode();
+            input.put("targetPoint", "PICK_STATION_A");
+            ExecuteActionCommand command = new ExecuteActionCommand(
+                    node.getTemplateId().toString(),                                      // workflowInstanceId
+                    node.getId().toString(),                                      // workflowNodeInstanceId
+                    UUID.randomUUID().toString(),                                // actionInstanceId
+                    "R01",                                    // 实际注册的robotId
+                    node.getNodeCode(),
+                    action.id()   // MOVE参数集ID
+            );
+            log.info("节点执行参数为：{}", command.toString());
+            executionsGateway.execute(command);
+        }
+        node.setStatus(RUNNING);
+        flowNodeMapper.updateById(node);
+    }
 }

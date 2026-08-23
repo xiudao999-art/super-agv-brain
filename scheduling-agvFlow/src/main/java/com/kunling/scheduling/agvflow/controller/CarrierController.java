@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.kunling.scheduling.agvflow.domain.entity.Carrier;
 import com.kunling.scheduling.agvflow.service.CarrierService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/carriers")
-@Tag(name = "载具管理")
+@Tag(name = "载具管理", description = "维护载具基础信息、状态及启用标记")
 public class CarrierController {
     private final CarrierService service;
 
@@ -24,9 +25,11 @@ public class CarrierController {
 
     @GetMapping
     @Operation(summary = "查询载具列表")
-    public List<Carrier> list(@RequestParam(required = false) String carrierCode,
-                              @RequestParam(required = false) String carrierStatus,
-                              @RequestParam(required = false) Integer enabled) {
+    public List<Carrier> list(
+            @Parameter(description = "载具编码") @RequestParam(required = false) String carrierCode,
+            @Parameter(description = "载具状态") @RequestParam(required = false) String carrierStatus,
+            @Parameter(description = "启用标记：1 启用，0 停用", example = "1")
+            @RequestParam(required = false) Integer enabled) {
         return service.list(Wrappers.<Carrier>lambdaQuery()
                 .eq(hasText(carrierCode), Carrier::getCarrierCode, carrierCode)
                 .eq(hasText(carrierStatus), Carrier::getCarrierStatus, carrierStatus)

@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.kunling.scheduling.agvflow.enums.FailureStrategyEnums;
 import com.kunling.scheduling.agvflow.enums.NodeCategoryEnums;
+import com.kunling.scheduling.agvflow.enums.NodeState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -26,6 +27,9 @@ public class FlowNode extends BaseEntity {
     private Integer sort;
 
     @Schema(description = "节点动作ID列表")
+    private NodeState status;
+
+    @Schema(description = "节点动作")
     @TableField(typeHandler = JacksonTypeHandler.class)
     private List<Long> actions;
 

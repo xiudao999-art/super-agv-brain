@@ -13,7 +13,7 @@ public class FlowTemplate extends BaseEntity {
     @Schema(description = "模版名称")
     private String templateName;
 
-    @Schema(description = "模版状态 0:未启用 1:启用")
+    @Schema(description = "流程状态：0 未启用，1 运行中，2 已完成，3 已失败")
     private Integer status;
 
     @Schema(description = "模板版本号")
@@ -21,4 +21,6 @@ public class FlowTemplate extends BaseEntity {
 
     @Schema(description = "适用对象")
     private String applicableScope;
+
+    private String bpmnXml;
 }

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.kunling.scheduling.agvflow.domain.entity.Location;
 import com.kunling.scheduling.agvflow.service.LocationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,15 +14,17 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/locations")
-@Tag(name = "库位管理")
+@Tag(name = "库位管理", description = "维护库位编码、类型及启用状态")
 public class LocationController {
     private final LocationService service;
     public LocationController(LocationService service) { this.service = service; }
 
     @GetMapping @Operation(summary = "查询库位列表")
-    public List<Location> list(@RequestParam(required = false) String locationCode,
-                               @RequestParam(required = false) String locationType,
-                               @RequestParam(required = false) Integer enabled) {
+    public List<Location> list(
+            @Parameter(description = "库位编码") @RequestParam(required = false) String locationCode,
+            @Parameter(description = "库位类型") @RequestParam(required = false) String locationType,
+            @Parameter(description = "启用标记：1 启用，0 停用", example = "1")
+            @RequestParam(required = false) Integer enabled) {
         return service.list(Wrappers.<Location>lambdaQuery()
             .eq(hasText(locationCode), Location::getLocationCode, locationCode)
             .eq(hasText(locationType), Location::getLocationType, locationType)

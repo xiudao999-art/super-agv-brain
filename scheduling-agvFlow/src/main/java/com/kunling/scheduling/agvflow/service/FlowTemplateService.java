@@ -16,4 +16,8 @@ public interface FlowTemplateService extends IService<FlowTemplate> {
     FlowTemplateDetail updateTemplate(Long id, FlowTemplateUpdateRequest request);
 
     void deleteTemplate(Long id);
+
+    void startFlowNode(Long tempId);
+
+    void startFlow(Long flowId);
 }

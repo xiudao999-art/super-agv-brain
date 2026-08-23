@@ -17,8 +17,18 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <mybatis-plus.version>3.5.7</mybatis-plus.version>
+        <fastjson2.version>2.0.60</fastjson2.version>
     </properties>
     <dependencies>
+        <!--
+            AGV Flow 通过 Action 模块公开的应用服务发起动作，并实现其报告接收端口。
+            Action 模块不反向依赖本模块，因此不会形成 Maven 循环依赖。
+        -->
+        <dependency>
+            <groupId>com.kunling</groupId>
+            <artifactId>scheduling-action</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
@@ -46,6 +56,11 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
+            <version>${fastjson2.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

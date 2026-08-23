@@ -1,6 +1,7 @@
 package com.kunling.scheduling.agvflow.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.kunling.scheduling.agvflow.enums.NodeState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -19,13 +20,13 @@ public class NodeStateTransitionRule {
     private String ruleSetCode;
 
     @Schema(description = "当前状态")
-    private String currentState;
+    private NodeState currentState;
 
     @Schema(description = "外部事件或系统事件")
     private String eventCode;
 
     @Schema(description = "流转后的状态")
-    private String nextState;
+    private NodeState nextState;
 
     @Schema(description = "流转后是否进入终态：0否，1是", example = "0")
     private Integer terminalFlag;
