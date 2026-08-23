@@ -410,7 +410,7 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
 
         return new FlowTemplateDetail(template.getId(), template.getTemplateNumber(),
                 template.getTemplateName(), template.getStatus(), template.getVersion(),
-                template.getApplicableScope(), nodeDetails,
+                template.getApplicableScope(), template.getBpmnXml(), nodeDetails,
                 template.getCreateTime(), template.getUpdateTime());
     }
 
@@ -437,6 +437,7 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
                         action.getCompletionCriteria(), action.getNextActionId()))
                 .collect(Collectors.toList());
         return new FlowTemplateDetail.NodeDetail(node.getId(), node.getNodeName(), node.getNodeCode(), node.getSort(),
+                node.getStatus(),
                 node.getNodeCategory(), node.getFailureStrategy(),
                 node.getParentNodeId(), node.getCompletionCriteria(),
                 node.getLeftNodeId(), node.getRightNodeId(),
@@ -501,5 +502,66 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
         }
         node.setStatus(RUNNING);
         flowNodeMapper.updateById(node);
+    }
+
+    /**
+     * 跳过当前运行流程中排序最前的挂起节点，并启动它后面的第一个待执行节点。
+     *
+     * @return 已启动的下一节点 ID；没有后续节点时返回 null
+     */
+    @Override
+    @Transactional
+    public Long skipHangNodeAndStartNext() {
+        FlowTemplate runningTemplate = lambdaQuery()
+                .eq(FlowTemplate::getStatus, 1)
+                .orderByDesc(FlowTemplate::getUpdateTime)
+                .last("limit 1")
+                .one();
+        if (runningTemplate == null) {
+            throw new NoSuchElementException("当前没有正在进行的流程");
+        }
+
+        FlowNode hangNode = nodeService.lambdaQuery()
+                .eq(FlowNode::getTemplateId, runningTemplate.getId())
+                .eq(FlowNode::getStatus, NodeState.HANG)
+                .orderByAsc(FlowNode::getSort)
+                .orderByAsc(FlowNode::getId)
+                .last("limit 1")
+                .one();
+        if (hangNode == null) {
+            throw new NoSuchElementException("当前流程不存在 HANG 状态节点: " + runningTemplate.getId());
+        }
+
+        boolean skipped = nodeService.lambdaUpdate()
+                .eq(FlowNode::getId, hangNode.getId())
+                .eq(FlowNode::getStatus, NodeState.HANG)
+                .set(FlowNode::getStatus, NodeState.SKIPPED)
+                .update();
+        if (!skipped) {
+            throw new IllegalStateException("挂起节点已被处理，请勿重复提交: " + hangNode.getId());
+        }
+
+        FlowNode nextNode = nodeService.lambdaQuery()
+                .eq(FlowNode::getTemplateId, runningTemplate.getId())
+                .gt(FlowNode::getSort, hangNode.getSort())
+                .eq(FlowNode::getStatus, NodeState.PENDING)
+                .orderByAsc(FlowNode::getSort)
+                .orderByAsc(FlowNode::getId)
+                .last("limit 1")
+                .one();
+        if (nextNode == null) {
+            runningTemplate.setStatus(2);
+            if (!updateById(runningTemplate)) {
+                throw new IllegalStateException("流程完成状态更新失败: " + runningTemplate.getId());
+            }
+            log.info("挂起节点已跳过，流程执行完成: flowId={}, nodeId={}",
+                    runningTemplate.getId(), hangNode.getId());
+            return null;
+        }
+
+        startFlowNode(nextNode.getId());
+        log.info("挂起节点已跳过并启动下一节点: flowId={}, skippedNodeId={}, nextNodeId={}",
+                runningTemplate.getId(), hangNode.getId(), nextNode.getId());
+        return nextNode.getId();
     }
 }

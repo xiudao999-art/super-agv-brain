@@ -3,6 +3,7 @@ package com.kunling.scheduling.agvflow.domain.dto;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.kunling.scheduling.agvflow.enums.FailureStrategyEnums;
 import com.kunling.scheduling.agvflow.enums.NodeCategoryEnums;
+import com.kunling.scheduling.agvflow.enums.NodeState;
 import lombok.Data;
 
 import java.util.Date;
@@ -16,6 +17,7 @@ public class FlowTemplateDetail {
     private final Integer status;
     private final Integer version;
     private final String applicableScope;
+    private final String bpmnXml;
     private final List<NodeDetail> nodes;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -25,7 +27,7 @@ public class FlowTemplateDetail {
     private final Date updateTime;
 
     public FlowTemplateDetail(Long id, String templateNumber, String templateName,
-                               Integer status, Integer version, String applicableScope,
+                               Integer status, Integer version, String applicableScope, String bpmnXml,
                                List<NodeDetail> nodes, Date createTime, Date updateTime) {
         this.id = id;
         this.templateNumber = templateNumber;
@@ -33,6 +35,7 @@ public class FlowTemplateDetail {
         this.status = status;
         this.version = version;
         this.applicableScope = applicableScope;
+        this.bpmnXml = bpmnXml;
         this.nodes = nodes;
         this.createTime = createTime;
         this.updateTime = updateTime;
@@ -44,6 +47,7 @@ public class FlowTemplateDetail {
         private final String nodeName;
         private final String nodeCode;
         private final Integer sort;
+        private final NodeState status;
         private final NodeCategoryEnums nodeCategory;
         private final FailureStrategyEnums failureStrategy;
         private final Long parentNodeId;
@@ -52,7 +56,7 @@ public class FlowTemplateDetail {
         private final Long rightNodeId;
         private final List<ActionDetail> actions;
 
-        public NodeDetail(Long id, String nodeName, String nodeCode, Integer sort,
+        public NodeDetail(Long id, String nodeName, String nodeCode, Integer sort, NodeState status,
                           NodeCategoryEnums nodeCategory, FailureStrategyEnums failureStrategy,
                           Long parentNodeId,
                           String completionCriteria, Long leftNodeId, Long rightNodeId,
@@ -61,6 +65,7 @@ public class FlowTemplateDetail {
             this.nodeName = nodeName;
             this.nodeCode = nodeCode;
             this.sort = sort;
+            this.status = status;
             this.nodeCategory = nodeCategory;
             this.failureStrategy = failureStrategy;
             this.parentNodeId = parentNodeId;
@@ -112,6 +117,7 @@ public class FlowTemplateDetail {
     public Integer getStatus() { return status; }
     public Integer getVersion() { return version; }
     public String getApplicableScope() { return applicableScope; }
+    public String getBpmnXml() { return bpmnXml; }
     public List<NodeDetail> getNodes() { return nodes; }
     public Date getCreateTime() { return createTime; }
     public Date getUpdateTime() { return updateTime; }

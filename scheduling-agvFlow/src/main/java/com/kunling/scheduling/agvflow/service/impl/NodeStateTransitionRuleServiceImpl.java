@@ -108,6 +108,10 @@ public class NodeStateTransitionRuleServiceImpl
         log.info("处理节点状态回调: nodeId={}, currentState={}, eventCode={}",
                 flowNode.getId(), flowNode.getStatus(), eventCode);
 
+        NodeStateTransitionRule rule = this.lambdaQuery().eq(NodeStateTransitionRule::getCurrentState, flowNode.getStatus())
+                .eq(NodeStateTransitionRule::getEventCode, dto.getEventCode()).last("limit 1").one();
+
+
         switch (eventCode) {
             case "SUCCEEDED":
                 handleSucceeded(flowNode);
@@ -121,7 +125,7 @@ public class NodeStateTransitionRuleServiceImpl
                         flowNode.getId(), flowNode.getStatus());
                 break;
             case "NON_RETRYABLE":
-                updateNodeState(flowNode, NodeState.FAILED);
+                // updateNodeState(flowNode, NodeState.FAILED);
                 log.warn("节点发生不可重试失败，等待外部处理: nodeId={}", flowNode.getId());
                 break;
             case "CRITICAL":
@@ -130,6 +134,7 @@ public class NodeStateTransitionRuleServiceImpl
             default:
                 throw new IllegalArgumentException("不支持的节点事件状态: " + eventCode);
         }
+        updateNodeState(flowNode, rule.getNextState());
     }
 
     private void handleSucceeded(FlowNode currentNode) {
@@ -138,7 +143,7 @@ public class NodeStateTransitionRuleServiceImpl
             log.info("忽略重复的节点成功回调: nodeId={}", currentNode.getId());
             return;
         }
-        updateNodeState(currentNode, NodeState.SUCCEEDED);
+
 
         FlowNode nextNode = flowNodeService.getOne(Wrappers.<FlowNode>lambdaQuery()
                 .eq(FlowNode::getTemplateId, currentNode.getTemplateId())
@@ -160,14 +165,11 @@ public class NodeStateTransitionRuleServiceImpl
                 && currentNode.getStatus() != NodeState.WAITING) {
             throw new IllegalStateException("当前节点状态不允许重试: " + currentNode.getStatus());
         }
-        updateNodeState(currentNode, NodeState.WAITING);
         flowTemplateService.startFlowNode(currentNode.getId());
     }
 
     private void handleCritical(FlowNode currentNode) {
-        updateNodeState(currentNode, NodeState.FAILED);
         updateFlowStatus(currentNode.getTemplateId(), FLOW_FAILED);
-
         // 严重错误终止流程，尚未启动的节点统一取消。
         List<FlowNode> pendingNodes = flowNodeService.list(Wrappers.<FlowNode>lambdaQuery()
                 .eq(FlowNode::getTemplateId, currentNode.getTemplateId())

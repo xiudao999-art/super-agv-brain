@@ -5,9 +5,6 @@ import com.kunling.scheduling.agvflow.domain.dto.*;
 import com.kunling.scheduling.agvflow.service.FlowTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -70,5 +67,13 @@ public class FlowTemplateController {
         return java.util.Collections.singletonMap("id", 200);
     }
 
-
+    @PostMapping("/external/skip-hang-node")
+    @Operation(summary = "跳过当前流程的挂起节点并执行下一节点")
+    public Map<String, Object> skipHangNode() {
+        Long nextNodeId = templateService.skipHangNodeAndStartNext();
+        Map<String, Object> response = new HashMap<>();
+        response.put("completed", nextNodeId == null);
+        response.put("nextNodeId", nextNodeId);
+        return response;
+    }
 }

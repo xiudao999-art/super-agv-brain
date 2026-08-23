@@ -20,4 +20,6 @@ public interface FlowTemplateService extends IService<FlowTemplate> {
     void startFlowNode(Long tempId);
 
     void startFlow(Long flowId);
+
+    Long skipHangNodeAndStartNext();
 }
