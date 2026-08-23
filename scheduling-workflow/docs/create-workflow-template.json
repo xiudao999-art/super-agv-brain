@@ -1,0 +1,16 @@
+{
+  "templateName": "AGV搬运流程",
+  "applicableObject": "AGV",
+  "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><definitions xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" targetNamespace=\"http://kunling.com/workflow\"><process id=\"agvTransport\" name=\"AGV搬运流程\" isExecutable=\"true\"><startEvent id=\"start\" name=\"开始\"/><sequenceFlow id=\"f1\" sourceRef=\"start\" targetRef=\"move\"/><subProcess id=\"move\" name=\"移动\"><startEvent id=\"moveStart\"/><sequenceFlow id=\"cf1\" sourceRef=\"moveStart\" targetRef=\"arm\"/><receiveTask id=\"arm\" name=\"机械臂运动\"/><sequenceFlow id=\"cf2\" sourceRef=\"arm\" targetRef=\"grab\"/><receiveTask id=\"grab\" name=\"夹抓\"/><sequenceFlow id=\"cf3\" sourceRef=\"grab\" targetRef=\"vision\"/><receiveTask id=\"vision\" name=\"视觉\"/><sequenceFlow id=\"cf4\" sourceRef=\"vision\" targetRef=\"moveEnd\"/><endEvent id=\"moveEnd\"/></subProcess><sequenceFlow id=\"f2\" sourceRef=\"move\" targetRef=\"end\"/><endEvent id=\"end\" name=\"结束\"/></process></definitions>",
+  "editorData": {
+    "nodeProperties": {
+      "move": {
+        "failureStrategy": "RETRY_THEN_SUSPEND",
+        "completionCriteria": "设备反馈完成并通过状态校验"
+      },
+      "arm": { "actionType": "ARM_MOVE", "executionParams": { "position": "PICK" } },
+      "grab": { "actionType": "GRAB", "executionParams": { "force": 30 } },
+      "vision": { "actionType": "VISION", "executionParams": { "program": "CHECK_MATERIAL" } }
+    }
+  }
+}

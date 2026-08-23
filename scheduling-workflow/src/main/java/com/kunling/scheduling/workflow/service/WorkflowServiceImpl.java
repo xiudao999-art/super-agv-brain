@@ -1,0 +1,242 @@
+package com.kunling.scheduling.workflow.service;
+
+import com.kunling.scheduling.workflow.dto.WorkflowRequests;
+import com.kunling.scheduling.workflow.dto.WorkflowResponses;
+import org.apache.commons.lang3.StringUtils;
+import org.flowable.engine.HistoryService;
+import org.flowable.engine.RepositoryService;
+import org.flowable.engine.RuntimeService;
+import org.flowable.engine.TaskService;
+import org.flowable.engine.history.HistoricActivityInstance;
+import org.flowable.engine.history.HistoricProcessInstance;
+import org.flowable.engine.repository.Deployment;
+import org.flowable.engine.repository.ProcessDefinition;
+import org.flowable.engine.repository.ProcessDefinitionQuery;
+import org.flowable.engine.runtime.Execution;
+import org.flowable.engine.runtime.ProcessInstance;
+import org.flowable.task.api.Task;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
+
+@Service
+public class WorkflowServiceImpl implements WorkflowService {
+    private final RepositoryService repositoryService;
+    private final RuntimeService runtimeService;
+    private final HistoryService historyService;
+    private final TaskService taskService;
+
+    public WorkflowServiceImpl(RepositoryService repositoryService, RuntimeService runtimeService,
+                               HistoryService historyService, TaskService taskService) {
+        this.repositoryService = repositoryService;
+        this.runtimeService = runtimeService;
+        this.historyService = historyService;
+        this.taskService = taskService;
+    }
+
+    @Override
+    @Transactional
+    public WorkflowResponses.Definition deploy(WorkflowRequests.DeployDefinition request) {
+        String resourceName = StringUtils.defaultIfBlank(request.getResourceName(), "process.bpmn20.xml");
+        if (!resourceName.endsWith(".bpmn") && !resourceName.endsWith(".bpmn20.xml")) {
+            resourceName += ".bpmn20.xml";
+        }
+        Deployment deployment = repositoryService.createDeployment()
+                .name(request.getName()).category(request.getCategory())
+                .addString(resourceName, request.getBpmnXml()).deploy();
+        ProcessDefinition definition = repositoryService.createProcessDefinitionQuery()
+                .deploymentId(deployment.getId()).singleResult();
+        if (definition == null) {
+            throw new IllegalStateException("部署成功但未找到流程定义");
+        }
+        return toDefinition(definition);
+    }
+
+    @Override
+    public List<WorkflowResponses.Definition> listDefinitions(String key) {
+        ProcessDefinitionQuery query = repositoryService
+                .createProcessDefinitionQuery().latestVersion().orderByProcessDefinitionKey().asc();
+        if (StringUtils.isNotBlank(key)) query.processDefinitionKey(key);
+        return query.list().stream().map(this::toDefinition).collect(Collectors.toList());
+    }
+
+    @Override
+    public String getDefinitionXml(String processDefinitionId) {
+        ProcessDefinition definition = requiredDefinition(processDefinitionId);
+        try (InputStream input = repositoryService.getResourceAsStream(
+                definition.getDeploymentId(), definition.getResourceName())) {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int length;
+            while ((length = input.read(buffer)) >= 0) output.write(buffer, 0, length);
+            return new String(output.toByteArray(), StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new IllegalStateException("读取BPMN XML失败", exception);
+        }
+    }
+
+    @Override
+    @Transactional
+    public WorkflowResponses.Instance start(WorkflowRequests.StartInstance request) {
+        boolean byId = StringUtils.isNotBlank(request.getProcessDefinitionId());
+        boolean byKey = StringUtils.isNotBlank(request.getProcessDefinitionKey());
+        if (byId == byKey) {
+            throw new IllegalArgumentException("processDefinitionId和processDefinitionKey必须且只能传一个");
+        }
+        ProcessInstance instance = byId
+                ? runtimeService.startProcessInstanceById(request.getProcessDefinitionId(), request.getBusinessKey())
+                : runtimeService.startProcessInstanceByKey(request.getProcessDefinitionKey(), request.getBusinessKey());
+        //查询当前节点
+//        List<WorkflowResponses.ActiveNode> activeNodes = listActiveNodes(instance.getId());
+//
+//        if (!CollectionUtils.isEmpty(children)){
+//            Execution execution = children.get(0);
+//            String activityId = execution.getActivityId();
+//            String modeId = activityId.split("node_")[2];
+//            //拿到模版id调用小邓接口
+//
+//        }
+        return toInstance(instance);
+
+
+    }
+
+    @Override
+    public WorkflowResponses.Instance getInstance(String processInstanceId) {
+        ProcessInstance active = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(processInstanceId).singleResult();
+        if (active != null) return toInstance(active);
+        HistoricProcessInstance historic = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceId(processInstanceId).singleResult();
+        if (historic == null) throw new NoSuchElementException("流程实例不存在: " + processInstanceId);
+        return toInstance(historic);
+    }
+
+    @Override @Transactional
+    public WorkflowResponses.Instance suspend(String id) {
+        requiredActiveInstance(id);
+        runtimeService.suspendProcessInstanceById(id);
+        return getInstance(id);
+    }
+
+    @Override @Transactional
+    public WorkflowResponses.Instance activate(String id) {
+        requiredActiveInstance(id);
+        runtimeService.activateProcessInstanceById(id);
+        return getInstance(id);
+    }
+
+    @Override @Transactional
+    public WorkflowResponses.Instance terminate(String id, WorkflowRequests.TerminateInstance request) {
+        requiredActiveInstance(id);
+        runtimeService.deleteProcessInstance(id, StringUtils.defaultIfBlank(request.getReason(), "人工终止"));
+        return getInstance(id);
+    }
+
+    @Override
+    public List<WorkflowResponses.ActiveNode> listActiveNodes(String id) {
+        requiredActiveInstance(id);
+        return runtimeService.createExecutionQuery().processInstanceId(id).list().stream()
+                .filter(item -> StringUtils.isNotBlank(item.getActivityId()))
+                .map(item -> new WorkflowResponses.ActiveNode(item.getId(), item.getActivityId(),
+                        item.getProcessInstanceId(), item.isSuspended()))
+                .collect(Collectors.toList());
+    }
+
+    @Override @Transactional
+    public WorkflowResponses.Instance trigger(WorkflowRequests.TriggerExecution request) {
+        Map<String, Object> variables = variables(request.getVariables());
+        String executionId = (String)variables.get("executionId");
+        Execution execution = runtimeService.createExecutionQuery().executionId(executionId).singleResult();
+        if (execution == null) {
+            throw new NoSuchElementException("活动执行节点不存在: " + executionId);
+        }
+        String instanceId = execution.getProcessInstanceId();
+        runtimeService.trigger(executionId, variables(variables));
+        return getInstance(instanceId);
+    }
+
+    @Override
+    public List<WorkflowResponses.HistoryNode> listHistory(String id) {
+        requiredHistoricInstance(id);
+        return historyService.createHistoricActivityInstanceQuery().processInstanceId(id)
+                .orderByHistoricActivityInstanceStartTime().asc().list().stream()
+                .map(this::toHistoryNode).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<WorkflowResponses.UserTask> listTasks(String processInstanceId, String assignee) {
+        org.flowable.task.api.TaskQuery query = taskService.createTaskQuery().active();
+        if (StringUtils.isNotBlank(processInstanceId)) query.processInstanceId(processInstanceId);
+        if (StringUtils.isNotBlank(assignee)) query.taskAssignee(assignee);
+        return query.orderByTaskCreateTime().asc().list().stream().map(this::toTask).collect(Collectors.toList());
+    }
+
+    @Override @Transactional
+    public void claimTask(String taskId, WorkflowRequests.ClaimTask request) {
+        requiredTask(taskId);
+        taskService.claim(taskId, request.getAssignee());
+    }
+
+    @Override @Transactional
+    public void completeTask(String taskId, WorkflowRequests.CompleteTask request) {
+        requiredTask(taskId);
+        taskService.complete(taskId, variables(request.getVariables()));
+    }
+
+    private ProcessDefinition requiredDefinition(String id) {
+        ProcessDefinition value = repositoryService.createProcessDefinitionQuery().processDefinitionId(id).singleResult();
+        if (value == null) throw new NoSuchElementException("流程定义不存在: " + id);
+        return value;
+    }
+    private ProcessInstance requiredActiveInstance(String id) {
+        ProcessInstance value = runtimeService.createProcessInstanceQuery().processInstanceId(id).singleResult();
+        if (value == null) throw new NoSuchElementException("运行中的流程实例不存在: " + id);
+        return value;
+    }
+    private HistoricProcessInstance requiredHistoricInstance(String id) {
+        HistoricProcessInstance value = historyService.createHistoricProcessInstanceQuery().processInstanceId(id).singleResult();
+        if (value == null) throw new NoSuchElementException("流程历史不存在: " + id);
+        return value;
+    }
+    private Task requiredTask(String id) {
+        Task value = taskService.createTaskQuery().taskId(id).singleResult();
+        if (value == null) throw new NoSuchElementException("人工任务不存在: " + id);
+        return value;
+    }
+    private java.util.Map<String, Object> variables(java.util.Map<String, Object> value) {
+        return value == null ? Collections.emptyMap() : value;
+    }
+    private WorkflowResponses.Definition toDefinition(ProcessDefinition value) {
+        return new WorkflowResponses.Definition(value.getId(), value.getKey(), value.getName(), value.getVersion(),
+                value.getDeploymentId(), value.getResourceName(), value.getCategory());
+    }
+    private WorkflowResponses.Instance toInstance(ProcessInstance value) {
+        return new WorkflowResponses.Instance(value.getId(), value.getProcessDefinitionId(), value.getBusinessKey(),
+                value.isSuspended() ? "SUSPENDED" : "RUNNING", value.isSuspended(), value.getStartTime(), null, null);
+    }
+    private WorkflowResponses.Instance toInstance(HistoricProcessInstance value) {
+        String state = value.getDeleteReason() == null ? "COMPLETED" : "TERMINATED";
+        return new WorkflowResponses.Instance(value.getId(), value.getProcessDefinitionId(), value.getBusinessKey(),
+                state, false, value.getStartTime(), value.getEndTime(), value.getDeleteReason());
+    }
+    private WorkflowResponses.HistoryNode toHistoryNode(HistoricActivityInstance value) {
+        return new WorkflowResponses.HistoryNode(value.getId(), value.getActivityId(), value.getActivityName(),
+                value.getActivityType(), value.getExecutionId(), value.getStartTime(), value.getEndTime(),
+                value.getDurationInMillis(), value.getAssignee());
+    }
+    private WorkflowResponses.UserTask toTask(Task value) {
+        return new WorkflowResponses.UserTask(value.getId(), value.getName(), value.getTaskDefinitionKey(),
+                value.getAssignee(), value.getProcessInstanceId(), value.getCreateTime());
+    }
+}

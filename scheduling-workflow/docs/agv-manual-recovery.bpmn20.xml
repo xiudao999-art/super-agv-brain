@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://kunling.com/workflow">
+  <process id="agvManualRecovery" name="AGV执行与人工异常处理" isExecutable="true">
+    <startEvent id="start" name="开始"/>
+    <sequenceFlow id="toWait" sourceRef="start" targetRef="waitAgv"/>
+    <receiveTask id="waitAgv" name="等待AGV结果"/>
+    <sequenceFlow id="toResult" sourceRef="waitAgv" targetRef="resultGateway"/>
+    <exclusiveGateway id="resultGateway" name="判断结果" default="toManual"/>
+    <sequenceFlow id="toSuccess" sourceRef="resultGateway" targetRef="successEnd">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${success == true}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toManual" sourceRef="resultGateway" targetRef="manualTask"/>
+    <userTask id="manualTask" name="人工处理异常" flowable:candidateGroups="AGV_OPERATOR"/>
+    <sequenceFlow id="toDecision" sourceRef="manualTask" targetRef="decisionGateway"/>
+    <exclusiveGateway id="decisionGateway" name="人工决定" default="toFailure"/>
+    <sequenceFlow id="toRetry" sourceRef="decisionGateway" targetRef="waitAgv">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${decision == 'RETRY'}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toFailure" sourceRef="decisionGateway" targetRef="failureEnd"/>
+    <endEvent id="successEnd" name="成功结束"/>
+    <endEvent id="failureEnd" name="失败结束"/>
+  </process>
+</definitions>
