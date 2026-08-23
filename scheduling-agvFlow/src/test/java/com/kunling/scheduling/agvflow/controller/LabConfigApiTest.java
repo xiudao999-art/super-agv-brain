@@ -18,7 +18,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -392,10 +391,9 @@ class LabConfigApiTest {
                 if (AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class) == null) {
                     continue;
                 }
-                String expectedPrefix = ResponseEntity.class.getName() + "<" + ApiResult.class.getName() + "<";
                 org.junit.jupiter.api.Assertions.assertTrue(
-                        method.getGenericReturnType().getTypeName().startsWith(expectedPrefix),
-                        method.getName() + " 必须返回 ResponseEntity<ApiResult<T>>");
+                        ApiResult.class.equals(method.getReturnType()),
+                        method.getName() + " 必须直接返回 ApiResult<T>");
             }
         }
     }

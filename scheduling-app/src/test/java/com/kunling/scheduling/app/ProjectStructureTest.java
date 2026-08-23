@@ -1,11 +1,21 @@
 package com.kunling.scheduling.app;
 
+import com.kunling.scheduling.common.web.ApiResult;
+import com.kunling.scheduling.common.web.BaseController;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -93,6 +103,38 @@ class ProjectStructureTest {
         assertThat(Paths.get(
                 "../scheduling-workflow/src/main/java/com/kunling/scheduling/workflow/controller/WorkflowExceptionHandler.java"
         )).doesNotExist();
+    }
+
+    @Test
+    void allEnabledControllerEndpointsReturnApiResultDirectly() {
+        ClassPathScanningCandidateComponentProvider scanner =
+                new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
+
+        List<String> violations = new ArrayList<>();
+        for (String basePackage : new String[]{
+                "com.kunling.scheduling.action.controller",
+                "com.kunling.scheduling.agvflow.controller",
+                "com.kunling.scheduling.workflow.controller"
+        }) {
+            scanner.findCandidateComponents(basePackage).forEach(candidate -> {
+                Class<?> controllerType = loadClass(candidate.getBeanClassName());
+                if (!BaseController.class.isAssignableFrom(controllerType)) {
+                    violations.add(controllerType.getName() + " 未继承 BaseController");
+                }
+                for (Method method : controllerType.getDeclaredMethods()) {
+                    if (AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class) != null
+                            && !ApiResult.class.equals(method.getReturnType())) {
+                        violations.add(controllerType.getSimpleName() + "#" + method.getName()
+                                + " 返回 " + method.getGenericReturnType().getTypeName());
+                    }
+                }
+            });
+        }
+
+        assertThat(violations)
+                .as("所有启用中的 Controller 接口必须直接返回 ApiResult<T>")
+                .isEmpty();
     }
 
     @Test
@@ -187,5 +229,13 @@ class ProjectStructureTest {
             hexadecimal.append(String.format("%02x", value & 0xff));
         }
         return hexadecimal.toString();
+    }
+
+    private Class<?> loadClass(String className) {
+        try {
+            return Class.forName(className);
+        } catch (ClassNotFoundException exception) {
+            throw new IllegalStateException("无法加载 Controller: " + className, exception);
+        }
     }
 }

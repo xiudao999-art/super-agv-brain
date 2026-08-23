@@ -1,6 +1,7 @@
 package com.kunling.scheduling.common.web;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import org.springframework.http.HttpStatus;
 
 import java.io.Serializable;
 
@@ -30,6 +31,22 @@ public final class ApiResult<T> implements Serializable {
 
     public static <T> ApiResult<T> success(int code, T data) {
         return new ApiResult<>(code, DEFAULT_SUCCESS_MESSAGE, data);
+    }
+
+    public static <T> ApiResult<T> success(T data) {
+        return success(HttpStatus.OK.value(), data);
+    }
+
+    public static ApiResult<Void> success() {
+        return success(HttpStatus.OK.value(), null);
+    }
+
+    public static <T> ApiResult<T> created(T data) {
+        return success(HttpStatus.CREATED.value(), data);
+    }
+
+    public static <T> ApiResult<T> accepted(T data) {
+        return success(HttpStatus.ACCEPTED.value(), data);
     }
 
     public static ApiResult<Void> success(int code) {

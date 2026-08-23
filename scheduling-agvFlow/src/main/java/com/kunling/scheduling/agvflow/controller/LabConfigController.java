@@ -14,7 +14,7 @@ import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 import javax.validation.Valid;
 
@@ -39,127 +40,130 @@ public class LabConfigController extends BaseController {
 
     @GetMapping("/{configId}")
     @Operation(summary = "查询配置详情")
-    public ResponseEntity<ApiResult<LabConfigDetail>> get(@PathVariable Long configId) {
+    public ApiResult<LabConfigDetail> get(@PathVariable Long configId) {
         return success(applicationService.getConfig(configId));
     }
 
     @PutMapping("/{configId}/map")
     @Operation(summary = "修改草稿地图引用")
-    public ResponseEntity<ApiResult<Void>> updateMap(@PathVariable Long configId,
-                                                     @Valid @RequestBody LabMapRequest request) {
+    public ApiResult<Void> updateMap(@PathVariable Long configId,
+                                     @Valid @RequestBody LabMapRequest request) {
         applicationService.updateMap(configId, request);
         return success();
     }
 
     @DeleteMapping("/{configId}")
     @Operation(summary = "删除配置草稿")
-    public ResponseEntity<ApiResult<Void>> deleteDraft(@PathVariable Long configId) {
+    public ApiResult<Void> deleteDraft(@PathVariable Long configId) {
         applicationService.deleteDraft(configId);
         return success();
     }
 
     @PostMapping("/{configId}/nodes")
+    @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "新增通行节点")
-    public ResponseEntity<ApiResult<CreatedResource>> createNode(
+    public ApiResult<CreatedResource> createNode(
             @PathVariable Long configId, @Valid @RequestBody LabNodeRequest request) {
         return created(applicationService.createNode(configId, request));
     }
 
     @PutMapping("/{configId}/nodes/{nodeId}")
     @Operation(summary = "修改通行节点")
-    public ResponseEntity<ApiResult<Void>> updateNode(@PathVariable Long configId,
-                                                      @PathVariable Long nodeId,
-                                                      @Valid @RequestBody LabNodeRequest request) {
+    public ApiResult<Void> updateNode(@PathVariable Long configId,
+                                      @PathVariable Long nodeId,
+                                      @Valid @RequestBody LabNodeRequest request) {
         applicationService.updateNode(configId, nodeId, request);
         return success();
     }
 
     @DeleteMapping("/{configId}/nodes/{nodeId}")
     @Operation(summary = "删除通行节点")
-    public ResponseEntity<ApiResult<Void>> deleteNode(@PathVariable Long configId, @PathVariable Long nodeId) {
+    public ApiResult<Void> deleteNode(@PathVariable Long configId, @PathVariable Long nodeId) {
         applicationService.deleteNode(configId, nodeId);
         return success();
     }
 
     @PostMapping("/{configId}/machines")
+    @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "新增机台")
-    public ResponseEntity<ApiResult<CreatedResource>> createMachine(
+    public ApiResult<CreatedResource> createMachine(
             @PathVariable Long configId, @Valid @RequestBody LabMachineRequest request) {
         return created(applicationService.createMachine(configId, request));
     }
 
     @PutMapping("/{configId}/machines/{machineId}")
     @Operation(summary = "修改机台")
-    public ResponseEntity<ApiResult<Void>> updateMachine(@PathVariable Long configId,
-                                                         @PathVariable Long machineId,
-                                                         @Valid @RequestBody LabMachineRequest request) {
+    public ApiResult<Void> updateMachine(@PathVariable Long configId,
+                                         @PathVariable Long machineId,
+                                         @Valid @RequestBody LabMachineRequest request) {
         applicationService.updateMachine(configId, machineId, request);
         return success();
     }
 
     @DeleteMapping("/{configId}/machines/{machineId}")
     @Operation(summary = "删除机台")
-    public ResponseEntity<ApiResult<Void>> deleteMachine(@PathVariable Long configId,
-                                                         @PathVariable Long machineId) {
+    public ApiResult<Void> deleteMachine(@PathVariable Long configId, @PathVariable Long machineId) {
         applicationService.deleteMachine(configId, machineId);
         return success();
     }
 
     @PostMapping("/{configId}/points")
+    @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "新增机台点位")
-    public ResponseEntity<ApiResult<CreatedResource>> createPoint(
+    public ApiResult<CreatedResource> createPoint(
             @PathVariable Long configId, @Valid @RequestBody LabPointRequest request) {
         return created(applicationService.createPoint(configId, request));
     }
 
     @PutMapping("/{configId}/points/{pointId}")
     @Operation(summary = "修改机台点位")
-    public ResponseEntity<ApiResult<Void>> updatePoint(@PathVariable Long configId,
-                                                       @PathVariable Long pointId,
-                                                       @Valid @RequestBody LabPointRequest request) {
+    public ApiResult<Void> updatePoint(@PathVariable Long configId,
+                                       @PathVariable Long pointId,
+                                       @Valid @RequestBody LabPointRequest request) {
         applicationService.updatePoint(configId, pointId, request);
         return success();
     }
 
     @DeleteMapping("/{configId}/points/{pointId}")
     @Operation(summary = "删除机台点位")
-    public ResponseEntity<ApiResult<Void>> deletePoint(@PathVariable Long configId, @PathVariable Long pointId) {
+    public ApiResult<Void> deletePoint(@PathVariable Long configId, @PathVariable Long pointId) {
         applicationService.deletePoint(configId, pointId);
         return success();
     }
 
     @PostMapping("/{configId}/links")
+    @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "新增通行连接")
-    public ResponseEntity<ApiResult<CreatedResource>> createLink(
+    public ApiResult<CreatedResource> createLink(
             @PathVariable Long configId, @Valid @RequestBody LabLinkRequest request) {
         return created(applicationService.createLink(configId, request));
     }
 
     @PutMapping("/{configId}/links/{linkId}")
     @Operation(summary = "修改通行连接")
-    public ResponseEntity<ApiResult<Void>> updateLink(@PathVariable Long configId,
-                                                      @PathVariable Long linkId,
-                                                      @Valid @RequestBody LabLinkRequest request) {
+    public ApiResult<Void> updateLink(@PathVariable Long configId,
+                                      @PathVariable Long linkId,
+                                      @Valid @RequestBody LabLinkRequest request) {
         applicationService.updateLink(configId, linkId, request);
         return success();
     }
 
     @DeleteMapping("/{configId}/links/{linkId}")
     @Operation(summary = "删除通行连接")
-    public ResponseEntity<ApiResult<Void>> deleteLink(@PathVariable Long configId, @PathVariable Long linkId) {
+    public ApiResult<Void> deleteLink(@PathVariable Long configId, @PathVariable Long linkId) {
         applicationService.deleteLink(configId, linkId);
         return success();
     }
 
     @PostMapping("/{configId}/validate")
     @Operation(summary = "校验配置草稿")
-    public ResponseEntity<ApiResult<ValidationResult>> validate(@PathVariable Long configId) {
+    public ApiResult<ValidationResult> validate(@PathVariable Long configId) {
         return success(applicationService.validateConfig(configId));
     }
 
     @PostMapping("/{configId}/publish")
     @Operation(summary = "发布配置草稿")
-    public ResponseEntity<ApiResult<LabConfigSummary>> publish(@PathVariable Long configId) {
+    public ApiResult<LabConfigSummary> publish(@PathVariable Long configId) {
         return success(applicationService.publish(configId));
     }
 }
