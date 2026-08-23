@@ -1,6 +1,8 @@
 package com.kunling.scheduling.action.robotbridge.application;
 
-public class RobotUnavailableException extends RuntimeException {
+import com.kunling.scheduling.common.exception.ServiceUnavailableException;
+
+public class RobotUnavailableException extends ServiceUnavailableException {
 
     public RobotUnavailableException(String message) {
         super(message);

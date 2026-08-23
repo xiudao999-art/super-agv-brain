@@ -1,6 +1,8 @@
 package com.kunling.scheduling.action.exceptionmapping.application;
 
-public class ErrorMappingRuleConflictException extends RuntimeException {
+import com.kunling.scheduling.common.exception.ConflictException;
+
+public class ErrorMappingRuleConflictException extends ConflictException {
     public ErrorMappingRuleConflictException(String message) {
         super(message);
     }

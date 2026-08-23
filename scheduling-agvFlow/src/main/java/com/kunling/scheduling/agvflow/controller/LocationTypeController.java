@@ -3,13 +3,13 @@ package com.kunling.scheduling.agvflow.controller;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.kunling.scheduling.agvflow.domain.entity.LocationType;
 import com.kunling.scheduling.agvflow.service.LocationTypeService;
+import com.kunling.scheduling.common.exception.ResourceNotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -66,7 +66,7 @@ public class LocationTypeController {
 
     private LocationType required(Long id) {
         LocationType entity = service.getById(id);
-        if (entity == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "库位类型不存在: " + id);
+        if (entity == null) throw new ResourceNotFoundException("库位类型不存在: " + id);
         return entity;
     }
 

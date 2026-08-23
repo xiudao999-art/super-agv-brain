@@ -1,6 +1,8 @@
 package com.kunling.scheduling.action.definition.application;
 
-public class ActionConflictException extends RuntimeException {
+import com.kunling.scheduling.common.exception.ConflictException;
+
+public class ActionConflictException extends ConflictException {
 
     public ActionConflictException(String message) {
         super(message);

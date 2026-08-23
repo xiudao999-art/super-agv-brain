@@ -19,7 +19,7 @@ public class AgvFlowModuleConfiguration {
         return GroupedOpenApi.builder()
                 .group("agv-flow")
                 .displayName("AGV Flow 接口")
-                .packagesToScan("com.kunling.scheduling.agvflow.controller")
+                .packagesToScan("com.kunling.scheduling.agvflow")
                 .pathsToMatch("/**")
                 .build();
     }

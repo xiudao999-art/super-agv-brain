@@ -15,6 +15,7 @@ class ProjectStructureTest {
     void robotBridgeBelongsToTheActionModuleInsteadOfAnIndependentMavenModule() throws Exception {
         String rootPom = new String(Files.readAllBytes(Paths.get("../pom.xml")), StandardCharsets.UTF_8);
 
+        assertThat(rootPom).contains("<module>scheduling-common</module>");
         assertThat(rootPom).contains("<module>scheduling-action</module>");
         assertThat(rootPom).contains("<module>scheduling-agvFlow</module>");
         assertThat(rootPom).contains("<module>scheduling-workflow</module>");
@@ -59,6 +60,38 @@ class ProjectStructureTest {
         )).doesNotExist();
         assertThat(Paths.get(
                 "../scheduling-action/src/main/java/com/kunling/scheduling/action/interfaces/rest"
+        )).doesNotExist();
+    }
+
+    @Test
+    void laboratoryConfigurationUsesTheExistingAgvFlowLayers() {
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/labconfig"
+        )).doesNotExist();
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/controller/LabConfigController.java"
+        )).isRegularFile();
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/service/LabConfigApplicationService.java"
+        )).isRegularFile();
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/mapper/LabConfigMapper.java"
+        )).isRegularFile();
+    }
+
+    @Test
+    void commonModuleOwnsTheOnlyGlobalExceptionHandler() {
+        assertThat(Paths.get(
+                "../scheduling-common/src/main/java/com/kunling/scheduling/common/web/GlobalExceptionHandler.java"
+        )).isRegularFile();
+        assertThat(Paths.get(
+                "../scheduling-action/src/main/java/com/kunling/scheduling/action/controller/ApiExceptionHandler.java"
+        )).doesNotExist();
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/config/GlobalExceptionHandler.java"
+        )).doesNotExist();
+        assertThat(Paths.get(
+                "../scheduling-workflow/src/main/java/com/kunling/scheduling/workflow/controller/WorkflowExceptionHandler.java"
         )).doesNotExist();
     }
 
