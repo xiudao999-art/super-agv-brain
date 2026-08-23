@@ -2,6 +2,7 @@ package com.kunling.scheduling.app;
 
 import com.kunling.scheduling.action.config.ActionModuleConfiguration;
 import com.kunling.scheduling.agvflow.AgvFlowModuleConfiguration;
+import com.kunling.scheduling.workflow.WorkflowModuleConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.annotation.AnnotatedElementUtils;
@@ -22,7 +23,8 @@ class KunlingSchedulingApplicationTest {
         assertThat(moduleImport).isNotNull();
         assertThat(moduleImport.value()).containsExactly(
                 ActionModuleConfiguration.class,
-                AgvFlowModuleConfiguration.class
+                AgvFlowModuleConfiguration.class,
+                WorkflowModuleConfiguration.class
         );
     }
 

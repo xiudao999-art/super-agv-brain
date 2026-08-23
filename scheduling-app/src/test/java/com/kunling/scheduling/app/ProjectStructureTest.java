@@ -17,6 +17,7 @@ class ProjectStructureTest {
 
         assertThat(rootPom).contains("<module>scheduling-action</module>");
         assertThat(rootPom).contains("<module>scheduling-agvFlow</module>");
+        assertThat(rootPom).contains("<module>scheduling-workflow</module>");
         assertThat(rootPom).contains("<module>scheduling-app</module>");
         assertThat(rootPom).doesNotContain("<module>scheduling-robot-bridge</module>");
         assertThat(Paths.get("../scheduling-action/src/main/java/com/kunling/scheduling/action/robotbridge"))

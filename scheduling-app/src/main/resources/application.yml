@@ -33,6 +33,11 @@ spring:
     hibernate:
       ddl-auto: none
 
+flowable:
+  database-schema-update: true
+  async-executor-activate: true
+  history-level: audit
+
 springdoc:
   api-docs:
     enabled: true
