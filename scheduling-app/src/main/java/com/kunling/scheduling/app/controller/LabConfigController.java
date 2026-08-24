@@ -1,4 +1,4 @@
-package com.kunling.scheduling.agvflow.controller;
+package com.kunling.scheduling.app.controller;
 
 import com.kunling.scheduling.agvflow.service.LabConfigApplicationService;
 import com.kunling.scheduling.agvflow.domain.dto.CreatedResource;
@@ -9,6 +9,7 @@ import com.kunling.scheduling.agvflow.domain.dto.LabNodeRequest;
 import com.kunling.scheduling.agvflow.domain.dto.LabPointRequest;
 import com.kunling.scheduling.agvflow.domain.dto.LabConfigSummary;
 import com.kunling.scheduling.agvflow.domain.dto.LabMapRequest;
+import com.kunling.scheduling.agvflow.domain.dto.LabMapPointView;
 import com.kunling.scheduling.agvflow.domain.dto.ValidationResult;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 import javax.validation.Valid;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/lab-configs")
@@ -44,8 +46,14 @@ public class LabConfigController extends BaseController {
         return success(applicationService.getConfig(configId));
     }
 
+    @GetMapping("/{configId}/map-points")
+    @Operation(summary = "查询地图点位列表", description = "返回统一换算为地图坐标的节点、机台锚点和机台点位")
+    public ApiResult<List<LabMapPointView>> listMapPoints(@PathVariable Long configId) {
+        return success(applicationService.listMapPoints(configId));
+    }
+
     @PutMapping("/{configId}/map")
-    @Operation(summary = "修改草稿地图引用")
+    @Operation(summary = "修改草稿地图图片信息")
     public ApiResult<Void> updateMap(@PathVariable Long configId,
                                      @Valid @RequestBody LabMapRequest request) {
         applicationService.updateMap(configId, request);

@@ -9,6 +9,7 @@ import com.kunling.scheduling.agvflow.domain.dto.LabConfigDetail;
 import com.kunling.scheduling.agvflow.domain.dto.LabConfigSummary;
 import com.kunling.scheduling.agvflow.domain.dto.LabLinkView;
 import com.kunling.scheduling.agvflow.domain.dto.LabMachineView;
+import com.kunling.scheduling.agvflow.domain.dto.LabMapPointView;
 import com.kunling.scheduling.agvflow.domain.dto.LabMapView;
 import com.kunling.scheduling.agvflow.domain.dto.LabNodeView;
 import com.kunling.scheduling.agvflow.domain.dto.LabPointView;
@@ -38,13 +39,16 @@ public class LabConfigQueryService {
     private final LabConfigMapper configMapper;
     private final LabConfigObjectMapper objectMapper;
     private final LabConfigLinkMapper linkMapper;
+    private final LabMapPointProjector mapPointProjector;
 
     public LabConfigQueryService(LabConfigMapper configMapper,
                                  LabConfigObjectMapper objectMapper,
-                                 LabConfigLinkMapper linkMapper) {
+                                 LabConfigLinkMapper linkMapper,
+                                 LabMapPointProjector mapPointProjector) {
         this.configMapper = configMapper;
         this.objectMapper = objectMapper;
         this.linkMapper = linkMapper;
+        this.mapPointProjector = mapPointProjector;
     }
 
     public List<LabSpaceSummary> listSpaces() {
@@ -72,14 +76,8 @@ public class LabConfigQueryService {
     }
 
     public LabConfigDetail getConfig(Long configId) {
-        LabConfigEntity configuration = configMapper.selectById(configId);
-        if (configuration == null) {
-            throw new ResourceNotFoundException("实验室配置不存在: " + configId);
-        }
-        List<LabConfigObjectEntity> objects = objectMapper.selectList(
-                Wrappers.<LabConfigObjectEntity>lambdaQuery()
-                        .eq(LabConfigObjectEntity::getConfigId, configId)
-                        .orderByAsc(LabConfigObjectEntity::getId));
+        LabConfigEntity configuration = requireConfig(configId);
+        List<LabConfigObjectEntity> objects = listObjects(configId);
         List<LabConfigLinkEntity> links = linkMapper.selectList(
                 Wrappers.<LabConfigLinkEntity>lambdaQuery()
                         .eq(LabConfigLinkEntity::getConfigId, configId)
@@ -97,6 +95,11 @@ public class LabConfigQueryService {
                         .map(LabConfigQueryService::toPointView).collect(Collectors.toList()),
                 links.isEmpty() ? Collections.emptyList() : links.stream()
                         .map(LabConfigQueryService::toLinkView).collect(Collectors.toList()));
+    }
+
+    public List<LabMapPointView> listMapPoints(Long configId) {
+        requireConfig(configId);
+        return mapPointProjector.project(listObjects(configId));
     }
 
     public LabConfigSummary toSummary(LabConfigEntity configuration) {
@@ -132,6 +135,21 @@ public class LabConfigQueryService {
             value.setLinkCount(value.getLinkCount() + 1);
         }
         return counts;
+    }
+
+    private LabConfigEntity requireConfig(Long configId) {
+        LabConfigEntity configuration = configMapper.selectById(configId);
+        if (configuration == null) {
+            throw new ResourceNotFoundException("实验室配置不存在: " + configId);
+        }
+        return configuration;
+    }
+
+    private List<LabConfigObjectEntity> listObjects(Long configId) {
+        return objectMapper.selectList(
+                Wrappers.<LabConfigObjectEntity>lambdaQuery()
+                        .eq(LabConfigObjectEntity::getConfigId, configId)
+                        .orderByAsc(LabConfigObjectEntity::getId));
     }
 
     private static LabNodeView toNodeView(LabConfigObjectEntity entity) {

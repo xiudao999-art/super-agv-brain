@@ -1,4 +1,4 @@
-package com.kunling.scheduling.agvflow.controller;
+package com.kunling.scheduling.app.controller;
 
 import com.kunling.scheduling.agvflow.service.LabConfigApplicationService;
 import com.kunling.scheduling.agvflow.domain.dto.CreateLabSpaceRequest;
