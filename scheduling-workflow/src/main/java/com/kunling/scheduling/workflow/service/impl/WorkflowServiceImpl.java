@@ -3,6 +3,7 @@ package com.kunling.scheduling.workflow.service.impl;
 import com.kunling.scheduling.workflow.dto.WorkflowRequests;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.service.WorkflowService;
+import com.kunling.scheduling.workflow.service.WorkflowStateService;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
@@ -35,13 +36,16 @@ public class WorkflowServiceImpl implements WorkflowService {
     private final RuntimeService runtimeService;
     private final HistoryService historyService;
     private final TaskService taskService;
+    private final WorkflowStateService workflowStateService;
 
     public WorkflowServiceImpl(RepositoryService repositoryService, RuntimeService runtimeService,
-                               HistoryService historyService, TaskService taskService) {
+                               HistoryService historyService, TaskService taskService,
+                               WorkflowStateService workflowStateService) {
         this.repositoryService = repositoryService;
         this.runtimeService = runtimeService;
         this.historyService = historyService;
         this.taskService = taskService;
+        this.workflowStateService = workflowStateService;
     }
 
     @Override
@@ -103,34 +107,22 @@ public class WorkflowServiceImpl implements WorkflowService {
 
     @Override
     public WorkflowResponses.Instance getInstance(String processInstanceId) {
-        ProcessInstance active = runtimeService.createProcessInstanceQuery()
-                .processInstanceId(processInstanceId).singleResult();
-        if (active != null) return toInstance(active);
-        HistoricProcessInstance historic = historyService.createHistoricProcessInstanceQuery()
-                .processInstanceId(processInstanceId).singleResult();
-        if (historic == null) throw new NoSuchElementException("流程实例不存在: " + processInstanceId);
-        return toInstance(historic);
+        return workflowStateService.get(processInstanceId);
     }
 
     @Override @Transactional
     public WorkflowResponses.Instance suspend(String id) {
-        requiredActiveInstance(id);
-        runtimeService.suspendProcessInstanceById(id);
-        return getInstance(id);
+        return workflowStateService.suspend(id);
     }
 
     @Override @Transactional
     public WorkflowResponses.Instance activate(String id) {
-        requiredActiveInstance(id);
-        runtimeService.activateProcessInstanceById(id);
-        return getInstance(id);
+        return workflowStateService.activate(id);
     }
 
     @Override @Transactional
     public WorkflowResponses.Instance terminate(String id, WorkflowRequests.TerminateInstance request) {
-        requiredActiveInstance(id);
-        runtimeService.deleteProcessInstance(id, StringUtils.defaultIfBlank(request.getReason(), "人工终止"));
-        return getInstance(id);
+        return workflowStateService.terminate(id, request == null ? null : request.getReason());
     }
 
     @Override
@@ -146,14 +138,9 @@ public class WorkflowServiceImpl implements WorkflowService {
     @Override @Transactional
     public WorkflowResponses.Instance trigger(WorkflowRequests.TriggerExecution request) {
         Map<String, Object> variables = variables(request.getVariables());
-        String executionId = (String)variables.get("executionId");
-        Execution execution = runtimeService.createExecutionQuery().executionId(executionId).singleResult();
-        if (execution == null) {
-            throw new NoSuchElementException("活动执行节点不存在: " + executionId);
-        }
-        String instanceId = execution.getProcessInstanceId();
-        runtimeService.trigger(executionId, variables(variables));
-        return getInstance(instanceId);
+        Object executionId = variables.get("executionId");
+        return workflowStateService.completeExecution(
+                executionId == null ? null : String.valueOf(executionId), variables);
     }
 
     @Override
