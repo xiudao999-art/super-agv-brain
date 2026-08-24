@@ -1,7 +1,8 @@
-package com.kunling.scheduling.agvflow.mapper;
+package com.kunling.scheduling.workflow.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.kunling.scheduling.agvflow.domain.entity.FlowNode;
+
+import com.kunling.scheduling.workflow.entity.FlowNode;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper

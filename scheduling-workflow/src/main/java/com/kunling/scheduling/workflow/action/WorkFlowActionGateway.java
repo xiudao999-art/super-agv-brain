@@ -6,11 +6,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 @Service
-public class AgvFlowActionGateway {
+public class WorkFlowActionGateway {
     private final ActionParameterSetService parameterSetService;
 
 
-    public AgvFlowActionGateway(ActionParameterSetService parameterSetService) {
+    public WorkFlowActionGateway(ActionParameterSetService parameterSetService) {
         this.parameterSetService = parameterSetService;
     }
 

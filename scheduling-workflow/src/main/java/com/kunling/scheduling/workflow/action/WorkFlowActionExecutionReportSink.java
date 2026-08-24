@@ -3,6 +3,7 @@ package com.kunling.scheduling.workflow.action;
 import com.kunling.scheduling.action.execution.application.ActionExecutionReportSink;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionReport;
 
+
 import com.kunling.scheduling.workflow.dto.StatusChangedDto;
 import com.kunling.scheduling.workflow.service.NodeStateTransitionRuleService;
 import org.slf4j.Logger;
@@ -13,13 +14,13 @@ import org.springframework.stereotype.Component;
  * 接收 Action 模块的执行事实，并将终态事件交给 AGV Flow 状态机。
  */
 @Component
-public class AgvFlowActionExecutionReportSink implements ActionExecutionReportSink {
+public class WorkFlowActionExecutionReportSink implements ActionExecutionReportSink {
 
-    private static final Logger log = LoggerFactory.getLogger(AgvFlowActionExecutionReportSink.class);
+    private static final Logger log = LoggerFactory.getLogger(WorkFlowActionExecutionReportSink.class);
 
     private final NodeStateTransitionRuleService transitionRuleService;
 
-    public AgvFlowActionExecutionReportSink(NodeStateTransitionRuleService transitionRuleService) {
+    public WorkFlowActionExecutionReportSink(NodeStateTransitionRuleService transitionRuleService) {
         this.transitionRuleService = transitionRuleService;
     }
 
@@ -48,6 +49,6 @@ public class AgvFlowActionExecutionReportSink implements ActionExecutionReportSi
         }
         transition.setWorkflowInstanceId(report.workflowInstanceId());
         transition.setWorkflowNodeInstanceId(report.workflowNodeInstanceId());
-        transitionRuleService.statusChanged(transition);
+       // transitionRuleService.statusChanged(transition);
     }
 }
