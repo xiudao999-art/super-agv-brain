@@ -20,6 +20,11 @@
         <fastjson2.version>2.0.60</fastjson2.version>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>com.kunling</groupId>
+            <artifactId>scheduling-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <!--
             AGV Flow 通过 Action 模块公开的应用服务发起动作，并实现其报告接收端口。
             Action 模块不反向依赖本模块，因此不会形成 Maven 循环依赖。
@@ -69,6 +74,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- Lombok -->

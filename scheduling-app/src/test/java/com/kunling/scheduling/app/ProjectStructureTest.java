@@ -1,11 +1,21 @@
 package com.kunling.scheduling.app;
 
+import com.kunling.scheduling.common.web.ApiResult;
+import com.kunling.scheduling.common.web.BaseController;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,6 +25,7 @@ class ProjectStructureTest {
     void robotBridgeBelongsToTheActionModuleInsteadOfAnIndependentMavenModule() throws Exception {
         String rootPom = new String(Files.readAllBytes(Paths.get("../pom.xml")), StandardCharsets.UTF_8);
 
+        assertThat(rootPom).contains("<module>scheduling-common</module>");
         assertThat(rootPom).contains("<module>scheduling-action</module>");
         assertThat(rootPom).contains("<module>scheduling-agvFlow</module>");
         assertThat(rootPom).contains("<module>scheduling-workflow</module>");
@@ -60,6 +71,70 @@ class ProjectStructureTest {
         assertThat(Paths.get(
                 "../scheduling-action/src/main/java/com/kunling/scheduling/action/interfaces/rest"
         )).doesNotExist();
+    }
+
+    @Test
+    void laboratoryConfigurationUsesTheExistingAgvFlowLayers() {
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/labconfig"
+        )).doesNotExist();
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/controller/LabConfigController.java"
+        )).isRegularFile();
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/service/LabConfigApplicationService.java"
+        )).isRegularFile();
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/mapper/LabConfigMapper.java"
+        )).isRegularFile();
+    }
+
+    @Test
+    void commonModuleOwnsTheOnlyGlobalExceptionHandler() {
+        assertThat(Paths.get(
+                "../scheduling-common/src/main/java/com/kunling/scheduling/common/web/GlobalExceptionHandler.java"
+        )).isRegularFile();
+        assertThat(Paths.get(
+                "../scheduling-action/src/main/java/com/kunling/scheduling/action/controller/ApiExceptionHandler.java"
+        )).doesNotExist();
+        assertThat(Paths.get(
+                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/config/GlobalExceptionHandler.java"
+        )).doesNotExist();
+        assertThat(Paths.get(
+                "../scheduling-workflow/src/main/java/com/kunling/scheduling/workflow/controller/WorkflowExceptionHandler.java"
+        )).doesNotExist();
+    }
+
+    @Test
+    void allEnabledControllerEndpointsReturnApiResultDirectly() {
+        ClassPathScanningCandidateComponentProvider scanner =
+                new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
+
+        List<String> violations = new ArrayList<>();
+        for (String basePackage : new String[]{
+                "com.kunling.scheduling.action.controller",
+                "com.kunling.scheduling.agvflow.controller",
+                "com.kunling.scheduling.workflow.controller"
+        }) {
+            scanner.findCandidateComponents(basePackage).forEach(candidate -> {
+                Class<?> controllerType = loadClass(candidate.getBeanClassName());
+                if (!BaseController.class.isAssignableFrom(controllerType)) {
+                    violations.add(controllerType.getName() + " 未继承 BaseController");
+                }
+                for (Method method : controllerType.getDeclaredMethods()) {
+                    if (AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class) != null
+                            && !ApiResult.class.equals(method.getReturnType())) {
+                        violations.add(controllerType.getSimpleName() + "#" + method.getName()
+                                + " 返回 " + method.getGenericReturnType().getTypeName());
+                    }
+                }
+            });
+        }
+
+        assertThat(violations)
+                .as("所有启用中的 Controller 接口必须直接返回 ApiResult<T>")
+                .isEmpty();
     }
 
     @Test
@@ -154,5 +229,13 @@ class ProjectStructureTest {
             hexadecimal.append(String.format("%02x", value & 0xff));
         }
         return hexadecimal.toString();
+    }
+
+    private Class<?> loadClass(String className) {
+        try {
+            return Class.forName(className);
+        } catch (ClassNotFoundException exception) {
+            throw new IllegalStateException("无法加载 Controller: " + className, exception);
+        }
     }
 }

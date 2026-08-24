@@ -19,6 +19,7 @@
     <description>坤灵机器人调度主应用</description>
 
     <modules>
+        <module>scheduling-common</module>
         <module>scheduling-action</module>
         <module>scheduling-agvFlow</module>
         <module>scheduling-workflow</module>

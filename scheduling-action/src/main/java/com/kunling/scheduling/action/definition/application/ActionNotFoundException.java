@@ -1,6 +1,8 @@
 package com.kunling.scheduling.action.definition.application;
 
-public class ActionNotFoundException extends RuntimeException {
+import com.kunling.scheduling.common.exception.ResourceNotFoundException;
+
+public class ActionNotFoundException extends ResourceNotFoundException {
 
     public ActionNotFoundException(String message) {
         super(message);

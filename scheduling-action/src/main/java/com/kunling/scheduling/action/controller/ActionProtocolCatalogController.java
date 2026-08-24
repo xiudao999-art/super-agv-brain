@@ -4,6 +4,8 @@ import com.kunling.scheduling.action.definition.domain.DownstreamActionType;
 import com.kunling.scheduling.action.definition.domain.DownstreamSubAction;
 import com.kunling.scheduling.action.definition.domain.PhaseFailureAction;
 import com.kunling.scheduling.action.definition.domain.RetryExhaustedAction;
+import com.kunling.scheduling.common.web.ApiResult;
+import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,10 +21,10 @@ import java.util.stream.Collectors;
 @Tag(name = "下游动作协议", description = "查询主动作、子动作和异常策略的协议边界")
 @RestController
 @RequestMapping("/api/action-protocol-catalog")
-public class ActionProtocolCatalogController {
+public class ActionProtocolCatalogController extends BaseController {
     @Operation(summary = "查询下游动作协议目录", description = "协议枚举值属于稳定线协议，因此保持英文")
     @GetMapping
-    public Map<String, Object> get() {
+    public ApiResult<Map<String, Object>> get() {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("actionTypes", Arrays.stream(DownstreamActionType.values()).map(type -> {
             Map<String, Object> item = new LinkedHashMap<String, Object>();
@@ -41,6 +43,6 @@ public class ActionProtocolCatalogController {
         }).collect(Collectors.toList()));
         result.put("failureActions", Arrays.asList(PhaseFailureAction.values()));
         result.put("retryExhaustedActions", Arrays.asList(RetryExhaustedAction.values()));
-        return result;
+        return success(result);
     }
 }
