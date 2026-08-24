@@ -14,12 +14,12 @@ import java.util.List;
  * <p>流程业务只依赖本门面，不直接访问 Action 模块的仓储、TCP 实现或控制器。</p>
  */
 @Service
-public class AgvFlowExecutionsGateway {
+public class WorkFlowExecutionsGateway {
 
     private final ObjectProvider<ActionExecutionService> actionExecutionServiceProvider;
 
 
-    public AgvFlowExecutionsGateway(
+    public WorkFlowExecutionsGateway(
             ObjectProvider<ActionExecutionService> actionExecutionServiceProvider) {
         this.actionExecutionServiceProvider = actionExecutionServiceProvider;
     }

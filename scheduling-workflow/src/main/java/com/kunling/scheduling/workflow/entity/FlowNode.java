@@ -1,11 +1,11 @@
-package com.kunling.scheduling.agvflow.domain.entity;
+package com.kunling.scheduling.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
-import com.kunling.scheduling.agvflow.enums.FailureStrategyEnums;
-import com.kunling.scheduling.agvflow.enums.NodeCategoryEnums;
-import com.kunling.scheduling.agvflow.enums.NodeState;
+import com.kunling.scheduling.workflow.enums.FailureStrategyEnums;
+import com.kunling.scheduling.workflow.enums.NodeCategoryEnums;
+import com.kunling.scheduling.workflow.enums.NodeState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 

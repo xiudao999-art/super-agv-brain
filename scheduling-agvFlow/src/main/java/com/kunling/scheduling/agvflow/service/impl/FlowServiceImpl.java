@@ -7,12 +7,12 @@
 //
 //import com.kunling.scheduling.agvflow.domain.dto.*;
 //import com.kunling.scheduling.agvflow.domain.entity.Flow;
-//import com.kunling.scheduling.agvflow.domain.entity.FlowNode;
+//import com.kunling.scheduling.workflow.entity.FlowNode;
 //import com.kunling.scheduling.agvflow.domain.entity.FlowTemplate;
 //import com.kunling.scheduling.agvflow.mapper.FlowMapper;
 //import com.kunling.scheduling.agvflow.enums.NodeState;
 //import com.kunling.scheduling.agvflow.enums.FlowState;
-//import com.kunling.scheduling.agvflow.service.FlowNodeService;
+//import com.kunling.scheduling.workflow.service.FlowNodeService;
 //import com.kunling.scheduling.agvflow.service.FlowService;
 //import com.kunling.scheduling.agvflow.service.FlowTemplateService;
 //import org.apache.commons.lang3.StringUtils;

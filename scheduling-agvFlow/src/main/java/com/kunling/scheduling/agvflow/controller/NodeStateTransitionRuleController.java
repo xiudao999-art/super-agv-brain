@@ -1,8 +1,8 @@
 //package com.kunling.scheduling.agvflow.controller;
 //
 //
-//import com.kunling.scheduling.agvflow.domain.entity.NodeStateTransitionRule;
-//import com.kunling.scheduling.agvflow.service.NodeStateTransitionRuleService;
+//import com.kunling.scheduling.workflow.entity.NodeStateTransitionRule;
+//import com.kunling.scheduling.workflow.service.NodeStateTransitionRuleService;
 //import com.kunling.scheduling.common.web.ApiResult;
 //import com.kunling.scheduling.common.web.BaseController;
 //import io.swagger.v3.oas.annotations.Operation;

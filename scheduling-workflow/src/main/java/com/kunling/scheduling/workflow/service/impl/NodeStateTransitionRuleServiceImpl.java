@@ -4,12 +4,13 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import com.kunling.scheduling.workflow.dto.StatusChangedDto;
+import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.NodeStateTransitionRule;
 import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.mapper.NodeStateTransitionRuleMapper;
+import com.kunling.scheduling.workflow.service.FlowNodeService;
 import com.kunling.scheduling.workflow.service.NodeStateTransitionRuleService;
 import lombok.extern.slf4j.Slf4j;
-import org.flowable.bpmn.model.FlowNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,7 +23,11 @@ public class NodeStateTransitionRuleServiceImpl
         extends ServiceImpl<NodeStateTransitionRuleMapper, NodeStateTransitionRule>
         implements NodeStateTransitionRuleService {
 
+    @Resource
+    private FlowNodeService flowNodeService;
 
+//    @Resource
+//    private FlowTemplateService flowTemplateService;
 
     private static final int FLOW_SUCCEEDED = 2;
     private static final int FLOW_FAILED = 3;
@@ -92,7 +97,7 @@ public class NodeStateTransitionRuleServiceImpl
             throw new IllegalArgumentException("workflowNodeInstanceId 必须是整数", exception);
         }
 
-  /*      FlowNode flowNode = flowNodeService.getById(nodeId);
+        FlowNode flowNode = flowNodeService.getById(nodeId);
         if (flowNode == null) {
             throw new IllegalArgumentException("流程节点不存在: " + nodeId);
         }
@@ -102,10 +107,10 @@ public class NodeStateTransitionRuleServiceImpl
                 flowNode.getId(), flowNode.getStatus(), eventCode);
 
         NodeStateTransitionRule rule = this.lambdaQuery().eq(NodeStateTransitionRule::getCurrentState, flowNode.getStatus())
-                .eq(NodeStateTransitionRule::getEventCode, dto.getEventCode()).last("limit 1").one();*/
+                .eq(NodeStateTransitionRule::getEventCode, dto.getEventCode()).last("limit 1").one();
 
 
- /*       switch (eventCode) {
+        switch (eventCode) {
             case "SUCCEEDED":
                 handleSucceeded(flowNode);
                 break;
@@ -127,10 +132,10 @@ public class NodeStateTransitionRuleServiceImpl
             default:
                 throw new IllegalArgumentException("不支持的节点事件状态: " + eventCode);
         }
-        updateNodeState(flowNode, rule.getNextState());*/
+        updateNodeState(flowNode, rule.getNextState());
     }
 
- /*   private void handleSucceeded(FlowNode currentNode) {
+    private void handleSucceeded(FlowNode currentNode) {
         // 终态回调可能被重复投递，已成功的节点不能再次启动下一节点。
         if (currentNode.getStatus() == NodeState.SUCCEEDED) {
             log.info("忽略重复的节点成功回调: nodeId={}", currentNode.getId());
@@ -150,18 +155,18 @@ public class NodeStateTransitionRuleServiceImpl
             log.info("流程全部节点执行完成: flowId={}", currentNode.getTemplateId());
             return;
         }
-        flowTemplateService.startFlowNode(nextNode.getId());
-    }*/
+//        flowTemplateService.startFlowNode(nextNode.getId());
+    }
 
-   /* private void handleRetryable(FlowNode currentNode) {
+    private void handleRetryable(FlowNode currentNode) {
         if (currentNode.getStatus() != NodeState.RUNNING
                 && currentNode.getStatus() != NodeState.WAITING) {
             throw new IllegalStateException("当前节点状态不允许重试: " + currentNode.getStatus());
         }
-        flowTemplateService.startFlowNode(currentNode.getId());
-    }*/
+//        flowTemplateService.startFlowNode(currentNode.getId());
+    }
 
- /*   private void handleCritical(FlowNode currentNode) {
+    private void handleCritical(FlowNode currentNode) {
         updateFlowStatus(currentNode.getTemplateId(), FLOW_FAILED);
         // 严重错误终止流程，尚未启动的节点统一取消。
         List<FlowNode> pendingNodes = flowNodeService.list(Wrappers.<FlowNode>lambdaQuery()
@@ -175,23 +180,23 @@ public class NodeStateTransitionRuleServiceImpl
         }
         log.error("流程因严重错误终止: flowId={}, nodeId={}",
                 currentNode.getTemplateId(), currentNode.getId());
-    }*/
+    }
 
- /*   private void updateNodeState(FlowNode node, NodeState state) {
+    private void updateNodeState(FlowNode node, NodeState state) {
         node.setStatus(state);
         if (!flowNodeService.updateById(node)) {
             throw new IllegalStateException("流程节点状态更新失败: " + node.getId());
         }
-    }*/
+    }
 
-/*    private void updateFlowStatus(Long flowId, int status) {
-        FlowTemplate flow = flowTemplateService.getById(flowId);
-        if (flow == null) {
-            throw new IllegalStateException("流程不存在: " + flowId);
-        }
-        flow.setStatus(status);
-        if (!flowTemplateService.updateById(flow)) {
-            throw new IllegalStateException("流程状态更新失败: " + flowId);
-        }
-    }*/
+    private void updateFlowStatus(Long flowId, int status) {
+//        FlowTemplate flow = flowTemplateService.getById(flowId);
+//        if (flow == null) {
+//            throw new IllegalStateException("流程不存在: " + flowId);
+//        }
+//        flow.setStatus(status);
+//        if (!flowTemplateService.updateById(flow)) {
+//            throw new IllegalStateException("流程状态更新失败: " + flowId);
+//        }
+    }
 }

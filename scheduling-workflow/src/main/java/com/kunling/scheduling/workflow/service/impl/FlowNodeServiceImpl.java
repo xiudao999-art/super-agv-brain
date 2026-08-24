@@ -1,10 +1,11 @@
-package com.kunling.scheduling.agvflow.service.impl;
+package com.kunling.scheduling.workflow.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
-import com.kunling.scheduling.agvflow.domain.entity.FlowNode;
-import com.kunling.scheduling.agvflow.mapper.FlowNodeMapper;
-import com.kunling.scheduling.agvflow.service.FlowNodeService;
+
+import com.kunling.scheduling.workflow.entity.FlowNode;
+import com.kunling.scheduling.workflow.mapper.FlowNodeMapper;
+import com.kunling.scheduling.workflow.service.FlowNodeService;
 import org.springframework.stereotype.Service;
 
 @Service

@@ -1,7 +1,7 @@
-package com.kunling.scheduling.agvflow.service;
+package com.kunling.scheduling.workflow.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.kunling.scheduling.agvflow.domain.entity.FlowNode;
+import com.kunling.scheduling.workflow.entity.FlowNode;
 
 
 public interface FlowNodeService extends IService<FlowNode> {
