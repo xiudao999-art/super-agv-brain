@@ -68,7 +68,7 @@
         </dependency>
         <dependency>
             <groupId>com.kunling</groupId>
-            <artifactId>scheduling-agvFlow</artifactId>
+            <artifactId>scheduling-action</artifactId>
             <version>${project.version}</version>
         </dependency>
     </dependencies>

@@ -1,3 +1,4 @@
+/*
 package com.kunling.scheduling.workflow.action;
 
 import com.kunling.scheduling.action.execution.application.ActionExecutionReportSink;
@@ -8,7 +9,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
-/** Action物理执行成功后自动推进对应的Flowable receiveTask。 */
+*/
+/** Action物理执行成功后自动推进对应的Flowable receiveTask。 *//*
+
 @Component
 public class WorkflowActionExecutionReportSink implements ActionExecutionReportSink {
     private static final Logger log = LoggerFactory.getLogger(WorkflowActionExecutionReportSink.class);
@@ -36,3 +39,4 @@ public class WorkflowActionExecutionReportSink implements ActionExecutionReportS
         return value == null || value.trim().isEmpty();
     }
 }
+*/
