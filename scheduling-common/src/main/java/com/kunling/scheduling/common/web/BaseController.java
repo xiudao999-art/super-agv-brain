@@ -22,4 +22,5 @@ public abstract class BaseController {
     protected <T> ApiResult<T> accepted(T data) {
         return ApiResult.accepted(data);
     }
+
 }

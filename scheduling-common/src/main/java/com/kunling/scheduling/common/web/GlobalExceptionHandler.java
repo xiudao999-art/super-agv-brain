@@ -90,26 +90,27 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiResult<Object>> handleResponseStatus(ResponseStatusException exception) {
         String message = exception.getReason() == null ? exception.getStatus().getReasonPhrase() : exception.getReason();
-        return ResponseEntity.status(exception.getStatus())
-                .body(ApiResult.failure(exception.getStatus().value(), message, null));
+        ApiResponseCode responseCode = ApiResponseCode.from(exception.getStatus());
+        return ResponseEntity.status(responseCode.getHttpStatus())
+                .body(ApiResult.failure(responseCode, message, null));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResult<Object>> handleUnsupportedMethod(HttpRequestMethodNotSupportedException exception) {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
-                .body(ApiResult.failure(HttpStatus.METHOD_NOT_ALLOWED.value(), "请求方法不支持", null));
+                .body(ApiResult.failure(ApiResponseCode.METHOD_NOT_ALLOWED, "请求方法不支持", null));
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ApiResult<Object>> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException exception) {
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .body(ApiResult.failure(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(), "请求内容类型不支持", null));
+                .body(ApiResult.failure(ApiResponseCode.UNSUPPORTED_MEDIA_TYPE, "请求内容类型不支持", null));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResult<Object>> handleUploadTooLarge(MaxUploadSizeExceededException exception) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(ApiResult.failure(HttpStatus.PAYLOAD_TOO_LARGE.value(), "上传文件不能超过10MB", null));
+                .body(ApiResult.failure(ApiResponseCode.PAYLOAD_TOO_LARGE, "上传文件不能超过10MB", null));
     }
 
     @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
@@ -143,27 +144,27 @@ public class GlobalExceptionHandler {
         }
         LOGGER.error("未处理的接口异常", exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResult.failure(HttpStatus.INTERNAL_SERVER_ERROR.value(), INTERNAL_ERROR_MESSAGE, null));
+                .body(ApiResult.failure(ApiResponseCode.INTERNAL_SERVER_ERROR, INTERNAL_ERROR_MESSAGE, null));
     }
 
     private ResponseEntity<ApiResult<Object>> response(ErrorType errorType, String message, Object issues) {
-        HttpStatus status = toHttpStatus(errorType);
-        return ResponseEntity.status(status)
-                .body(ApiResult.failure(status.value(), safeMessage(message), issues));
+        ApiResponseCode responseCode = toResponseCode(errorType);
+        return ResponseEntity.status(responseCode.getHttpStatus())
+                .body(ApiResult.failure(responseCode, safeMessage(message), issues));
     }
 
-    private HttpStatus toHttpStatus(ErrorType errorType) {
+    private ApiResponseCode toResponseCode(ErrorType errorType) {
         switch (errorType) {
             case BAD_REQUEST:
-                return HttpStatus.BAD_REQUEST;
+                return ApiResponseCode.BAD_REQUEST;
             case NOT_FOUND:
-                return HttpStatus.NOT_FOUND;
+                return ApiResponseCode.NOT_FOUND;
             case CONFLICT:
-                return HttpStatus.CONFLICT;
+                return ApiResponseCode.CONFLICT;
             case SERVICE_UNAVAILABLE:
-                return HttpStatus.SERVICE_UNAVAILABLE;
+                return ApiResponseCode.SERVICE_UNAVAILABLE;
             default:
-                return HttpStatus.INTERNAL_SERVER_ERROR;
+                return ApiResponseCode.INTERNAL_SERVER_ERROR;
         }
     }
 

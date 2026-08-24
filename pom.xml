@@ -33,6 +33,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <knife4j.version>4.4.0</knife4j.version>
+        <swagger.annotations.version>2.2.9</swagger.annotations.version>
     </properties>
 
     <build>

@@ -32,15 +32,47 @@
 
 ### 1.3 统一响应结构
 
-所有接口都返回统一结构，HTTP 状态码与响应体中的 `code` 一致。
+所有接口都返回统一结构。HTTP 状态码用于表示传输结果；响应体中的 `code` 只能使用系统固定响应码，成功固定为 `200`。
 
 ```ts
+export enum ApiResponseCode {
+  SUCCESS = 200,
+  BAD_REQUEST = 400,
+  UNAUTHORIZED = 401,
+  FORBIDDEN = 403,
+  NOT_FOUND = 404,
+  METHOD_NOT_ALLOWED = 405,
+  CONFLICT = 409,
+  PAYLOAD_TOO_LARGE = 413,
+  UNSUPPORTED_MEDIA_TYPE = 415,
+  INTERNAL_SERVER_ERROR = 500,
+  SERVICE_UNAVAILABLE = 503,
+}
+
 export interface ApiResult<T> {
-  code: number;
+  code: ApiResponseCode;
   message: string;
-  data?: T;
+  data: T | null;
 }
 ```
+
+固定响应码说明：
+
+| 响应码 | 含义 |
+|---|---|
+| `200` | 成功 |
+| `400` | 请求参数或内容错误 |
+| `401` | 未认证 |
+| `403` | 无权访问 |
+| `404` | 资源不存在 |
+| `405` | 请求方法不支持 |
+| `409` | 数据或状态冲突 |
+| `413` | 请求内容过大 |
+| `415` | 请求内容类型不支持 |
+| `500` | 系统内部错误 |
+| `503` | 服务暂不可用 |
+
+注意：新增接口的 HTTP 状态为 `201`，但响应体成功码仍为 `200`。
 
 查询成功示例：
 
@@ -56,7 +88,7 @@ export interface ApiResult<T> {
 
 ```json
 {
-  "code": 201,
+  "code": 200,
   "message": "操作成功",
   "data": {
     "id": 101
@@ -64,12 +96,13 @@ export interface ApiResult<T> {
 }
 ```
 
-修改或删除成功没有业务数据，`data` 字段不会返回：
+修改或删除成功没有业务数据，但仍固定返回 `data` 字段：
 
 ```json
 {
   "code": 200,
-  "message": "操作成功"
+  "message": "操作成功",
+  "data": null
 }
 ```
 
@@ -93,7 +126,8 @@ export interface ApiResult<T> {
 ```json
 {
   "code": 409,
-  "message": "该空间已存在草稿"
+  "message": "该空间已存在草稿",
+  "data": null
 }
 ```
 
@@ -313,7 +347,7 @@ Content-Type: multipart/form-data
 
 ```json
 {
-  "code": 201,
+  "code": 200,
   "message": "操作成功",
   "data": {
     "imageUrl": "/files/550e8400-e29b-41d4-a716-446655440000.png"
@@ -420,7 +454,7 @@ Content-Type: application/json
 
 ```json
 {
-  "code": 201,
+  "code": 200,
   "message": "操作成功",
   "data": {
     "spaceId": "49e589fa-649f-4d08-9806-cf697dad2599",
@@ -466,7 +500,7 @@ POST /api/lab-spaces/{spaceId}/drafts
 
 ```json
 {
-  "code": 201,
+  "code": 200,
   "message": "操作成功",
   "data": {
     "spaceId": "49e589fa-649f-4d08-9806-cf697dad2599",
@@ -704,7 +738,7 @@ POST /api/lab-configs/{configId}/nodes
 
 ```json
 {
-  "code": 201,
+  "code": 200,
   "message": "操作成功",
   "data": {
     "id": 201

@@ -82,7 +82,7 @@ class KunlingSchedulingApplicationTest {
         ApiResult<ImageUploadResult> result = controller.upload(
                 new MockMultipartFile("file", "map.png", "image/png", png));
 
-        assertThat(result.getCode()).isEqualTo(201);
+        assertThat(result.getCode()).isEqualTo(200);
         String imageUrl = result.getData().getImageUrl();
         assertThat(imageUrl).startsWith("/files/").endsWith(".png");
         assertThat(Files.exists(directory.resolve(imageUrl.substring("/files/".length())))).isTrue();

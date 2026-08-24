@@ -83,7 +83,7 @@ class LabConfigApiTest {
                                 + "\"map\":{\"name\":\"实验室总览地图\",\"version\":\"V1.0\","
                                 + "\"imageUrl\":\"/files/lab-a-v1.png\"}}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.code").value(201))
+                .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.message").value("操作成功"))
                 .andExpect(jsonPath("$.data.status").value("DRAFT"))
                 .andExpect(jsonPath("$.data.revision").value(1));
@@ -106,7 +106,7 @@ class LabConfigApiTest {
         MvcResult uploadResult = mockMvc.perform(multipart("/api/files/images")
                         .file(new MockMultipartFile("file", "map.png", "image/png", png)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.code").value(201))
+                .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.imageUrl").value(org.hamcrest.Matchers.matchesPattern(
                         "/files/[0-9a-f-]+\\.png")))
                 .andReturn();
@@ -132,7 +132,7 @@ class LabConfigApiTest {
                         .content("{\"code\":\"N01\",\"name\":\"立库出口\",\"type\":\"NAVIGATION\","
                                 + "\"x\":11.8200,\"y\":6.1100,\"yaw\":90.0}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.code").value(201))
+                .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.id").isNumber());
 
         mockMvc.perform(get("/api/lab-configs/{configId}", configId))
@@ -283,13 +283,18 @@ class LabConfigApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"实验室 A（东区）\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200));
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.message").value("操作成功"))
+                .andExpect(jsonPath("$.data").hasJsonPath())
+                .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()));
         mockMvc.perform(put("/api/lab-configs/{configId}/map", creation.configId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"东区地图\",\"version\":\"V1.1\","
                                 + "\"imageUrl\":\"/files/lab-a-v1.1.png\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200));
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data").hasJsonPath())
+                .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()));
 
         Long startNodeId = postAndGetId("/api/lab-configs/" + creation.configId + "/nodes",
                 "{\"code\":\"N01\",\"name\":\"起点\",\"type\":\"NAVIGATION\","
@@ -359,7 +364,9 @@ class LabConfigApiTest {
 
         mockMvc.perform(delete("/api/lab-configs/{configId}", creation.configId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(200));
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data").hasJsonPath())
+                .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()));
         mockMvc.perform(get("/api/lab-configs/{configId}", creation.configId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(404));
@@ -434,6 +441,8 @@ class LabConfigApiTest {
 
         mockMvc.perform(get("/v3/api-docs/resource-config"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$..properties.code.example")
+                        .value(org.hamcrest.Matchers.hasItem(200)))
                 .andExpect(jsonPath("$.paths['/api/files/images']").exists())
                 .andExpect(jsonPath("$.paths['/api/lab-spaces']").exists())
                 .andExpect(jsonPath("$.paths['/api/lab-configs/{configId}/map-points']").exists());
@@ -501,6 +510,8 @@ class LabConfigApiTest {
                                 + "\"map\":{\"name\":\"实验室总览地图\",\"version\":\"V1.0\","
                                 + "\"imageUrl\":\"/files/lab-a-v1.png\"}}"))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.message").value("操作成功"))
                 .andReturn();
         Number configId = com.jayway.jsonpath.JsonPath.read(
                 result.getResponse().getContentAsString(), "$.data.configId");
@@ -514,6 +525,8 @@ class LabConfigApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.message").value("操作成功"))
                 .andReturn();
         Number id = com.jayway.jsonpath.JsonPath.read(result.getResponse().getContentAsString(), "$.data.id");
         return id.longValue();
