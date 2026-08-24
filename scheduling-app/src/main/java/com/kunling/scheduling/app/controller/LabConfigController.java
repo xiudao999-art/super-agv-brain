@@ -31,7 +31,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/lab-configs")
-@Tag(name = "实验室配置版本", description = "维护空间配置草稿并执行校验和发布")
+@Tag(name = "实验室配置版本", description = "维护唯一实验室的配置草稿并执行校验和发布")
 public class LabConfigController extends BaseController {
 
     private final LabConfigApplicationService applicationService;

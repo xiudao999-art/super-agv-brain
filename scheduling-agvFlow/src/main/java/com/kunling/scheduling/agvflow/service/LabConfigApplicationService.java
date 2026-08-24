@@ -5,8 +5,7 @@ import com.kunling.scheduling.common.exception.ConflictException;
 import com.kunling.scheduling.common.exception.ResourceNotFoundException;
 import com.kunling.scheduling.agvflow.enums.LabConfigStatus;
 import com.kunling.scheduling.agvflow.enums.LabObjectKind;
-import com.kunling.scheduling.agvflow.domain.dto.CreateLabSpaceRequest;
-import com.kunling.scheduling.agvflow.domain.dto.CreateLabSpaceResult;
+import com.kunling.scheduling.agvflow.domain.dto.InitializeLabRequest;
 import com.kunling.scheduling.agvflow.domain.dto.CreatedResource;
 import com.kunling.scheduling.agvflow.domain.dto.LabConfigDetail;
 import com.kunling.scheduling.agvflow.domain.dto.LabConfigSummary;
@@ -16,8 +15,9 @@ import com.kunling.scheduling.agvflow.domain.dto.LabMapRequest;
 import com.kunling.scheduling.agvflow.domain.dto.LabMapPointView;
 import com.kunling.scheduling.agvflow.domain.dto.LabNodeRequest;
 import com.kunling.scheduling.agvflow.domain.dto.LabPointRequest;
-import com.kunling.scheduling.agvflow.domain.dto.LabSpaceSummary;
-import com.kunling.scheduling.agvflow.domain.dto.UpdateLabSpaceRequest;
+import com.kunling.scheduling.agvflow.domain.dto.LabConfigVersionResult;
+import com.kunling.scheduling.agvflow.domain.dto.LabSummary;
+import com.kunling.scheduling.agvflow.domain.dto.UpdateLabRequest;
 import com.kunling.scheduling.agvflow.domain.dto.ValidationResult;
 import com.kunling.scheduling.agvflow.domain.entity.LabConfigEntity;
 import com.kunling.scheduling.agvflow.domain.entity.LabConfigLinkEntity;
@@ -34,10 +34,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 /**
- * 实验室配置应用门面：编排空间版本生命周期，并把查询和草稿编辑委托给独立服务。
+ * 实验室配置应用门面：编排唯一实验室的版本生命周期，并把查询和草稿编辑委托给独立服务。
  */
 @Service
 public class LabConfigApplicationService {
@@ -64,11 +63,12 @@ public class LabConfigApplicationService {
     }
 
     @Transactional
-    public CreateLabSpaceResult createSpace(CreateLabSpaceRequest request) {
+    public LabConfigVersionResult initializeLab(InitializeLabRequest request) {
+        if (configMapper.selectCount(Wrappers.<LabConfigEntity>lambdaQuery()) > 0) {
+            throw new ConflictException("实验室已初始化，不能重复创建");
+        }
         LabConfigEntity entity = new LabConfigEntity();
-        entity.setSpaceId(UUID.randomUUID().toString());
-        entity.setSpaceCode(request.getCode().trim());
-        entity.setSpaceName(request.getName().trim());
+        entity.setLabName(request.getName().trim());
         entity.setMapName(request.getMap().getName().trim());
         entity.setMapVersion(request.getMap().getVersion().trim());
         entity.setMapFileRef(request.getMap().getImageUrl().trim());
@@ -77,13 +77,13 @@ public class LabConfigApplicationService {
         try {
             configMapper.insert(entity);
         } catch (DuplicateKeyException exception) {
-            throw new ConflictException("空间编码已存在: " + entity.getSpaceCode(), exception);
+            throw new ConflictException("实验室已初始化，不能重复创建", exception);
         }
-        return new CreateLabSpaceResult(entity.getSpaceId(), entity.getId(), entity.getRevision(), entity.getStatus());
+        return new LabConfigVersionResult(entity.getId(), entity.getRevision(), entity.getStatus());
     }
 
-    public List<LabSpaceSummary> listSpaces() {
-        return queryService.listSpaces();
+    public LabSummary getLab() {
+        return queryService.getLab();
     }
 
     public LabConfigDetail getConfig(Long configId) {
@@ -95,15 +95,15 @@ public class LabConfigApplicationService {
     }
 
     @Transactional
-    public void updateSpaceName(String spaceId, UpdateLabSpaceRequest request) {
-        List<LabConfigEntity> configurations = configMapper.selectBySpaceIdForUpdate(spaceId);
+    public void updateLabName(UpdateLabRequest request) {
+        List<LabConfigEntity> configurations = configMapper.selectAllForUpdate();
         if (configurations.isEmpty()) {
-            throw new ResourceNotFoundException("实验室空间不存在: " + spaceId);
+            throw new ResourceNotFoundException("实验室尚未初始化");
         }
         String normalizedName = request.getName().trim();
-        // 空间字段随版本保存，重命名时同步全部版本，保证查询历史版本时身份信息一致。
+        // 实验室名称随版本保存，重命名时同步全部版本，保证历史配置展示一致。
         for (LabConfigEntity configuration : configurations) {
-            configuration.setSpaceName(normalizedName);
+            configuration.setLabName(normalizedName);
             configuration.setUpdatedAt(LocalDateTime.now());
             configMapper.updateById(configuration);
         }
@@ -188,8 +188,7 @@ public class LabConfigApplicationService {
 
     @Transactional
     public LabConfigSummary publish(Long configId) {
-        LabConfigEntity requested = requireConfig(configId);
-        List<LabConfigEntity> locked = configMapper.selectBySpaceIdForUpdate(requested.getSpaceId());
+        List<LabConfigEntity> locked = configMapper.selectAllForUpdate();
         LabConfigEntity draft = locked.stream()
                 .filter(value -> configId.equals(value.getId()))
                 .findFirst()
@@ -202,7 +201,7 @@ public class LabConfigApplicationService {
             throw new ConflictException("配置校验未通过，不能发布");
         }
 
-        // 先归档旧版本，再发布新版本，避免出现两个同时生效的空间配置。
+        // 先归档旧版本，再发布新版本，避免唯一实验室出现两个同时生效的配置。
         for (LabConfigEntity configuration : locked) {
             if (LabConfigStatus.PUBLISHED.name().equals(configuration.getStatus())) {
                 configuration.setStatus(LabConfigStatus.ARCHIVED.name());
@@ -217,13 +216,13 @@ public class LabConfigApplicationService {
     }
 
     @Transactional
-    public CreateLabSpaceResult createDraft(String spaceId) {
-        List<LabConfigEntity> locked = configMapper.selectBySpaceIdForUpdate(spaceId);
+    public LabConfigVersionResult createDraft() {
+        List<LabConfigEntity> locked = configMapper.selectAllForUpdate();
         if (locked.isEmpty()) {
-            throw new ResourceNotFoundException("实验室空间不存在: " + spaceId);
+            throw new ResourceNotFoundException("实验室尚未初始化");
         }
         if (locked.stream().anyMatch(value -> LabConfigStatus.DRAFT.name().equals(value.getStatus()))) {
-            throw new ConflictException("该空间已存在草稿");
+            throw new ConflictException("实验室已存在草稿");
         }
         LabConfigEntity source = locked.stream()
                 .filter(value -> LabConfigStatus.PUBLISHED.name().equals(value.getStatus()))
@@ -235,17 +234,15 @@ public class LabConfigApplicationService {
             configMapper.insert(draft);
         } catch (DuplicateKeyException exception) {
             // 数据库唯一约束是并发竞争的最终防线，对外统一呈现为草稿冲突。
-            throw new ConflictException("该空间已存在草稿或版本号冲突", exception);
+            throw new ConflictException("实验室已存在草稿或版本号冲突", exception);
         }
         cloneGraph(source.getId(), draft.getId());
-        return new CreateLabSpaceResult(spaceId, draft.getId(), draft.getRevision(), draft.getStatus());
+        return new LabConfigVersionResult(draft.getId(), draft.getRevision(), draft.getStatus());
     }
 
     private LabConfigEntity copyConfiguration(LabConfigEntity source, int revision) {
         LabConfigEntity target = new LabConfigEntity();
-        target.setSpaceId(source.getSpaceId());
-        target.setSpaceCode(source.getSpaceCode());
-        target.setSpaceName(source.getSpaceName());
+        target.setLabName(source.getLabName());
         target.setMapName(source.getMapName());
         target.setMapVersion(source.getMapVersion());
         target.setMapFileRef(source.getMapFileRef());

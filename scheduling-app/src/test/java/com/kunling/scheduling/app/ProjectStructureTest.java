@@ -80,7 +80,7 @@ class ProjectStructureTest {
         )).doesNotExist();
         for (String controller : new String[]{
                 "LocationController", "LocationTypeController", "CarrierController",
-                "CarrierTypeController", "LabSpaceController", "LabConfigController"
+                "CarrierTypeController", "LabController", "LabConfigController"
         }) {
             assertThat(Paths.get("src/main/java/com/kunling/scheduling/app/controller/"
                     + controller + ".java")).isRegularFile();

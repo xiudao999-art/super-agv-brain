@@ -16,11 +16,7 @@ public class LabConfigEntity {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String spaceId;
-
-    private String spaceCode;
-
-    private String spaceName;
+    private String labName;
 
     private String mapName;
 

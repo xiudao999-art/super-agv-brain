@@ -76,10 +76,10 @@ class LabConfigApiTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void 创建空间后可以从列表取回首个草稿() throws Exception {
-        mockMvc.perform(post("/api/lab-spaces")
+    void 初始化唯一实验室后可以查询首个草稿() throws Exception {
+        mockMvc.perform(post("/api/lab")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"SPACE-LAB-A\",\"name\":\"实验室 A\","
+                        .content("{\"name\":\"实验室 A\","
                                 + "\"map\":{\"name\":\"实验室总览地图\",\"version\":\"V1.0\","
                                 + "\"imageUrl\":\"/files/lab-a-v1.png\"}}"))
                 .andExpect(status().isCreated())
@@ -88,13 +88,27 @@ class LabConfigApiTest {
                 .andExpect(jsonPath("$.data.status").value("DRAFT"))
                 .andExpect(jsonPath("$.data.revision").value(1));
 
-        mockMvc.perform(get("/api/lab-spaces"))
+        mockMvc.perform(get("/api/lab"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
-                .andExpect(jsonPath("$.data[0].code").value("SPACE-LAB-A"))
-                .andExpect(jsonPath("$.data[0].draft.revision").value(1))
-                .andExpect(jsonPath("$.data[0].draft.map.version").value("V1.0"))
-                .andExpect(jsonPath("$.data[0].draft.map.imageUrl").value("/files/lab-a-v1.png"));
+                .andExpect(jsonPath("$.data.name").value("实验室 A"))
+                .andExpect(jsonPath("$.data.draft.revision").value(1))
+                .andExpect(jsonPath("$.data.draft.map.version").value("V1.0"))
+                .andExpect(jsonPath("$.data.draft.map.imageUrl").value("/files/lab-a-v1.png"));
+    }
+
+    @Test
+    void 唯一实验室不能重复初始化() throws Exception {
+        initializeLab();
+
+        mockMvc.perform(post("/api/lab")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"另一个实验室\","
+                                + "\"map\":{\"name\":\"另一张地图\",\"version\":\"V1.0\","
+                                + "\"imageUrl\":\"/files/another.png\"}}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(409))
+                .andExpect(jsonPath("$.message").value("实验室已初始化，不能重复创建"));
     }
 
     @Test
@@ -125,7 +139,7 @@ class LabConfigApiTest {
 
     @Test
     void 可以在草稿中新增通行节点并从配置详情读取() throws Exception {
-        Long configId = createSpaceAndGetConfigId();
+        Long configId = initializeLabAndGetConfigId();
 
         mockMvc.perform(post("/api/lab-configs/{configId}/nodes", configId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -146,8 +160,8 @@ class LabConfigApiTest {
     }
 
     @Test
-    void 可以在三表模型中构建完整空间配置图() throws Exception {
-        Long configId = createSpaceAndGetConfigId();
+    void 可以在三表模型中构建完整实验室配置图() throws Exception {
+        Long configId = initializeLabAndGetConfigId();
         Long startNodeId = postAndGetId("/api/lab-configs/" + configId + "/nodes",
                 "{\"code\":\"N01\",\"name\":\"起点\",\"type\":\"NAVIGATION\","
                         + "\"x\":1.0,\"y\":2.0,\"yaw\":0}");
@@ -188,17 +202,17 @@ class LabConfigApiTest {
                 .andExpect(jsonPath("$.data[3].y").value(4.52))
                 .andExpect(jsonPath("$.data[3].yaw").value(-90));
 
-        mockMvc.perform(get("/api/lab-spaces"))
+        mockMvc.perform(get("/api/lab"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].draft.counts.nodeCount").value(2))
-                .andExpect(jsonPath("$.data[0].draft.counts.machineCount").value(1))
-                .andExpect(jsonPath("$.data[0].draft.counts.pointCount").value(1))
-                .andExpect(jsonPath("$.data[0].draft.counts.linkCount").value(1));
+                .andExpect(jsonPath("$.data.draft.counts.nodeCount").value(2))
+                .andExpect(jsonPath("$.data.draft.counts.machineCount").value(1))
+                .andExpect(jsonPath("$.data.draft.counts.pointCount").value(1))
+                .andExpect(jsonPath("$.data.draft.counts.linkCount").value(1));
     }
 
     @Test
     void 发布后不可修改且新草稿会重建全部内部引用() throws Exception {
-        SpaceCreation creation = createSpace();
+        LabInitialization creation = initializeLab();
         Long startNodeId = postAndGetId("/api/lab-configs/" + creation.configId + "/nodes",
                 "{\"code\":\"N01\",\"name\":\"起点\",\"type\":\"NAVIGATION\","
                         + "\"x\":1,\"y\":2,\"yaw\":0}");
@@ -230,7 +244,7 @@ class LabConfigApiTest {
                                 + "\"x\":0,\"y\":0,\"yaw\":0}"))
                 .andExpect(status().isConflict());
 
-        MvcResult draftResult = mockMvc.perform(post("/api/lab-spaces/{spaceId}/drafts", creation.spaceId))
+        MvcResult draftResult = mockMvc.perform(post("/api/lab/drafts"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.revision").value(2))
                 .andReturn();
@@ -270,16 +284,16 @@ class LabConfigApiTest {
         mockMvc.perform(get("/api/lab-configs/{configId}", creation.configId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("ARCHIVED"));
-        mockMvc.perform(get("/api/lab-spaces"))
+        mockMvc.perform(get("/api/lab"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].published.id").value(draftConfigId))
-                .andExpect(jsonPath("$.data[0].draft").doesNotExist());
+                .andExpect(jsonPath("$.data.published.id").value(draftConfigId))
+                .andExpect(jsonPath("$.data.draft").doesNotExist());
     }
 
     @Test
     void 草稿支持完整维护且被引用对象不能直接删除() throws Exception {
-        SpaceCreation creation = createSpace();
-        mockMvc.perform(put("/api/lab-spaces/{spaceId}", creation.spaceId)
+        LabInitialization creation = initializeLab();
+        mockMvc.perform(put("/api/lab")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"实验室 A（东区）\"}"))
                 .andExpect(status().isOk())
@@ -354,7 +368,7 @@ class LabConfigApiTest {
 
         mockMvc.perform(get("/api/lab-configs/{configId}", creation.configId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.spaceName").value("实验室 A（东区）"))
+                .andExpect(jsonPath("$.data.labName").value("实验室 A（东区）"))
                 .andExpect(jsonPath("$.data.map.version").value("V1.1"))
                 .andExpect(jsonPath("$.data.nodes[0].name").value("新起点"))
                 .andExpect(jsonPath("$.data.nodes[0].type").value("WAITING"))
@@ -374,15 +388,13 @@ class LabConfigApiTest {
 
     @Test
     void 校验失败会阻止发布且跨配置引用返回冲突() throws Exception {
-        SpaceCreation first = createSpace();
+        LabInitialization first = initializeLab();
         Long foreignNodeId = postAndGetId("/api/lab-configs/" + first.configId + "/nodes",
                 "{\"code\":\"N01\",\"name\":\"外部节点\",\"type\":\"NAVIGATION\","
                         + "\"x\":1,\"y\":2,\"yaw\":0}");
-        MvcResult secondResult = mockMvc.perform(post("/api/lab-spaces")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"SPACE-LAB-B\",\"name\":\"实验室 B\","
-                                + "\"map\":{\"name\":\"B区地图\",\"version\":\"V1.0\","
-                                + "\"imageUrl\":\"/files/lab-b-v1.png\"}}"))
+        mockMvc.perform(post("/api/lab-configs/{configId}/publish", first.configId))
+                .andExpect(status().isOk());
+        MvcResult secondResult = mockMvc.perform(post("/api/lab/drafts"))
                 .andExpect(status().isCreated())
                 .andReturn();
         Number secondConfigValue = com.jayway.jsonpath.JsonPath.read(
@@ -425,7 +437,7 @@ class LabConfigApiTest {
                 .andExpect(jsonPath("$.data.issues[0].code").value("DUPLICATE_LOCATION_BINDING"));
         mockMvc.perform(post("/api/lab-configs/{configId}/publish", secondConfigId))
                 .andExpect(status().isConflict());
-        mockMvc.perform(post("/api/lab-spaces/{spaceId}/drafts", first.spaceId))
+        mockMvc.perform(post("/api/lab/drafts"))
                 .andExpect(status().isConflict());
     }
 
@@ -433,7 +445,7 @@ class LabConfigApiTest {
     void OpenApi契约包含实验室配置接口() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.paths['/api/lab-spaces']").exists())
+                .andExpect(jsonPath("$.paths['/api/lab']").exists())
                 .andExpect(jsonPath("$.paths['/api/files/images']").exists())
                 .andExpect(jsonPath("$.paths['/api/lab-configs/{configId}/map-points']").exists())
                 .andExpect(jsonPath("$.paths['/api/lab-configs/{configId}/publish']").exists())
@@ -444,13 +456,13 @@ class LabConfigApiTest {
                 .andExpect(jsonPath("$..properties.code.example")
                         .value(org.hamcrest.Matchers.hasItem(200)))
                 .andExpect(jsonPath("$.paths['/api/files/images']").exists())
-                .andExpect(jsonPath("$.paths['/api/lab-spaces']").exists())
+                .andExpect(jsonPath("$.paths['/api/lab']").exists())
                 .andExpect(jsonPath("$.paths['/api/lab-configs/{configId}/map-points']").exists());
     }
 
     @Test
     void 实验室Controller的每个接口都返回统一Result() {
-        for (Class<?> controllerType : Arrays.asList(LabSpaceController.class, LabConfigController.class)) {
+        for (Class<?> controllerType : Arrays.asList(LabController.class, LabConfigController.class)) {
             org.junit.jupiter.api.Assertions.assertTrue(
                     BaseController.class.isAssignableFrom(controllerType),
                     controllerType.getSimpleName() + " 必须继承 BaseController");
@@ -466,8 +478,8 @@ class LabConfigApiTest {
     }
 
     @Test
-    void 并发创建草稿时同一空间只有一个请求成功() throws Exception {
-        SpaceCreation creation = createSpace();
+    void 并发创建草稿时唯一实验室只有一个请求成功() throws Exception {
+        LabInitialization creation = initializeLab();
         mockMvc.perform(post("/api/lab-configs/{configId}/publish", creation.configId))
                 .andExpect(status().isOk());
 
@@ -480,7 +492,7 @@ class LabConfigApiTest {
                 futures.add(executor.submit(() -> {
                     ready.countDown();
                     start.await();
-                    return mockMvc.perform(post("/api/lab-spaces/{spaceId}/drafts", creation.spaceId))
+                    return mockMvc.perform(post("/api/lab/drafts"))
                             .andReturn().getResponse().getStatus();
                 }));
             }
@@ -493,20 +505,20 @@ class LabConfigApiTest {
             executor.shutdownNow();
         }
 
-        mockMvc.perform(get("/api/lab-spaces"))
+        mockMvc.perform(get("/api/lab"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].published.revision").value(1))
-                .andExpect(jsonPath("$.data[0].draft.revision").value(2));
+                .andExpect(jsonPath("$.data.published.revision").value(1))
+                .andExpect(jsonPath("$.data.draft.revision").value(2));
     }
 
-    private Long createSpaceAndGetConfigId() throws Exception {
-        return createSpace().configId;
+    private Long initializeLabAndGetConfigId() throws Exception {
+        return initializeLab().configId;
     }
 
-    private SpaceCreation createSpace() throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/lab-spaces")
+    private LabInitialization initializeLab() throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/lab")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"SPACE-LAB-A\",\"name\":\"实验室 A\","
+                        .content("{\"name\":\"实验室 A\","
                                 + "\"map\":{\"name\":\"实验室总览地图\",\"version\":\"V1.0\","
                                 + "\"imageUrl\":\"/files/lab-a-v1.png\"}}"))
                 .andExpect(status().isCreated())
@@ -515,9 +527,7 @@ class LabConfigApiTest {
                 .andReturn();
         Number configId = com.jayway.jsonpath.JsonPath.read(
                 result.getResponse().getContentAsString(), "$.data.configId");
-        String spaceId = com.jayway.jsonpath.JsonPath.read(
-                result.getResponse().getContentAsString(), "$.data.spaceId");
-        return new SpaceCreation(spaceId, configId.longValue());
+        return new LabInitialization(configId.longValue());
     }
 
     private Long postAndGetId(String path, String body) throws Exception {
@@ -540,12 +550,10 @@ class LabConfigApiTest {
                 .orElseThrow(() -> new AssertionError("未找到对象: " + code));
     }
 
-    private static final class SpaceCreation {
-        private final String spaceId;
+    private static final class LabInitialization {
         private final Long configId;
 
-        private SpaceCreation(String spaceId, Long configId) {
-            this.spaceId = spaceId;
+        private LabInitialization(Long configId) {
             this.configId = configId;
         }
     }
@@ -556,7 +564,7 @@ class LabConfigApiTest {
     @Import({
             MybatisPlusConfig.class,
             LabConfigController.class,
-            LabSpaceController.class,
+            LabController.class,
             ImageUploadController.class,
             ImageStorageService.class,
             FileWebConfiguration.class,

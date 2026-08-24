@@ -13,7 +13,7 @@ import com.kunling.scheduling.agvflow.domain.dto.LabMapPointView;
 import com.kunling.scheduling.agvflow.domain.dto.LabMapView;
 import com.kunling.scheduling.agvflow.domain.dto.LabNodeView;
 import com.kunling.scheduling.agvflow.domain.dto.LabPointView;
-import com.kunling.scheduling.agvflow.domain.dto.LabSpaceSummary;
+import com.kunling.scheduling.agvflow.domain.dto.LabSummary;
 import com.kunling.scheduling.agvflow.domain.entity.LabConfigEntity;
 import com.kunling.scheduling.agvflow.domain.entity.LabConfigLinkEntity;
 import com.kunling.scheduling.agvflow.domain.entity.LabConfigObjectEntity;
@@ -25,7 +25,6 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -51,28 +50,30 @@ public class LabConfigQueryService {
         this.mapPointProjector = mapPointProjector;
     }
 
-    public List<LabSpaceSummary> listSpaces() {
+    public LabSummary getLab() {
         List<LabConfigEntity> configurations = configMapper.selectList(
                 Wrappers.<LabConfigEntity>lambdaQuery()
-                        .orderByAsc(LabConfigEntity::getSpaceCode)
                         .orderByDesc(LabConfigEntity::getRevision));
-        Map<String, LabSpaceAccumulator> spaces = new LinkedHashMap<>();
+        if (configurations.isEmpty()) {
+            throw new ResourceNotFoundException("实验室尚未初始化");
+        }
         List<Long> activeConfigIds = new ArrayList<>();
+        LabConfigEntity published = null;
+        LabConfigEntity draft = null;
         for (LabConfigEntity configuration : configurations) {
-            LabSpaceAccumulator accumulator = spaces.computeIfAbsent(
-                    configuration.getSpaceId(), ignored -> new LabSpaceAccumulator(configuration));
-            accumulator.accept(configuration);
-            if (LabConfigStatus.DRAFT.name().equals(configuration.getStatus())
-                    || LabConfigStatus.PUBLISHED.name().equals(configuration.getStatus())) {
+            if (LabConfigStatus.DRAFT.name().equals(configuration.getStatus())) {
+                draft = configuration;
+                activeConfigIds.add(configuration.getId());
+            } else if (LabConfigStatus.PUBLISHED.name().equals(configuration.getStatus())) {
+                published = configuration;
                 activeConfigIds.add(configuration.getId());
             }
         }
         Map<Long, LabConfigCounts> countsByConfigId = loadCounts(activeConfigIds);
-        List<LabSpaceSummary> result = new ArrayList<>();
-        for (LabSpaceAccumulator accumulator : spaces.values()) {
-            result.add(accumulator.toSummary(countsByConfigId));
-        }
-        return result;
+        LabConfigCounts publishedCounts = published == null ? null : countsByConfigId.get(published.getId());
+        LabConfigCounts draftCounts = draft == null ? null : countsByConfigId.get(draft.getId());
+        return new LabSummary(configurations.get(0).getLabName(),
+                toSummary(published, publishedCounts), toSummary(draft, draftCounts));
     }
 
     public LabConfigDetail getConfig(Long configId) {
@@ -83,8 +84,8 @@ public class LabConfigQueryService {
                         .eq(LabConfigLinkEntity::getConfigId, configId)
                         .orderByAsc(LabConfigLinkEntity::getId));
         return new LabConfigDetail(
-                configuration.getId(), configuration.getSpaceId(), configuration.getSpaceCode(),
-                configuration.getSpaceName(), configuration.getRevision(), configuration.getStatus(),
+                configuration.getId(), configuration.getLabName(),
+                configuration.getRevision(), configuration.getStatus(),
                 new LabMapView(configuration.getMapName(), configuration.getMapVersion(),
                         configuration.getMapFileRef()),
                 objects.stream().filter(value -> LabObjectKind.TRAFFIC_NODE.name().equals(value.getKind()))
@@ -184,33 +185,4 @@ public class LabConfigQueryService {
                 counts == null ? LabConfigCounts.empty() : counts);
     }
 
-    private static final class LabSpaceAccumulator {
-        private final String id;
-        private final String code;
-        private final String name;
-        private LabConfigEntity published;
-        private LabConfigEntity draft;
-
-        private LabSpaceAccumulator(LabConfigEntity source) {
-            this.id = source.getSpaceId();
-            this.code = source.getSpaceCode();
-            this.name = source.getSpaceName();
-        }
-
-        private void accept(LabConfigEntity configuration) {
-            if (LabConfigStatus.DRAFT.name().equals(configuration.getStatus())) {
-                draft = configuration;
-            } else if (LabConfigStatus.PUBLISHED.name().equals(configuration.getStatus())) {
-                published = configuration;
-            }
-        }
-
-        private LabSpaceSummary toSummary(Map<Long, LabConfigCounts> countsByConfigId) {
-            LabConfigCounts publishedCounts = published == null ? null : countsByConfigId.get(published.getId());
-            LabConfigCounts draftCounts = draft == null ? null : countsByConfigId.get(draft.getId());
-            return new LabSpaceSummary(id, code, name,
-                    LabConfigQueryService.toSummary(published, publishedCounts),
-                    LabConfigQueryService.toSummary(draft, draftCounts));
-        }
-    }
 }

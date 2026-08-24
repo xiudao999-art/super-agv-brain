@@ -20,7 +20,7 @@ public class SchedulingAppOpenApiConfiguration {
                 // Knife4j 4.4.0 要求分组显式提供非空包扫描列表。
                 .packagesToScan("com.kunling.scheduling.app.controller")
                 .pathsToMatch(
-                        "/api/lab-spaces/**", "/api/lab-configs/**",
+                        "/api/lab/**", "/api/lab-configs/**",
                         "/api/files/**",
                         "/locations/**", "/locationTypes/**",
                         "/carriers/**", "/carrierTypes/**")

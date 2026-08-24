@@ -9,9 +9,7 @@ import java.util.List;
 @AllArgsConstructor
 public class LabConfigDetail {
     private Long id;
-    private String spaceId;
-    private String spaceCode;
-    private String spaceName;
+    private String labName;
     private Integer revision;
     private String status;
     private LabMapView map;

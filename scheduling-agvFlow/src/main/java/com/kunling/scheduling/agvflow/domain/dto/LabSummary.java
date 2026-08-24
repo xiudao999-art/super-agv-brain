@@ -5,9 +5,7 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class LabSpaceSummary {
-    private String id;
-    private String code;
+public class LabSummary {
     private String name;
     private LabConfigSummary published;
     private LabConfigSummary draft;
