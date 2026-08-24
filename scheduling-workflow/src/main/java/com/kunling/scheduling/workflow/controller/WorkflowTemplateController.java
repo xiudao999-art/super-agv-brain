@@ -64,6 +64,15 @@ public class WorkflowTemplateController extends BaseController {
         return service.page(pageNum, pageSize, keyword);
     }
 
+    @GetMapping("/flows/page")
+    @Operation(summary = "分页查询流程列表，支持按流程名称或模板名称搜索")
+    public WorkflowTemplateResponses.FlowPage flowPage(
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String keyword) {
+        return service.flowPage(pageNum, pageSize, keyword);
+    }
+
     @GetMapping(value = "/{id}/xml", produces = MediaType.APPLICATION_XML_VALUE)
     @Operation(summary = "获取bpmn.js可重新导入的BPMN XML")
     public ApiResult<String> xml(@PathVariable Long id) {

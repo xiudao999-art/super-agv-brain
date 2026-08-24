@@ -2,7 +2,7 @@ package com.kunling.scheduling.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.Version;
-import com.kunling.scheduling.agvflow.enums.FlowState;
+import com.kunling.scheduling.workflow.enums.FlowState;
 import com.kunling.scheduling.workflow.enums.NodeEnum;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -11,7 +11,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("flow")
+@TableName("process_details")
 public class Flow extends BaseEntity {
     @Schema(description = "任务id")
     private Long taskId;
@@ -59,7 +59,6 @@ public class Flow extends BaseEntity {
     @Schema(description = "已重试次数")
     private Integer attempt;
 
-    private String processDefinitionId;
 
-    private Long processInstanceId;
+    private String processInstanceId;
 }

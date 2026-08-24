@@ -10,7 +10,9 @@ import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateRequests;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
+import com.kunling.scheduling.workflow.entity.Flow;
 import com.kunling.scheduling.workflow.mapper.WorkflowTemplateMapper;
+import com.kunling.scheduling.workflow.service.FlowService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
@@ -39,11 +41,14 @@ public class WorkflowTemplateService {
     private final WorkflowTemplateMapper mapper;
     private final WorkflowService workflowService;
     private final ObjectMapper objectMapper;
+    private final FlowService flowService;
 
-    public WorkflowTemplateService(WorkflowTemplateMapper mapper, WorkflowService workflowService, ObjectMapper objectMapper) {
+    public WorkflowTemplateService(WorkflowTemplateMapper mapper, WorkflowService workflowService,
+                                   ObjectMapper objectMapper, FlowService flowService) {
         this.mapper = mapper;
         this.workflowService = workflowService;
         this.objectMapper = objectMapper;
+        this.flowService = flowService;
     }
 
     @Transactional
@@ -90,6 +95,45 @@ public class WorkflowTemplateService {
         List<WorkflowTemplateResponses.PageItem> records = result.getRecords().stream()
                 .map(this::pageItem).collect(Collectors.toList());
         return new WorkflowTemplateResponses.Page(result.getTotal(), result.getCurrent(), result.getSize(), records);
+    }
+
+    /** 查询“流程列表”页，流程通过template_id引用workflow_template。 */
+    public WorkflowTemplateResponses.FlowPage flowPage(long pageNum, long pageSize, String keyword) {
+        if (pageNum < 1) throw new IllegalArgumentException("pageNum不能小于1");
+        if (pageSize < 1 || pageSize > 200) throw new IllegalArgumentException("pageSize范围必须为1到200");
+
+        String value = keyword == null ? "" : keyword.trim();
+        List<Long> matchingTemplateIds = Collections.emptyList();
+        if (!value.isEmpty()) {
+            matchingTemplateIds = mapper.selectList(Wrappers.<WorkflowTemplateEntity>lambdaQuery()
+                            .like(WorkflowTemplateEntity::getTemplateName, value))
+                    .stream().map(WorkflowTemplateEntity::getId).collect(Collectors.toList());
+        }
+
+        final List<Long> templateIdsForSearch = matchingTemplateIds;
+        Page<Flow> flowResult = flowService.page(new Page<>(pageNum, pageSize),
+                Wrappers.<Flow>lambdaQuery()
+                        .and(!value.isEmpty(), query -> {
+                            query.like(Flow::getFlowName, value);
+                            if (!templateIdsForSearch.isEmpty()) {
+                                query.or().in(Flow::getTemplateId, templateIdsForSearch);
+                            }
+                        })
+                        .orderByDesc(Flow::getUpdateTime)
+                        .orderByDesc(Flow::getId));
+
+        Set<Long> templateIds = flowResult.getRecords().stream().map(Flow::getTemplateId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, WorkflowTemplateEntity> templates = templateIds.isEmpty()
+                ? Collections.emptyMap()
+                : mapper.selectBatchIds(templateIds).stream()
+                        .collect(Collectors.toMap(WorkflowTemplateEntity::getId, item -> item));
+
+        List<WorkflowTemplateResponses.FlowPageItem> records = flowResult.getRecords().stream()
+                .map(flow -> flowPageItem(flow, templates.get(flow.getTemplateId())))
+                .collect(Collectors.toList());
+        return new WorkflowTemplateResponses.FlowPage(
+                flowResult.getTotal(), flowResult.getCurrent(), flowResult.getSize(), records);
     }
 
     @Transactional
@@ -143,6 +187,18 @@ public class WorkflowTemplateService {
                 sequence, String.join(" → ", sequence), value.getApplicableObject(),
                 value.getDeployedVersion(), deployed ? "ENABLED" : "DRAFT", deployed ? "已启用" : "草稿",
                 value.getProcessDefinitionId(), value.getUpdatedAt());
+    }
+
+    private WorkflowTemplateResponses.FlowPageItem flowPageItem(
+            Flow flow, WorkflowTemplateEntity template) {
+        String displayNumber = "FLOW-" + flow.getId();
+        String templateName = template == null ? null : template.getTemplateName();
+        Integer nodeCount = template == null ? 0 : parseMainActionSequence(template.getBpmnXml()).size();
+//        String processDefinitionId = StringUtils.defaultIfBlank(flow.getProcessDefinitionId(),
+//                template == null ? null : template.getProcessDefinitionId());
+        return new WorkflowTemplateResponses.FlowPageItem(
+                flow.getId(), displayNumber, flow.getFlowName(), flow.getTemplateId(), templateName,
+                nodeCount, flow.getUpdateTime());
     }
 
     /**

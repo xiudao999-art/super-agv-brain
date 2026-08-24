@@ -1,6 +1,7 @@
 package com.kunling.scheduling.workflow.controller;
 
 import com.kunling.scheduling.workflow.dto.FlowSuccessCallbackRequest;
+import com.kunling.scheduling.workflow.dto.FlowStartRequest;
 import com.kunling.scheduling.workflow.service.FlowControlService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,8 +27,15 @@ public class FlowController {
     @PostMapping("/callbacks/success")
     @Operation(summary = "AGV动作成功回调并推进到下一流程节点")
     public Map<String, Boolean> success(@Valid @RequestBody FlowSuccessCallbackRequest request) {
-        boolean handled = flowControlService.processCallback(
-                request.getExecutionId(), request.getFlowId(), request.getBusinessKey());
+        FlowStartRequest callback = new FlowStartRequest();
+        callback.setExecutionId(request.getExecutionId());
+        try {
+            callback.setFlowId(Long.valueOf(request.getFlowId()));
+            callback.setBusinessKey(Long.valueOf(request.getBusinessKey()));
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("flowId和businessKey必须是整数", exception);
+        }
+        boolean handled = flowControlService.processCallback(callback);
         return Collections.singletonMap("success", handled);
     }
 }

@@ -1,7 +1,8 @@
 package com.kunling.scheduling.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
-import com.kunling.scheduling.agvflow.enums.NodeState;
+
+import com.kunling.scheduling.workflow.enums.NodeState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 

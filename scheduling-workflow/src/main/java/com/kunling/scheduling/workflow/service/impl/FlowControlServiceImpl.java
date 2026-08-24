@@ -2,19 +2,17 @@ package com.kunling.scheduling.workflow.service.impl;
 
 import com.kunling.scheduling.action.commissioning.application.ActionParameterSetService;
 import com.kunling.scheduling.action.commissioning.application.ActionParameterSetView;
-import com.kunling.scheduling.action.execution.application.ActionExecutionReceipt;
 import com.kunling.scheduling.action.execution.application.ActionExecutionService;
 import com.kunling.scheduling.action.execution.application.ExecuteActionCommand;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionTransport;
 import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
-import com.kunling.scheduling.agvflow.domain.dto.FlowCreateRequest;
-
-import com.kunling.scheduling.agvflow.enums.FlowState;
-import com.kunling.scheduling.agvflow.enums.NodeState;
 import com.kunling.scheduling.workflow.dto.WorkflowRequests;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
+import com.kunling.scheduling.workflow.dto.FlowStartRequest;
 import com.kunling.scheduling.workflow.entity.Flow;
+import com.kunling.scheduling.workflow.enums.FlowState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
+import com.kunling.scheduling.workflow.enums.StartTypeEnum;
 import com.kunling.scheduling.workflow.service.FlowControlService;
 import com.kunling.scheduling.workflow.service.FlowService;
 import com.kunling.scheduling.workflow.service.WorkflowService;
@@ -22,10 +20,10 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import javax.annotation.Resource;
-import javax.transaction.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -53,10 +51,13 @@ public class FlowControlServiceImpl implements FlowControlService {
 
     @Override
     @Transactional
-    public boolean start(String processDefinitionId,Long businessKey,Long template){
-        if (StringUtils.isBlank(processDefinitionId) || businessKey == null){
+    public boolean start(FlowStartRequest request){
+        if (request == null || StringUtils.isBlank(request.getProcessDefinitionId())
+                || request.getBusinessKey() == null || request.getTemplateId() == null){
             throw new IllegalArgumentException("参数异常");
         }
+        String processDefinitionId = request.getProcessDefinitionId();
+        Long businessKey = request.getBusinessKey();;
         WorkflowRequests.StartInstance startInstance = new WorkflowRequests.StartInstance();
         startInstance.setBusinessKey(String.valueOf(businessKey));
         startInstance.setProcessDefinitionId(processDefinitionId);
@@ -79,36 +80,37 @@ public class FlowControlServiceImpl implements FlowControlService {
         WorkflowResponses.ActiveNode activeNode = activeNodes.get(0);
         String executionId = activeNode.getExecutionId();
         String actionKey = activeNode.getActivityId();
+        String processInstanceId = activeNode.getProcessInstanceId();
         if (StringUtils.isBlank(actionKey) || StringUtils.isBlank(executionId)){
             return failAndClear(id, "活动节点ID或执行ID为空");
         }
 
         //创建流程数据
         Flow flow = new Flow();
-        flow.setTaskId(businessKey);
-        flow.setOrderNumber("123456");
-        flow.setTemplateId(template);
-        flow.setCurrentNodeState(NodeStateEnum.PENDING);
+        flow.setTaskId(request.getTaskId());
+        flow.setOrderNumber(String.valueOf(request.getBusinessKey()));
+        flow.setTemplateId(request.getTemplateId());
         flow.setCurrentNode(activeNode.getActivityId());
+        flow.setProcessInstanceId(processInstanceId);
         flowService.save(flow);
 
-        return dispatchDownstreamAction(id, String.valueOf(businessKey), flow.getId(), activeNode);
+        return dispatchDownstreamAction(id, String.valueOf(businessKey), flow.getId(), activeNode, StartTypeEnum.START);
     }
 
 
     @Override
     @Transactional
-    public boolean processCallback(String executionId, String taskId, String businessKey) {
-        if (StringUtils.isBlank(executionId) || StringUtils.isBlank(taskId)
-                || StringUtils.isBlank(businessKey)) {
+    public boolean processCallback(FlowStartRequest request) {
+        if (StringUtils.isBlank(request.getExecutionId()) || request.getFlowId() == null
+                || request.getBusinessKey() == null) {
             throw new IllegalArgumentException("executionId、flowId和businessKey不能为空");
         }
 
         final long flowId;
         final Long businessId;
         try {
-            flowId = Long.parseLong(taskId);
-            businessId = Long.valueOf(businessKey);
+            flowId = request.getFlowId();
+            businessId = request.getBusinessKey();
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("flowId和businessKey必须是整数", exception);
         }
@@ -128,7 +130,7 @@ public class FlowControlServiceImpl implements FlowControlService {
         //完成当前节点
         WorkflowRequests.TriggerExecution trigger = new WorkflowRequests.TriggerExecution();
         Map<String, Object> variables = new HashMap<>();
-        variables.put("executionId", executionId);
+        variables.put("executionId", request.getExecutionId());
         variables.put("success", true);
         variables.put("nodeState", NodeStateEnum.SUCCEEDED.name());
         variables.put("deviceStatus", "COMPLETED");
@@ -150,7 +152,8 @@ public class FlowControlServiceImpl implements FlowControlService {
                 flow.setCurrentNode(next.getActivityId());
                 flow.setCurrentNodeState(NodeStateEnum.PENDING);
 
-                if (!dispatchDownstreamAction(instance.getId(), businessKey, flowId, next)) {
+                if (!dispatchDownstreamAction(instance.getId(), String.valueOf(businessId), flowId,
+                        next, StartTypeEnum.CALLBACK)) {
                     return false;
                 }
             }
@@ -162,7 +165,8 @@ public class FlowControlServiceImpl implements FlowControlService {
     private boolean dispatchDownstreamAction(String processInstanceId,
                                              String businessKey,
                                              Long flowId,
-                                             WorkflowResponses.ActiveNode activeNode) {
+                                             WorkflowResponses.ActiveNode activeNode,
+                                             StartTypeEnum startType) {
         if (activeNode == null || StringUtils.isBlank(activeNode.getActivityId())
                 || StringUtils.isBlank(activeNode.getExecutionId())) {
             return failAndClear(processInstanceId, "下游调度节点ID或执行ID为空");
@@ -170,7 +174,12 @@ public class FlowControlServiceImpl implements FlowControlService {
 
         List<RobotSessionView> robotSessions = robotActionTransport.listSessions();
         if (CollectionUtils.isEmpty(robotSessions)) {
-            return failAndClear(processInstanceId, "未找到在线机器人");
+            if (startType == StartTypeEnum.START){
+                return failAndClear(processInstanceId, "未找到在线机器人");
+            }else {
+
+            }
+
         }
         String robotId = robotSessions.get(0).robotId();
 

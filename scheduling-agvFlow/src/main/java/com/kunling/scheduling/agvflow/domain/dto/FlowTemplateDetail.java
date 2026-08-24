@@ -17,7 +17,6 @@ public class FlowTemplateDetail {
     private final Integer status;
     private final Integer version;
     private final String applicableScope;
-    private final String bpmnXml;
     private final List<NodeDetail> nodes;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -27,7 +26,7 @@ public class FlowTemplateDetail {
     private final Date updateTime;
 
     public FlowTemplateDetail(Long id, String templateNumber, String templateName,
-                               Integer status, Integer version, String applicableScope, String bpmnXml,
+                               Integer status, Integer version, String applicableScope,
                                List<NodeDetail> nodes, Date createTime, Date updateTime) {
         this.id = id;
         this.templateNumber = templateNumber;
@@ -35,7 +34,6 @@ public class FlowTemplateDetail {
         this.status = status;
         this.version = version;
         this.applicableScope = applicableScope;
-        this.bpmnXml = bpmnXml;
         this.nodes = nodes;
         this.createTime = createTime;
         this.updateTime = updateTime;
@@ -117,7 +115,6 @@ public class FlowTemplateDetail {
     public Integer getStatus() { return status; }
     public Integer getVersion() { return version; }
     public String getApplicableScope() { return applicableScope; }
-    public String getBpmnXml() { return bpmnXml; }
     public List<NodeDetail> getNodes() { return nodes; }
     public Date getCreateTime() { return createTime; }
     public Date getUpdateTime() { return updateTime; }

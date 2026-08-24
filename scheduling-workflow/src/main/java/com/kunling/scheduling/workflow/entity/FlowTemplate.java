@@ -1,4 +1,4 @@
-package com.kunling.scheduling.agvflow.domain.entity;
+package com.kunling.scheduling.workflow.entity;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 @TableName("flow_template")
-public class FlowTemplate extends BaseEntity {
+public class FlowTemplate extends BaseEntity{
     @Schema(description = "模版编号")
     private String templateNumber;
 
@@ -22,5 +22,9 @@ public class FlowTemplate extends BaseEntity {
     @Schema(description = "适用对象")
     private String applicableScope;
 
-    private String bpmnXml;
+    @Schema(description = "引用的流程模板ID")
+    private Long sourceTemplateId;
+
+    @Schema(description = "流程说明")
+    private String description;
 }

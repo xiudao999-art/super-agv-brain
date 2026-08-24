@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Date;
 
 public final class WorkflowTemplateResponses {
     private WorkflowTemplateResponses() { }
@@ -58,5 +59,27 @@ public final class WorkflowTemplateResponses {
         private String statusDescription;
         private String processDefinitionId;
         private LocalDateTime updatedAt;
+    }
+
+    /** “流程列表”页分页数据。 */
+    @Data @AllArgsConstructor
+    public static class FlowPage {
+        private long total;
+        private long pageNum;
+        private long pageSize;
+        private List<FlowPageItem> records;
+    }
+
+    /** “流程列表”页单行数据。 */
+    @Data @AllArgsConstructor
+    public static class FlowPageItem {
+        private Long id;
+        private String flowNumber;
+        private String flowName;
+        private Long templateId;
+        private String templateName;
+        private Integer templateNodeCount;
+//        private String processDefinitionId;
+        private Date updatedAt;
     }
 }

@@ -1,4 +1,4 @@
-package com.kunling.scheduling.agvflow.enums;
+package com.kunling.scheduling.workflow.enums;
 
 import lombok.Getter;
 
