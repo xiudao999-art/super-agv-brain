@@ -13,6 +13,7 @@ import com.kunling.scheduling.agvflow.domain.dto.LabConfigSummary;
 import com.kunling.scheduling.agvflow.domain.dto.LabLinkRequest;
 import com.kunling.scheduling.agvflow.domain.dto.LabMachineRequest;
 import com.kunling.scheduling.agvflow.domain.dto.LabMapRequest;
+import com.kunling.scheduling.agvflow.domain.dto.LabMapPointView;
 import com.kunling.scheduling.agvflow.domain.dto.LabNodeRequest;
 import com.kunling.scheduling.agvflow.domain.dto.LabPointRequest;
 import com.kunling.scheduling.agvflow.domain.dto.LabSpaceSummary;
@@ -70,7 +71,7 @@ public class LabConfigApplicationService {
         entity.setSpaceName(request.getName().trim());
         entity.setMapName(request.getMap().getName().trim());
         entity.setMapVersion(request.getMap().getVersion().trim());
-        entity.setMapFileRef(request.getMap().getFileRef().trim());
+        entity.setMapFileRef(request.getMap().getImageUrl().trim());
         entity.setRevision(1);
         entity.setStatus(LabConfigStatus.DRAFT.name());
         try {
@@ -87,6 +88,10 @@ public class LabConfigApplicationService {
 
     public LabConfigDetail getConfig(Long configId) {
         return queryService.getConfig(configId);
+    }
+
+    public List<LabMapPointView> listMapPoints(Long configId) {
+        return queryService.listMapPoints(configId);
     }
 
     @Transactional
@@ -109,7 +114,7 @@ public class LabConfigApplicationService {
         LabConfigEntity configuration = requireDraft(configId);
         configuration.setMapName(request.getName().trim());
         configuration.setMapVersion(request.getVersion().trim());
-        configuration.setMapFileRef(request.getFileRef().trim());
+        configuration.setMapFileRef(request.getImageUrl().trim());
         configuration.setUpdatedAt(LocalDateTime.now());
         configMapper.updateById(configuration);
     }

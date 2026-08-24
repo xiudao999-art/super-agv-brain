@@ -17,8 +17,9 @@ public class AgvFlowModuleConfiguration {
         return GroupedOpenApi.builder()
                 .group("agv-flow")
                 .displayName("AGV Flow 接口")
+                // Knife4j 4.4.0 要求每个分组都有非空包扫描列表。
                 .packagesToScan("com.kunling.scheduling.agvflow")
-                .pathsToMatch("/**")
+                .pathsToMatch("/api/flow-templates/**", "/nodeRules/**")
                 .build();
     }
 }

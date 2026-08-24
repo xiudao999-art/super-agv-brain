@@ -1,4 +1,4 @@
-package com.kunling.scheduling.agvflow.controller;
+package com.kunling.scheduling.app.controller;
 
 import com.kunling.scheduling.agvflow.config.MybatisPlusConfig;
 import com.kunling.scheduling.agvflow.mapper.LabConfigMapper;
@@ -7,6 +7,10 @@ import com.kunling.scheduling.agvflow.service.LabConfigDraftEditor;
 import com.kunling.scheduling.agvflow.service.LabConfigQueryService;
 import com.kunling.scheduling.agvflow.service.LabConfigurationValidator;
 import com.kunling.scheduling.agvflow.service.LabLocationReferenceChecker;
+import com.kunling.scheduling.agvflow.service.LabMapPointProjector;
+import com.kunling.scheduling.app.file.FileWebConfiguration;
+import com.kunling.scheduling.app.file.ImageStorageService;
+import com.kunling.scheduling.app.config.SchedulingAppOpenApiConfiguration;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import org.mybatis.spring.annotation.MapperScan;
@@ -18,6 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
@@ -38,10 +43,12 @@ import java.util.concurrent.Future;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 @SpringBootTest(
         classes = LabConfigApiTest.TestApplication.class,
@@ -51,7 +58,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
                 "spring.datasource.username=sa",
                 "spring.datasource.password=",
                 "spring.jpa.hibernate.ddl-auto=none",
-                "spring.sql.init.mode=never"
+                "spring.sql.init.mode=never",
+                "flowable.process.enabled=false",
+                "flowable.eventregistry.enabled=false",
+                "flowable.idm.enabled=false",
+                "knife4j.enable=true",
+                "kunling.file.storage-directory=target/test-images"
         })
 @AutoConfigureMockMvc
 @Sql(scripts = "/db/test/lab_config_test_schema.sql")
@@ -69,7 +81,7 @@ class LabConfigApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"SPACE-LAB-A\",\"name\":\"实验室 A\","
                                 + "\"map\":{\"name\":\"实验室总览地图\",\"version\":\"V1.0\","
-                                + "\"fileRef\":\"map-service://lab-a/v1\"}}"))
+                                + "\"imageUrl\":\"/files/lab-a-v1.png\"}}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value(201))
                 .andExpect(jsonPath("$.message").value("操作成功"))
@@ -81,7 +93,34 @@ class LabConfigApiTest {
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data[0].code").value("SPACE-LAB-A"))
                 .andExpect(jsonPath("$.data[0].draft.revision").value(1))
-                .andExpect(jsonPath("$.data[0].draft.map.version").value("V1.0"));
+                .andExpect(jsonPath("$.data[0].draft.map.version").value("V1.0"))
+                .andExpect(jsonPath("$.data[0].draft.map.imageUrl").value("/files/lab-a-v1.png"));
+    }
+
+    @Test
+    void 上传地图图片后返回可提交给地图接口的地址() throws Exception {
+        byte[] png = new byte[]{
+                (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0
+        };
+
+        MvcResult uploadResult = mockMvc.perform(multipart("/api/files/images")
+                        .file(new MockMultipartFile("file", "map.png", "image/png", png)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.code").value(201))
+                .andExpect(jsonPath("$.data.imageUrl").value(org.hamcrest.Matchers.matchesPattern(
+                        "/files/[0-9a-f-]+\\.png")))
+                .andReturn();
+        String imageUrl = com.jayway.jsonpath.JsonPath.read(
+                uploadResult.getResponse().getContentAsString(), "$.data.imageUrl");
+        mockMvc.perform(get(imageUrl))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(png));
+
+        mockMvc.perform(multipart("/api/files/images")
+                        .file(new MockMultipartFile(
+                                "file", "map.txt", "text/plain", "not-image".getBytes())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("仅支持 PNG、JPEG、GIF、WEBP 图片"));
     }
 
     @Test
@@ -137,6 +176,17 @@ class LabConfigApiTest {
                 .andExpect(jsonPath("$.data.points[0].navNodeId").value(endNodeId))
                 .andExpect(jsonPath("$.data.links[0].id").value(linkId))
                 .andExpect(jsonPath("$.data.links[0].speedLimit").value(0.6));
+
+        mockMvc.perform(get("/api/lab-configs/{configId}/map-points", configId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(4))
+                .andExpect(jsonPath("$.data[0].kind").value("TRAFFIC_NODE"))
+                .andExpect(jsonPath("$.data[2].kind").value("MACHINE"))
+                .andExpect(jsonPath("$.data[3].id").value(pointId))
+                .andExpect(jsonPath("$.data[3].kind").value("MACHINE_POINT"))
+                .andExpect(jsonPath("$.data[3].x").value(3.335))
+                .andExpect(jsonPath("$.data[3].y").value(4.52))
+                .andExpect(jsonPath("$.data[3].yaw").value(-90));
 
         mockMvc.perform(get("/api/lab-spaces"))
                 .andExpect(status().isOk())
@@ -237,7 +287,7 @@ class LabConfigApiTest {
         mockMvc.perform(put("/api/lab-configs/{configId}/map", creation.configId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"东区地图\",\"version\":\"V1.1\","
-                                + "\"fileRef\":\"map-service://lab-a/v1.1\"}"))
+                                + "\"imageUrl\":\"/files/lab-a-v1.1.png\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200));
 
@@ -325,7 +375,7 @@ class LabConfigApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"SPACE-LAB-B\",\"name\":\"实验室 B\","
                                 + "\"map\":{\"name\":\"B区地图\",\"version\":\"V1.0\","
-                                + "\"fileRef\":\"map-service://lab-b/v1\"}}"))
+                                + "\"imageUrl\":\"/files/lab-b-v1.png\"}}"))
                 .andExpect(status().isCreated())
                 .andReturn();
         Number secondConfigValue = com.jayway.jsonpath.JsonPath.read(
@@ -377,8 +427,16 @@ class LabConfigApiTest {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/lab-spaces']").exists())
+                .andExpect(jsonPath("$.paths['/api/files/images']").exists())
+                .andExpect(jsonPath("$.paths['/api/lab-configs/{configId}/map-points']").exists())
                 .andExpect(jsonPath("$.paths['/api/lab-configs/{configId}/publish']").exists())
                 .andExpect(jsonPath("$.paths['/api/lab-configs/{configId}/nodes/{nodeId}']").exists());
+
+        mockMvc.perform(get("/v3/api-docs/resource-config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/files/images']").exists())
+                .andExpect(jsonPath("$.paths['/api/lab-spaces']").exists())
+                .andExpect(jsonPath("$.paths['/api/lab-configs/{configId}/map-points']").exists());
     }
 
     @Test
@@ -441,7 +499,7 @@ class LabConfigApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"SPACE-LAB-A\",\"name\":\"实验室 A\","
                                 + "\"map\":{\"name\":\"实验室总览地图\",\"version\":\"V1.0\","
-                                + "\"fileRef\":\"map-service://lab-a/v1\"}}"))
+                                + "\"imageUrl\":\"/files/lab-a-v1.png\"}}"))
                 .andExpect(status().isCreated())
                 .andReturn();
         Number configId = com.jayway.jsonpath.JsonPath.read(
@@ -486,11 +544,16 @@ class LabConfigApiTest {
             MybatisPlusConfig.class,
             LabConfigController.class,
             LabSpaceController.class,
+            ImageUploadController.class,
+            ImageStorageService.class,
+            FileWebConfiguration.class,
             LabConfigApplicationService.class,
             LabConfigDraftEditor.class,
             LabConfigQueryService.class,
+            LabMapPointProjector.class,
             LabConfigurationValidator.class,
-            LabLocationReferenceChecker.class
+            LabLocationReferenceChecker.class,
+            SchedulingAppOpenApiConfiguration.class
     })
     static class TestApplication {
     }

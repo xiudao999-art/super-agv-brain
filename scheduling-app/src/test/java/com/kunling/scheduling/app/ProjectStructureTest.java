@@ -74,13 +74,19 @@ class ProjectStructureTest {
     }
 
     @Test
-    void laboratoryConfigurationUsesTheExistingAgvFlowLayers() {
+    void managementControllersBelongToApplicationAndDomainLayersStayInAgvFlow() {
         assertThat(Paths.get(
                 "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/labconfig"
         )).doesNotExist();
-        assertThat(Paths.get(
-                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/controller/LabConfigController.java"
-        )).isRegularFile();
+        for (String controller : new String[]{
+                "LocationController", "LocationTypeController", "CarrierController",
+                "CarrierTypeController", "LabSpaceController", "LabConfigController"
+        }) {
+            assertThat(Paths.get("src/main/java/com/kunling/scheduling/app/controller/"
+                    + controller + ".java")).isRegularFile();
+            assertThat(Paths.get("../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/controller/"
+                    + controller + ".java")).doesNotExist();
+        }
         assertThat(Paths.get(
                 "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/service/LabConfigApplicationService.java"
         )).isRegularFile();
@@ -113,6 +119,7 @@ class ProjectStructureTest {
 
         List<String> violations = new ArrayList<>();
         for (String basePackage : new String[]{
+                "com.kunling.scheduling.app.controller",
                 "com.kunling.scheduling.action.controller",
                 "com.kunling.scheduling.agvflow.controller",
                 "com.kunling.scheduling.workflow.controller"

@@ -41,7 +41,7 @@ public class LabConfigurationValidator {
         if (isBlank(configuration.getMapName())
                 || isBlank(configuration.getMapVersion())
                 || isBlank(configuration.getMapFileRef())) {
-            issues.add(issue("MISSING_MAP", "地图名称、版本和文件引用必须完整", "CONFIG", configuration.getId()));
+            issues.add(issue("MISSING_MAP", "地图名称、版本和图片地址必须完整", "CONFIG", configuration.getId()));
         }
 
         Map<Long, LabConfigObjectEntity> objectById = new HashMap<>();

@@ -5,6 +5,8 @@
 *.iml
 *.log
 .env
+/scheduling-app/src/main/resources/file/*
+!/scheduling-app/src/main/resources/file/.gitkeep
 /.mvn/
 /scheduling-action/docs/
 /scheduling-app/src/test/
@@ -13,3 +15,19 @@
 /scheduling-action/src/test/java/
 /scheduling-action/src/test/java/com/kunling/scheduling/action/execution/
 /scheduling-action/src/test/java/com/kunling/scheduling/action/
+
+# scheduling-app 中已交付的实验室配置 API 测试需要纳入版本控制；本地 systemlog 草稿继续忽略。
+!/scheduling-app/src/test/
+!/scheduling-app/src/test/java/
+!/scheduling-app/src/test/java/com/
+!/scheduling-app/src/test/java/com/kunling/
+!/scheduling-app/src/test/java/com/kunling/scheduling/
+!/scheduling-app/src/test/java/com/kunling/scheduling/app/
+!/scheduling-app/src/test/java/com/kunling/scheduling/app/controller/
+!/scheduling-app/src/test/java/com/kunling/scheduling/app/controller/LabConfigApiTest.java
+!/scheduling-app/src/test/resources/
+!/scheduling-app/src/test/resources/db/
+!/scheduling-app/src/test/resources/db/test/
+!/scheduling-app/src/test/resources/db/test/lab_config_test_schema.sql
+/scheduling-app/src/test/java/com/kunling/scheduling/app/systemlog/
+/scheduling-app/src/test/resources/db/test/reset-operation-log.sql

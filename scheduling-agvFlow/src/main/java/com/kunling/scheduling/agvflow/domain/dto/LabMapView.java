@@ -8,5 +8,5 @@ import lombok.Data;
 public class LabMapView {
     private String name;
     private String version;
-    private String fileRef;
+    private String imageUrl;
 }

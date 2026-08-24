@@ -3,6 +3,9 @@ server:
   port: 8081
 
 kunling:
+  file:
+    # 开发期地图图片写入 scheduling-app 模块源码资源目录。
+    storage-directory: scheduling-app/src/main/resources/file
   action:
     robot-bridge:
       # 下游在此地址监听，上游机器人客户端主动连接该地址与端口。
@@ -19,6 +22,10 @@ spring:
         cachecontrol:
           # Action 工作台处于高频联调阶段，禁止浏览器继续执行旧版静态脚本。
           no-store: true
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
   datasource:
     url: jdbc:mysql://39.105.68.15:50013/kunling?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: sunder
