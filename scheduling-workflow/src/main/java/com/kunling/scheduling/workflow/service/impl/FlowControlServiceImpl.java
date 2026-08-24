@@ -9,6 +9,7 @@ import com.kunling.scheduling.action.robotbridge.application.RobotActionTranspor
 import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
 import com.kunling.scheduling.agvflow.domain.dto.FlowCreateRequest;
 
+import com.kunling.scheduling.agvflow.enums.FlowState;
 import com.kunling.scheduling.agvflow.enums.NodeState;
 import com.kunling.scheduling.workflow.dto.WorkflowRequests;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
@@ -25,8 +26,13 @@ import org.springframework.util.CollectionUtils;
 
 import javax.annotation.Resource;
 import javax.transaction.Transactional;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
+
+import static com.baomidou.mybatisplus.extension.toolkit.Db.updateById;
 
 @Service
 public class FlowControlServiceImpl implements FlowControlService {
@@ -76,20 +82,6 @@ public class FlowControlServiceImpl implements FlowControlService {
         if (StringUtils.isBlank(actionKey) || StringUtils.isBlank(executionId)){
             return failAndClear(id, "活动节点ID或执行ID为空");
         }
-        //查询机器人
-        List<RobotSessionView> robotSessionViews = robotActionTransport.listSessions();
-        if (CollectionUtils.isEmpty(robotSessionViews)){
-            return failAndClear(id, "未找到在线机器人");
-        }
-        String robotId = robotSessionViews.get(0).robotId();
-
-        //调用小邓的接口
-        List<ActionParameterSetView> actionParameterSetViews = parameterSetService.list(actionKey);
-        if (CollectionUtils.isEmpty(actionParameterSetViews)){
-            return failAndClear(id, "节点未配置动作参数: " + actionKey);
-        }
-        ActionParameterSetView actionParameterSetView = actionParameterSetViews.get(0);
-        String actionInstanceId = actionParameterSetView.id();
 
         //创建流程数据
         Flow flow = new Flow();
@@ -99,11 +91,113 @@ public class FlowControlServiceImpl implements FlowControlService {
         flow.setCurrentNodeState(NodeStateEnum.PENDING);
         flow.setCurrentNode(activeNode.getActivityId());
         flowService.save(flow);
-        ExecuteActionCommand request = new ExecuteActionCommand(String.valueOf(businessKey), executionId, String.valueOf(flow.getId()), robotId, actionKey, actionInstanceId);
-        actionExecutionService.execute(request);
-        //调用
+
+        return dispatchDownstreamAction(id, String.valueOf(businessKey), flow.getId(), activeNode);
+    }
+
+
+    @Override
+    @Transactional
+    public boolean processCallback(String executionId, String taskId, String businessKey) {
+        if (StringUtils.isBlank(executionId) || StringUtils.isBlank(taskId)
+                || StringUtils.isBlank(businessKey)) {
+            throw new IllegalArgumentException("executionId、flowId和businessKey不能为空");
+        }
+
+        final long flowId;
+        final Long businessId;
+        try {
+            flowId = Long.parseLong(taskId);
+            businessId = Long.valueOf(businessKey);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("flowId和businessKey必须是整数", exception);
+        }
+
+        Flow flow = flowService.getById(flowId);
+        if (flow == null) {
+            throw new NoSuchElementException("流程业务记录不存在: " + flowId);
+        }
+        if (!businessId.equals(flow.getTaskId())) {
+            throw new IllegalArgumentException("回调businessKey与流程业务记录不一致");
+        }
+        // Action终态报告可能重复投递；已成功的流程直接按成功处理，避免重复trigger。
+        if (flow.getFlowState() == FlowState.SUCCEEDED) {
+            return true;
+        }
+
+        //完成当前节点
+        WorkflowRequests.TriggerExecution trigger = new WorkflowRequests.TriggerExecution();
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("executionId", executionId);
+        variables.put("success", true);
+        variables.put("nodeState", NodeStateEnum.SUCCEEDED.name());
+        variables.put("deviceStatus", "COMPLETED");
+        trigger.setVariables(variables);
+
+        WorkflowResponses.Instance instance = workflowService.trigger(trigger);
+        flow.setCurrentNodeState(NodeStateEnum.SUCCEEDED);
+
+        if ("COMPLETED".equals(instance.getState())) {
+            settleSucceeded(flow);
+        } else {
+            List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(instance.getId());
+            if (activeNodes.isEmpty()) {
+                // 当前业务流程是串行流程；成功推进后没有下一活动节点即表示已经走到流程末尾。
+                settleSucceeded(flow);
+            } else {
+                WorkflowResponses.ActiveNode next = activeNodes.get(0);
+                flow.setFlowState(FlowState.RUNNING);
+                flow.setCurrentNode(next.getActivityId());
+                flow.setCurrentNodeState(NodeStateEnum.PENDING);
+
+                if (!dispatchDownstreamAction(instance.getId(), businessKey, flowId, next)) {
+                    return false;
+                }
+            }
+        }
+        return updateById(flow);
+    }
+
+    /** 选择在线机器人和节点参数集，并将当前Flowable节点下发给Action系统。 */
+    private boolean dispatchDownstreamAction(String processInstanceId,
+                                             String businessKey,
+                                             Long flowId,
+                                             WorkflowResponses.ActiveNode activeNode) {
+        if (activeNode == null || StringUtils.isBlank(activeNode.getActivityId())
+                || StringUtils.isBlank(activeNode.getExecutionId())) {
+            return failAndClear(processInstanceId, "下游调度节点ID或执行ID为空");
+        }
+
+        List<RobotSessionView> robotSessions = robotActionTransport.listSessions();
+        if (CollectionUtils.isEmpty(robotSessions)) {
+            return failAndClear(processInstanceId, "未找到在线机器人");
+        }
+        String robotId = robotSessions.get(0).robotId();
+
+        String actionKey = activeNode.getActivityId();
+        List<ActionParameterSetView> parameterSets = parameterSetService.list(actionKey);
+        if (CollectionUtils.isEmpty(parameterSets)) {
+            return failAndClear(processInstanceId, "节点未配置动作参数: " + actionKey);
+        }
+        String parameterSetId = parameterSets.get(0).id();
+
+        ExecuteActionCommand command = new ExecuteActionCommand(
+                businessKey,
+                activeNode.getExecutionId(),
+                String.valueOf(flowId),
+                robotId,
+                actionKey,
+                parameterSetId);
+        actionExecutionService.execute(command);
         return true;
     }
+
+    private void settleSucceeded(Flow flow) {
+        flow.setFlowState(FlowState.SUCCEEDED);
+        flow.setCurrentNodeState(NodeStateEnum.SUCCEEDED);
+        flow.setCompletedAt(LocalDateTime.now());
+    }
+
 
     /**
      * 清理单个异常流程实例。不要直接DELETE ACT_RU_EXECUTION，Flowable会同时清理

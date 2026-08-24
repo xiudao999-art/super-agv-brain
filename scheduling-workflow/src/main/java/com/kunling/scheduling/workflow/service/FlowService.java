@@ -7,5 +7,5 @@ import com.kunling.scheduling.workflow.entity.Flow;
 
 
 public interface FlowService extends IService<Flow> {
-    boolean processCallback(String executionId, String taskId, String businessKey);
+
 }

@@ -45,6 +45,15 @@ public class WorkflowTemplateController {
     @Operation(summary = "查询模板列表")
     public List<WorkflowTemplateResponses.Summary> list(@RequestParam(required = false) String keyword) { return service.list(keyword); }
 
+    @GetMapping("/page")
+    @Operation(summary = "分页查询模板列表，包含BPMN动作顺序、版本和状态")
+    public WorkflowTemplateResponses.Page page(
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String keyword) {
+        return service.page(pageNum, pageSize, keyword);
+    }
+
     @GetMapping(value = "/{id}/xml", produces = MediaType.APPLICATION_XML_VALUE)
     @Operation(summary = "获取bpmn.js可重新导入的BPMN XML")
     public String xml(@PathVariable Long id) { return service.get(id).getBpmnXml(); }
