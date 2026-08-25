@@ -61,10 +61,14 @@ public final class OrderResponses {
     @Data @AllArgsConstructor
     public static class ActionItem {
         private Long nodeId;
+        private String sequence;
         private Integer sort;
+        private String actionName;
+        private String resource;
         private String nodeName;
         private String nodeCode;
         private String status;
+        private String completionEvidence;
         private String completionCriteria;
         private String failureStrategy;
     }
