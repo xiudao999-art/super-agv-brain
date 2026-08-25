@@ -107,12 +107,16 @@ public class OrderService {
                 ? null : workflowTemplateMapper.selectById(flow.getSourceTemplateId());
         List<FlowNode> nodes = template == null ? Collections.emptyList()
                 : flowNodeMapper.selectList(Wrappers.<FlowNode>lambdaQuery()
-                        .eq(FlowNode::getTemplateId, template.getId()).orderByAsc(FlowNode::getSort));
-        List<OrderResponses.ActionItem> actions = nodes.stream().map(node -> new OrderResponses.ActionItem(
-                node.getId(), node.getSort(), node.getNodeName(), node.getNodeCode(),
-                node.getStatus() == null ? null : node.getStatus().getLabel(), node.getCompletionCriteria(),
-                node.getFailureStrategy() == null ? null : node.getFailureStrategy().getLabel()))
-                .collect(Collectors.toList());
+                        .eq(FlowNode::getTemplateId, flow.getId()).orderByAsc(FlowNode::getSort));
+        List<OrderResponses.ActionItem> actions = nodes.stream().map(node -> {
+            int sort = node.getSort() == null ? 0 : node.getSort();
+            String resource = StringUtils.defaultIfBlank(node.getNodeCode(), actionResource(node));
+            return new OrderResponses.ActionItem(node.getId(), String.format("A%02d", sort), node.getSort(),
+                    node.getNodeName(), resource, node.getNodeName(), node.getNodeCode(),
+                    node.getStatus() == null ? null : node.getStatus().getLabel(), node.getCompletionCriteria(),
+                    node.getCompletionCriteria(),
+                    node.getFailureStrategy() == null ? null : node.getFailureStrategy().getLabel());
+        }).collect(Collectors.toList());
         String path = nodes.stream().map(FlowNode::getNodeName).filter(StringUtils::isNotBlank)
                 .collect(Collectors.joining(" → "));
         String strategies = nodes.stream().map(FlowNode::getFailureStrategy).filter(Objects::nonNull)
@@ -120,6 +124,11 @@ public class OrderService {
         return new OrderResponses.ExecutionConfig(task.getFlowNumber(), flow == null ? null : flow.getTemplateName(),
                 flow == null ? task.getFlowTemplateId() : flow.getId(), template == null ? null : template.getTemplateName(),
                 path, task.getCurrentStep(), strategies, actions);
+    }
+
+    private String actionResource(FlowNode node) {
+        if (node.getActions() == null || node.getActions().isEmpty()) return null;
+        return node.getActions().stream().map(id -> "RESOURCE-" + id).collect(Collectors.joining(", "));
     }
 
     private OrderResponses.OrderItem item(CustomerOrder value, OrderTaskCount count) {
