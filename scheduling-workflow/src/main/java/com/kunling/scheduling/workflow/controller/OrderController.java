@@ -34,10 +34,10 @@ public class OrderController extends BaseController {
     @GetMapping("/orders")
     @Operation(summary = "分页查询订单")
     public ApiResult<OrderResponses.Page> page(@RequestParam(defaultValue = "1") long pageNum,
-                                                @RequestParam(defaultValue = "10") long pageSize,
-                                                @RequestParam(required = false) OrderStatus status,
-                                                @RequestParam(required = false) String source,
-                                                @RequestParam(required = false) String keyword) {
+                                               @RequestParam(defaultValue = "10") long pageSize,
+                                               @RequestParam(required = false) OrderStatus status,
+                                               @RequestParam(required = false) String source,
+                                               @RequestParam(required = false) String keyword) {
         return success(queryService.page(pageNum, pageSize, status, source, keyword));
     }
 
@@ -70,4 +70,12 @@ public class OrderController extends BaseController {
 //    public ApiResult<Map<String, Boolean>> retry(@PathVariable Long id) {
 //        return success(Collections.singletonMap("success", orchestrationService.startTask(id)));
 //    }
+
+
+    @GetMapping("/taskInfo")
+    @Operation(summary = "查看当前进行任务信息")
+    public ApiResult<Object> taskInfo() {
+
+        return null;
+    }
 }

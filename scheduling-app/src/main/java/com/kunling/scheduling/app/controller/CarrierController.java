@@ -46,10 +46,10 @@ public class CarrierController extends BaseController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "新增载具")
-    public ApiResult<Carrier> create(@RequestBody Carrier entity) {
+    public ApiResult<Boolean> create(@RequestBody Carrier entity) {
         entity.setId(null);
         service.save(entity);
-        return created(required(entity.getId()));
+        return ApiResult.success(true);
     }
 
     @PutMapping("/{id}")

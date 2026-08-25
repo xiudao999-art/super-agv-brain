@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,6 +60,7 @@ public class ActionParameterSetService {
         definitionService.get(actionKey);
         return repository.findByActionKeyOrderByNameAsc(actionKey).stream()
                 .map(this::toView)
+                .sorted(Comparator.comparing(ActionParameterSetView::revision))
                 .collect(ImmutableCollections.toImmutableList());
     }
 

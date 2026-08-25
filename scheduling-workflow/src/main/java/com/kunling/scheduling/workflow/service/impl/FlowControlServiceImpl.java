@@ -17,10 +17,7 @@ import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
 import com.kunling.scheduling.workflow.order.application.TaskFlowStatusEvent;
-import com.kunling.scheduling.workflow.service.FlowControlService;
-import com.kunling.scheduling.workflow.service.FlowNodeService;
-import com.kunling.scheduling.workflow.service.FlowService;
-import com.kunling.scheduling.workflow.service.WorkflowService;
+import com.kunling.scheduling.workflow.service.*;
 import com.kunling.scheduling.workflow.service.WorkflowStateService;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -58,6 +55,7 @@ public class FlowControlServiceImpl implements FlowControlService {
 
     @Resource
     private FlowNodeService flowNodeService;
+
 
 
     @Override
@@ -113,7 +111,7 @@ public class FlowControlServiceImpl implements FlowControlService {
         WorkflowResponses.ActiveNode activeNode = activeNodes.get(0);
         String processInstanceId = activeNode.getProcessInstanceId();
         flow.setProcessInstanceId(processInstanceId);
-        return dispatchDownstreamAction(id,flow.getId(), activeNode, StartTypeEnum.START);
+        return dispatchDownstreamAction(id, flow.getId(), activeNode, StartTypeEnum.START);
     }
 
 //
