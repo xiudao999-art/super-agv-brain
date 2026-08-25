@@ -6,22 +6,24 @@ import com.kunling.scheduling.action.execution.application.ActionExecutionServic
 import com.kunling.scheduling.action.execution.application.ExecuteActionCommand;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionTransport;
 import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
-import com.kunling.scheduling.workflow.dto.WorkflowRequests;
-import com.kunling.scheduling.workflow.dto.WorkflowResponses;
-import com.kunling.scheduling.workflow.dto.FlowStartRequest;
-import com.kunling.scheduling.workflow.dto.FlowFailureCallbackRequest;
+import com.kunling.scheduling.workflow.dto.*;
 import com.kunling.scheduling.workflow.entity.Flow;
 import com.kunling.scheduling.workflow.entity.FlowNode;
+import com.kunling.scheduling.workflow.entity.FlowTemplate;
+import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
 import com.kunling.scheduling.workflow.enums.FlowState;
 import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
+import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
+import com.kunling.scheduling.workflow.mapper.WorkflowTemplateMapper;
 import com.kunling.scheduling.workflow.order.application.TaskFlowStatusEvent;
 import com.kunling.scheduling.workflow.service.*;
 import com.kunling.scheduling.workflow.service.WorkflowStateService;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,7 @@ import org.springframework.util.CollectionUtils;
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 
@@ -55,7 +58,14 @@ public class FlowControlServiceImpl implements FlowControlService {
 
     @Resource
     private FlowNodeService flowNodeService;
+    @Resource
+    private WorkflowTemplateMapper workflowTemplateMapper;
 
+    @Resource
+    private FlowTemplateMapper flowTemplateMapper;
+
+    @Resource
+    private WorkflowTemplateService workflowTemplateService;
 
 
     @Override
@@ -112,7 +122,7 @@ public class FlowControlServiceImpl implements FlowControlService {
         String processInstanceId = activeNode.getProcessInstanceId();
         flow.setProcessInstanceId(processInstanceId);
         flowService.save(flow);
-        return dispatchDownstreamAction(id,flow.getId(), activeNode, StartTypeEnum.START);
+        return dispatchDownstreamAction(id, flow.getId(), activeNode, StartTypeEnum.START);
     }
 
 //
@@ -215,16 +225,28 @@ public class FlowControlServiceImpl implements FlowControlService {
         if (CollectionUtils.isEmpty(parameterSets)) {
             if (startType == StartTypeEnum.START) {
                 return failAndClear(processInstanceId, "节点未配置动作参数: " + actionKey);
-            }else {
+            } else {
                 return suspendAndWait(processInstanceId, flowId, "节点未配置动作参数: " + actionKey);
             }
         }
         String parameterSetId = parameterSets.get(0).id();
 
+        Flow flow = flowService.getById(flowId);
+        FlowTemplate flowTemplate = flowTemplateMapper.selectById(flow.getTemplateId());
+        WorkflowTemplateEntity template = workflowTemplateMapper.selectById(flowTemplate.getSourceTemplateId());
+        //查询当前节点所有动作
+        WorkflowTemplateResponses.Page page = workflowTemplateService.page(1, 10, template.getTemplateNumber());
+        List<String> actionSequence = page.getRecords().get(0).getActionSequence();
+        List<String> newList = actionSequence.stream()
+                .filter(s -> !s.equals("开始") && !s.equals("结束"))
+                .collect(Collectors.toList());
         //处理业务node表
         List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(processInstanceId);
         int count = flowNodeService.lambdaQuery().eq(FlowNode::getTemplateId, flowId).count().intValue();
         FlowNode flowNode = new FlowNode();
+
+
+        flow.setFlowName(newList.get(count));
         flowNode.setTemplateId(flowId);
         flowNode.setProcessInstanceId(processInstanceId);
         flowNode.setSort(count + 1);
