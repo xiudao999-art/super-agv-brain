@@ -1,0 +1,52 @@
+{
+  "agvStatus": {
+    "agvCode": "AGV-01",
+    "online": true,
+    "executionStatus": "EXECUTING"
+  },
+  "batteryRule": {
+    "initialPercent": 78,
+    "decreaseIntervalMinutes": 2,
+    "minimumPercent": 10
+  },
+  "currentOrder": {
+    "executingCount": 1,
+    "queuedCount": 3,
+    "source": "UPSTREAM"
+  },
+  "locationConsistency": {
+    "rate": 98.6,
+    "pendingConfirmationCount": 1
+  },
+  "todayTaskCompletion": {
+    "completedCount": 47,
+    "totalCount": 48
+  },
+  "hardwareModules": [
+    {
+      "code": "CHASSIS",
+      "name": "底盘",
+      "online": true
+    },
+    {
+      "code": "ROBOT_ARM",
+      "name": "机械臂",
+      "online": true
+    },
+    {
+      "code": "VISION",
+      "name": "视觉",
+      "online": true
+    },
+    {
+      "code": "GRIPPER",
+      "name": "夹具",
+      "online": true
+    },
+    {
+      "code": "SCANNER",
+      "name": "扫码器",
+      "online": true
+    }
+  ]
+}
