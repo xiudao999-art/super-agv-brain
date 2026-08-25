@@ -14,7 +14,7 @@ import java.util.Map;
 
 /** 使用客户HTTP接口拉取增量订单。客户响应体需与PullOrderResponse结构一致。 */
 @Component
-@ConditionalOnProperty(prefix = "kunling.workflow.order-sync", name = "endpoint")
+@ConditionalOnProperty(prefix = "kunling.workflow.order-sync", name = "mock-enabled", havingValue = "false")
 public class HttpOrderPullClient implements OrderPullClient {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private final HttpClientUtil http;

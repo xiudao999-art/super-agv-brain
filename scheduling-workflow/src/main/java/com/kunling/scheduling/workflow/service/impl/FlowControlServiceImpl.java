@@ -111,7 +111,8 @@ public class FlowControlServiceImpl implements FlowControlService {
         WorkflowResponses.ActiveNode activeNode = activeNodes.get(0);
         String processInstanceId = activeNode.getProcessInstanceId();
         flow.setProcessInstanceId(processInstanceId);
-        return dispatchDownstreamAction(id, flow.getId(), activeNode, StartTypeEnum.START);
+        flowService.save(flow);
+        return dispatchDownstreamAction(id,flow.getId(), activeNode, StartTypeEnum.START);
     }
 
 //

@@ -12,6 +12,8 @@ import java.util.List;
 @ConfigurationProperties(prefix = "kunling.workflow.order-sync")
 public class OrderSyncProperties {
     private boolean enabled = true;
+    /** 是否使用本地假订单；当前默认开启，关闭后才会调用真实HTTP接口。 */
+    private boolean mockEnabled = true;
     private long fixedDelayMs = 10000L;
     private int pageSize = 100;
     private Duration overlap = Duration.ofMinutes(1);

@@ -5,11 +5,13 @@ import com.kunling.scheduling.common.web.BaseController;
 import com.kunling.scheduling.workflow.dto.WorkflowRequests;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.service.WorkflowService;
+import com.kunling.scheduling.workflow.service.WorkflowStateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
 
@@ -18,6 +20,8 @@ import java.util.List;
 @Tag(name = "工作流程管理")
 public class WorkflowController extends BaseController {
     private final WorkflowService workflowService;
+    @Resource
+    private WorkflowStateService workflowStateService;
 
     public WorkflowController(WorkflowService workflowService) {
         this.workflowService = workflowService;
@@ -118,6 +122,14 @@ public class WorkflowController extends BaseController {
     public ApiResult<Void> complete(@PathVariable String taskId,
                                     @RequestBody WorkflowRequests.CompleteTask request) {
         workflowService.completeTask(taskId, request);
+        return success();
+    }
+
+    @GetMapping("/activate")
+    //任务恢复
+    @Operation(summary = "任务恢复")
+    public ApiResult<Void> delegate(@RequestParam String processInstanceId) {
+        workflowStateService.activate(processInstanceId);
         return success();
     }
 }

@@ -46,8 +46,6 @@ public class OrderPersistenceService {
         order.setSystemOrderNo(number("SYS-ORD"));
         order.setStatus(OrderStatus.QUEUED);
         order.setPriority(pulled.getPriority());
-        order.setTaskCount(pulled.getTasks().size());
-        order.setCompletedTaskCount(0);
         order.setIssuedAt(pulled.getIssuedAt());
         order.setUpstreamUpdatedAt(pulled.getUpstreamUpdatedAt());
         order.setVersion(0);

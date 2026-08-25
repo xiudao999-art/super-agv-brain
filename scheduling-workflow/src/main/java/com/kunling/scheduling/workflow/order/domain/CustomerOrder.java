@@ -32,12 +32,6 @@ public class CustomerOrder extends BaseEntity {
             example = "1", allowableValues = {"1", "2", "3", "4"})
     private Integer priority;
 
-    @Schema(description = "订单包含的任务总数", example = "2")
-    private Integer taskCount;
-
-    @Schema(description = "已经成功完成的任务数量，用于计算订单完成进度", example = "1")
-    private Integer completedTaskCount;
-
     @Schema(description = "订单在客户系统中的最后更新时间，用于增量同步",
             example = "2026-08-25T10:00:00")
     private LocalDateTime upstreamUpdatedAt;

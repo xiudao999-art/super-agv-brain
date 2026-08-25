@@ -22,6 +22,7 @@ import com.kunling.scheduling.workflow.service.FlowControlService;
 import com.kunling.scheduling.workflow.service.FlowNodeService;
 import com.kunling.scheduling.workflow.service.FlowService;
 import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+@Slf4j
 @Service
 public class OrderTaskOrchestrationService {
     private final CustomerOrderMapper orderMapper;
@@ -90,7 +92,6 @@ public class OrderTaskOrchestrationService {
     public boolean dispatchNext() {
         CustomerOrder running = orderMapper.selectOne(Wrappers.<CustomerOrder>lambdaQuery()
                 .eq(CustomerOrder::getStatus, OrderStatus.RUNNING)
-                .orderByAsc(CustomerOrder::getId)
                 .last("limit 1"));
         if (running != null) {
             long activeTasks = taskMapper.selectCount(Wrappers.<OrderTask>lambdaQuery()
@@ -124,43 +125,29 @@ public class OrderTaskOrchestrationService {
     }
 
     public boolean startTask(OrderTask task) {
-        if (task.getStatus() != OrderTaskStatus.QUEUED && task.getStatus() != OrderTaskStatus.FAILED) {
-            return task.getStatus() == OrderTaskStatus.RUNNING || task.getStatus() == OrderTaskStatus.SUCCEEDED;
-        }
-        if (hasOtherRunningOrder(task.getOrderId())
-                || !lockService.tryOrderExecutionLock(task.getOrderId(), Duration.ofDays(7))) {
-            return false;
-        }
         try {
-            if (task.getStatus() == OrderTaskStatus.QUEUED) {
-                boolean resumed = flowControlService.resumeTask(task.getId());
-                if (!resumed) return false;
-                task.setStatus(OrderTaskStatus.RUNNING);
-                task.setErrorCode(null);
-                task.setErrorMessage(null);
-                taskMapper.updateById(task);
-                updateOrderRunning(task.getOrderId());
-                return true;
-            }
             FlowTemplate flowTemplate = flowTemplateMapper.selectOne(Wrappers.<FlowTemplate>lambdaQuery()
-                    .eq(FlowTemplate::getTemplateNumber, task.getFlowNumber())
+                    .eq(FlowTemplate::getId, task.getFlowTemplateId())
                     .eq(FlowTemplate::getStatus, 1));
             if (flowTemplate == null) {
-                throw new NoSuchElementException("流程编号不存在或未启用: " + task.getFlowNumber());
+                log.error("流程编号不存在或未启用: {}", task.getFlowTemplateId());
+                throw new NoSuchElementException("流程编号不存在或未启用: " + task.getFlowTemplateId());
             }
             WorkflowTemplateEntity workflowTemplate = workflowTemplateMapper.selectById(flowTemplate.getSourceTemplateId());
             if (workflowTemplate == null || StringUtils.isBlank(workflowTemplate.getProcessDefinitionId())) {
-                throw new IllegalStateException("流程尚未部署: " + task.getFlowNumber());
+                log.error("流程尚未部署: {}", task.getFlowTemplateId());
+                throw new IllegalStateException("流程尚未部署: " + task.getFlowTemplateId());
             }
 
             FlowStartRequest request = new FlowStartRequest();
             request.setProcessDefinitionId(workflowTemplate.getProcessDefinitionId());
-            request.setBusinessKey(task.getId());
+            request.setBusinessKey(task.getOrderId());
             request.setTaskId(task.getId());
             request.setTemplateId(flowTemplate.getId());
             boolean started = flowControlService.start(request);
-            if (!started) {
-                throw new IllegalStateException("流程启动或首节点下发失败");
+            if (!started){
+                log.error("流程启动或首节点下发失败: {}", task.getId());
+                throw new IllegalStateException("流程启动或首节点下发失败: " + task.getId());
             }
             task.setFlowTemplateId(flowTemplate.getId());
             task.setStatus(OrderTaskStatus.RUNNING);
@@ -244,8 +231,6 @@ public class OrderTaskOrchestrationService {
         int total = Math.toIntExact(taskMapper.selectCount(Wrappers.<OrderTask>lambdaQuery().eq(OrderTask::getOrderId, orderId)));
         int completed = Math.toIntExact(taskMapper.selectCount(Wrappers.<OrderTask>lambdaQuery()
                 .eq(OrderTask::getOrderId, orderId).eq(OrderTask::getStatus, OrderTaskStatus.SUCCEEDED)));
-        order.setTaskCount(total);
-        order.setCompletedTaskCount(completed);
         order.setStatus(total > 0 && completed == total ? OrderStatus.SUCCEEDED : OrderStatus.RUNNING);
         orderMapper.updateById(order);
     }
@@ -264,38 +249,5 @@ public class OrderTaskOrchestrationService {
         return task;
     }
 
-    public TaskInfoResp taskInfo() {
-        TaskInfoResp resp = new TaskInfoResp();
-        OrderTask orderTask = taskMapper.selectOne(Wrappers.<OrderTask>lambdaQuery().eq(OrderTask::getStatus, OrderTaskStatus.RUNNING).last("limt 1"));
-        CustomerOrder order = orderMapper.selectById(orderTask.getOrderId());
-        FlowTemplate flowTemplate = flowTemplateMapper.selectById(orderTask.getFlowTemplateId());
 
-        WorkflowTemplateEntity template = workflowTemplateMapper.selectById(flowTemplate.getSourceTemplateId());
-        WorkflowTemplateResponses.Page page = workflowTemplateService.page(1, 10, template.getTemplateNumber());
-        resp.setSystemOrderNo(order.getSystemOrderNo());
-        resp.setUpstreamOrderNo(order.getUpstreamOrderNo());
-        resp.setFlowName(flowTemplate.getTemplateName());
-        resp.setFlowTemplateName(template.getTemplateName());
-        List<String> actionSequence = page.getRecords().get(0).getActionSequence();
-        List<FlowNode> list = flowNodeService.lambdaQuery().eq(FlowNode::getTemplateId, template.getId()).orderByAsc(FlowNode::getSort).list();
-        List<TaskInfoResp.TaskAction> actions = new ArrayList<>();
-        for (int i = 0; i < actionSequence.size(); i++) {
-            String actionName = actionSequence.get(i);
-            TaskInfoResp.TaskAction action = new TaskInfoResp.TaskAction();
-            action.setActionName(actionName);
-            action.setSort(i + 1);
-            action.setResource("");
-            if (i < list.size()) {
-                FlowNode flowNode = list.get(i);
-                action.setStatus(flowNode.getStatus().getLabel());
-                if (flowNode.getStatus() == NodeState.SUCCEEDED) {
-                    action.setCompleteProve("设备状态、扫码或传感器");
-                }
-            }
-            actions.add(action);
-        }
-        resp.setTaskActionList(actions);
-
-        return resp;
-    }
 }
