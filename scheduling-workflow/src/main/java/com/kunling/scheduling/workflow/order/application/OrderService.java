@@ -2,6 +2,7 @@ package com.kunling.scheduling.workflow.order.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
@@ -16,9 +17,12 @@ import com.kunling.scheduling.workflow.order.domain.OrderTaskStatus;
 import com.kunling.scheduling.workflow.order.infrastructure.CustomerOrderMapper;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskCount;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
+import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.annotation.RequestScope;
 
+import javax.annotation.Resource;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -34,6 +38,8 @@ public class OrderService {
     private final FlowTemplateMapper flowTemplateMapper;
     private final WorkflowTemplateMapper workflowTemplateMapper;
     private final FlowNodeMapper flowNodeMapper;
+    @Resource
+    private WorkflowTemplateService workflowTemplateService;
 
     public OrderService(CustomerOrderMapper orderMapper, OrderTaskMapper taskMapper,
                         FlowTemplateMapper flowTemplateMapper, WorkflowTemplateMapper workflowTemplateMapper,
@@ -105,9 +111,17 @@ public class OrderService {
         }
         WorkflowTemplateEntity template = flow == null || flow.getSourceTemplateId() == null
                 ? null : workflowTemplateMapper.selectById(flow.getSourceTemplateId());
+
+        WorkflowTemplateResponses.Page page = workflowTemplateService.page(1, 10, template.getTemplateNumber());
+        List<String> actionSequence = page.getRecords().get(0).getActionSequence();
+        List<String> newList = actionSequence.stream()
+                .filter(s -> !s.equals("开始") && !s.equals("结束"))
+                .collect(Collectors.toList());
+
+
         List<FlowNode> nodes = template == null ? Collections.emptyList()
                 : flowNodeMapper.selectList(Wrappers.<FlowNode>lambdaQuery()
-                        .eq(FlowNode::getTemplateId, flow.getId()).orderByAsc(FlowNode::getSort));
+                .eq(FlowNode::getTemplateId, flow.getId()).orderByAsc(FlowNode::getSort));
         List<OrderResponses.ActionItem> actions = nodes.stream().map(node -> {
             int sort = node.getSort() == null ? 0 : node.getSort();
             String resource = StringUtils.defaultIfBlank(node.getNodeCode(), actionResource(node));
