@@ -15,11 +15,15 @@ import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
 import com.kunling.scheduling.workflow.mapper.NodeStateTransitionRuleMapper;
+import com.kunling.scheduling.workflow.order.domain.CustomerOrder;
+import com.kunling.scheduling.workflow.order.domain.OrderStatus;
 import com.kunling.scheduling.workflow.order.domain.OrderTask;
 import com.kunling.scheduling.workflow.order.domain.OrderTaskStatus;
+import com.kunling.scheduling.workflow.order.infrastructure.CustomerOrderMapper;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import com.kunling.scheduling.workflow.service.*;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.criterion.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +31,7 @@ import javax.annotation.Resource;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -52,6 +57,8 @@ public class NodeStateTransitionRuleServiceImpl
     @Resource
     private OrderTaskMapper orderTaskMapper;
 
+    @Resource
+    private CustomerOrderMapper customerOrderMapper;
 
 
     @Override
@@ -168,11 +175,20 @@ public class NodeStateTransitionRuleServiceImpl
         WorkflowResponses.Instance instance = workflowStateService.completeExecution(activeNode.getExecutionId(), variables);
         //完成当前节点后,判断流程是否结束
         if ("COMPLETED".equals(instance.getState())) {
-            updateOrderTaskAndFlow(currentNode.getTemplateId(),FlowState.SUCCEEDED,OrderTaskStatus.SUCCEEDED);
+            updateOrderTaskAndFlow(currentNode.getTemplateId(), FlowState.SUCCEEDED, OrderTaskStatus.SUCCEEDED);
             log.info("当前流程flow{}全部完成", currentNode.getTemplateId());
             //判断订单下的任务是否都完成
-
-
+            Flow flow = flowService.getById(currentNode.getTemplateId());
+            OrderTask orderTask = orderTaskMapper.selectById(flow.getTaskId());
+            List<OrderTask> orderTasks = orderTaskMapper.selectList(Wrappers.<OrderTask>lambdaQuery().eq(OrderTask::getOrderId, orderTask.getOrderId()));
+            //
+            List<OrderTask> unCompleteTask = orderTasks.stream().filter(s -> !OrderTaskStatus.SUCCEEDED.equals(s.getStatus())).collect(Collectors.toList());
+            if (CollectionUtils.isEmpty(unCompleteTask)) {
+                CustomerOrder customerOrder = new CustomerOrder();
+                customerOrder.setId(orderTask.getOrderId());
+                customerOrder.setStatus(OrderStatus.SUCCEEDED);
+                customerOrderMapper.updateById(customerOrder);
+            }
 
         } else {
             //未完成的话,执行下发下一节点
@@ -181,7 +197,7 @@ public class NodeStateTransitionRuleServiceImpl
 
     }
 
-    private void updateOrderTaskAndFlow(Long flowId,FlowState flowState,OrderTaskStatus orderTaskStatus) {
+    private void updateOrderTaskAndFlow(Long flowId, FlowState flowState, OrderTaskStatus orderTaskStatus) {
         Flow flow = flowService.getById(flowId);
         flow.setFlowState(flowState);
         flowService.updateById(flow);
@@ -202,7 +218,7 @@ public class NodeStateTransitionRuleServiceImpl
     //将当前节点任务挂起
     private void handleManual(FlowNode currentNode) {
         WorkflowResponses.Instance suspend = workflowStateService.suspend(currentNode.getProcessInstanceId());
-        updateOrderTaskAndFlow(currentNode.getTemplateId(),FlowState.FAILED,OrderTaskStatus.FAILED);
+        updateOrderTaskAndFlow(currentNode.getTemplateId(), FlowState.FAILED, OrderTaskStatus.FAILED);
     }
 
     private void handleCritical(FlowNode currentNode) {
@@ -215,7 +231,7 @@ public class NodeStateTransitionRuleServiceImpl
         }
         if (!pendingNodes.isEmpty()) {
             flowNodeService.updateBatchById(pendingNodes);
-            updateOrderTaskAndFlow(currentNode.getTemplateId(),FlowState.CANCELLED,OrderTaskStatus.CANCELLED);
+            updateOrderTaskAndFlow(currentNode.getTemplateId(), FlowState.CANCELLED, OrderTaskStatus.CANCELLED);
         }
         log.error("流程因严重错误终止: flowId={}, nodeId={}",
                 currentNode.getTemplateId(), currentNode.getId());
