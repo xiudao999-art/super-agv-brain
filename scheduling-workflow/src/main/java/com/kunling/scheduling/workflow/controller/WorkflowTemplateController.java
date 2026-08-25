@@ -1,5 +1,7 @@
 package com.kunling.scheduling.workflow.controller;
 
+import com.kunling.scheduling.common.audit.OperationLog;
+import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import com.kunling.scheduling.workflow.dto.FlowStartRequest;
@@ -29,6 +31,8 @@ public class WorkflowTemplateController extends BaseController {
 
     @PostMapping("/deploy")
     @Operation(summary = "将已保存模板部署到Flowable,发布模版")
+    @OperationLog(module = "流程模板", operation = "发布流程模板", type = OperationType.PUBLISH,
+            recordResponse = false)
     public ApiResult<WorkflowResponses.Definition> deploy(@Parameter Long id) {
         return success(service.deploy(id));
     }
@@ -80,6 +84,8 @@ public class WorkflowTemplateController extends BaseController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除业务模板，不删除Flowable历史")
+    @OperationLog(module = "流程模板", operation = "删除流程模板", type = OperationType.DELETE,
+            recordResponse = false)
     public ApiResult<Void> delete(@PathVariable Long id) {
         service.delete(id);
         return success();
@@ -87,6 +93,8 @@ public class WorkflowTemplateController extends BaseController {
 
     @PostMapping("/start")
     @Operation(summary = "启动流程")
+    @OperationLog(module = "工作流程", operation = "从模板启动流程", type = OperationType.EXECUTE,
+            recordResponse = false)
     public ApiResult<Void> start(@RequestBody FlowStartRequest flowStartRequest) {
         flowControlService.start(flowStartRequest);
         return success();

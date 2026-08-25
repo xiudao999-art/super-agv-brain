@@ -11,6 +11,8 @@ import com.kunling.scheduling.agvflow.domain.dto.LabConfigSummary;
 import com.kunling.scheduling.agvflow.domain.dto.LabMapRequest;
 import com.kunling.scheduling.agvflow.domain.dto.LabMapPointView;
 import com.kunling.scheduling.agvflow.domain.dto.ValidationResult;
+import com.kunling.scheduling.common.audit.OperationLog;
+import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -62,6 +64,8 @@ public class LabConfigController extends BaseController {
 
     @DeleteMapping("/{configId}")
     @Operation(summary = "删除配置草稿")
+    @OperationLog(module = "实验室配置", operation = "删除配置草稿", type = OperationType.DELETE,
+            recordResponse = false)
     public ApiResult<Void> deleteDraft(@PathVariable Long configId) {
         applicationService.deleteDraft(configId);
         return success();
@@ -171,6 +175,8 @@ public class LabConfigController extends BaseController {
 
     @PostMapping("/{configId}/publish")
     @Operation(summary = "发布配置草稿")
+    @OperationLog(module = "实验室配置", operation = "发布配置草稿", type = OperationType.PUBLISH,
+            recordResponse = false)
     public ApiResult<LabConfigSummary> publish(@PathVariable Long configId) {
         return success(applicationService.publish(configId));
     }

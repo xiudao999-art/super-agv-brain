@@ -4,6 +4,8 @@ import com.kunling.scheduling.action.exceptionmapping.application.ActionErrorMap
 import com.kunling.scheduling.action.exceptionmapping.application.ActionErrorMappingRuleView;
 import com.kunling.scheduling.action.exceptionmapping.application.SaveErrorMappingRuleRequest;
 import com.kunling.scheduling.action.exceptionmapping.domain.ErrorMappingRuleStatus;
+import com.kunling.scheduling.common.audit.OperationLog;
+import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -73,6 +75,8 @@ public class ActionErrorMappingController extends BaseController {
 
     @Operation(summary = "启用异常映射")
     @PostMapping("/{ruleId}/activate")
+    @OperationLog(module = "异常映射", operation = "启用异常映射", type = OperationType.PUBLISH,
+            recordResponse = false)
     public ApiResult<ActionErrorMappingRuleView> activate(@PathVariable String ruleId,
                                                           @RequestParam long expectedRevision) {
         return success(ruleService.activate(ruleId, expectedRevision));
@@ -80,6 +84,8 @@ public class ActionErrorMappingController extends BaseController {
 
     @Operation(summary = "停用异常映射")
     @PostMapping("/{ruleId}/disable")
+    @OperationLog(module = "异常映射", operation = "停用异常映射", type = OperationType.UPDATE,
+            recordResponse = false)
     public ApiResult<ActionErrorMappingRuleView> disable(@PathVariable String ruleId,
                                                          @RequestParam long expectedRevision) {
         return success(ruleService.disable(ruleId, expectedRevision));
@@ -87,6 +93,8 @@ public class ActionErrorMappingController extends BaseController {
 
     @Operation(summary = "删除异常映射", description = "ACTIVE 规则必须先停用")
     @DeleteMapping("/{ruleId}")
+    @OperationLog(module = "异常映射", operation = "删除异常映射", type = OperationType.DELETE,
+            recordResponse = false)
     public ApiResult<Void> delete(@PathVariable String ruleId,
                                   @RequestParam long expectedRevision) {
         ruleService.delete(ruleId, expectedRevision);

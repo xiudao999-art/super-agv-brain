@@ -1,5 +1,8 @@
-package com.kunling.scheduling.app.hometest;
+package com.kunling.scheduling.app.service;
 
+import com.kunling.scheduling.app.domain.HomeOverviewResponse;
+import com.kunling.scheduling.app.domain.HomeOverviewTestData;
+import com.kunling.scheduling.app.mapper.HomeTestDataMapper;
 import com.kunling.scheduling.common.exception.ServiceUnavailableException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -23,14 +26,14 @@ public class HomeOverviewTestService {
     private final Instant batteryRuleStartedAt;
 
     @Autowired
-    public HomeOverviewTestService(HomeTestDataRepository dataRepository) {
-        this(dataRepository, Clock.systemUTC());
+    public HomeOverviewTestService(HomeTestDataMapper dataMapper) {
+        this(dataMapper, Clock.systemUTC());
     }
 
-    HomeOverviewTestService(HomeTestDataRepository dataRepository, Clock clock) {
+    public HomeOverviewTestService(HomeTestDataMapper dataMapper, Clock clock) {
         this.clock = Objects.requireNonNull(clock, "系统时钟不能为空");
         this.testData = validate(Objects.requireNonNull(
-                dataRepository, "测试数据仓库不能为空").load());
+                dataMapper, "测试数据 Mapper 不能为空").load());
         // 临时测试数据不写数据库：每次服务启动后从 JSON 初始电量重新开始衰减。
         this.batteryRuleStartedAt = clock.instant();
     }

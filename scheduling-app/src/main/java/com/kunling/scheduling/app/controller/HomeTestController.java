@@ -1,7 +1,7 @@
 package com.kunling.scheduling.app.controller;
 
-import com.kunling.scheduling.app.hometest.HomeOverviewResponse;
-import com.kunling.scheduling.app.hometest.HomeOverviewTestService;
+import com.kunling.scheduling.app.domain.HomeOverviewResponse;
+import com.kunling.scheduling.app.service.HomeOverviewTestService;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;

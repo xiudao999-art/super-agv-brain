@@ -1,4 +1,4 @@
-package com.kunling.scheduling.app.hometest;
+package com.kunling.scheduling.app.domain;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -12,7 +12,7 @@ import java.util.List;
  *
  * <p>该模型不会直接暴露给前端，避免把电量衰减参数混入接口响应。</p>
  */
-final class HomeOverviewTestData {
+public final class HomeOverviewTestData {
 
     private final AgvDefinition agvStatus;
     private final BatteryRule batteryRule;
@@ -22,7 +22,7 @@ final class HomeOverviewTestData {
     private final List<HomeOverviewResponse.HardwareModuleStatus> hardwareModules;
 
     @JsonCreator
-    HomeOverviewTestData(
+    public HomeOverviewTestData(
             @JsonProperty("agvStatus") AgvDefinition agvStatus,
             @JsonProperty("batteryRule") BatteryRule batteryRule,
             @JsonProperty("currentOrder") HomeOverviewResponse.CurrentOrder currentOrder,
@@ -39,37 +39,37 @@ final class HomeOverviewTestData {
                 : Collections.unmodifiableList(new ArrayList<>(hardwareModules));
     }
 
-    AgvDefinition getAgvStatus() {
+    public AgvDefinition getAgvStatus() {
         return agvStatus;
     }
 
-    BatteryRule getBatteryRule() {
+    public BatteryRule getBatteryRule() {
         return batteryRule;
     }
 
-    HomeOverviewResponse.CurrentOrder getCurrentOrder() {
+    public HomeOverviewResponse.CurrentOrder getCurrentOrder() {
         return currentOrder;
     }
 
-    HomeOverviewResponse.LocationConsistency getLocationConsistency() {
+    public HomeOverviewResponse.LocationConsistency getLocationConsistency() {
         return locationConsistency;
     }
 
-    TaskCompletionDefinition getTodayTaskCompletion() {
+    public TaskCompletionDefinition getTodayTaskCompletion() {
         return todayTaskCompletion;
     }
 
-    List<HomeOverviewResponse.HardwareModuleStatus> getHardwareModules() {
+    public List<HomeOverviewResponse.HardwareModuleStatus> getHardwareModules() {
         return hardwareModules;
     }
 
-    static final class AgvDefinition {
+    public static final class AgvDefinition {
         private final String agvCode;
         private final boolean online;
         private final String executionStatus;
 
         @JsonCreator
-        AgvDefinition(@JsonProperty("agvCode") String agvCode,
+        public AgvDefinition(@JsonProperty("agvCode") String agvCode,
                       @JsonProperty("online") boolean online,
                       @JsonProperty("executionStatus") String executionStatus) {
             this.agvCode = agvCode;
@@ -77,26 +77,26 @@ final class HomeOverviewTestData {
             this.executionStatus = executionStatus;
         }
 
-        String getAgvCode() {
+        public String getAgvCode() {
             return agvCode;
         }
 
-        boolean isOnline() {
+        public boolean isOnline() {
             return online;
         }
 
-        String getExecutionStatus() {
+        public String getExecutionStatus() {
             return executionStatus;
         }
     }
 
-    static final class BatteryRule {
+    public static final class BatteryRule {
         private final int initialPercent;
         private final int decreaseIntervalMinutes;
         private final int minimumPercent;
 
         @JsonCreator
-        BatteryRule(@JsonProperty("initialPercent") int initialPercent,
+        public BatteryRule(@JsonProperty("initialPercent") int initialPercent,
                     @JsonProperty("decreaseIntervalMinutes") int decreaseIntervalMinutes,
                     @JsonProperty("minimumPercent") int minimumPercent) {
             this.initialPercent = initialPercent;
@@ -104,35 +104,35 @@ final class HomeOverviewTestData {
             this.minimumPercent = minimumPercent;
         }
 
-        int getInitialPercent() {
+        public int getInitialPercent() {
             return initialPercent;
         }
 
-        int getDecreaseIntervalMinutes() {
+        public int getDecreaseIntervalMinutes() {
             return decreaseIntervalMinutes;
         }
 
-        int getMinimumPercent() {
+        public int getMinimumPercent() {
             return minimumPercent;
         }
     }
 
-    static final class TaskCompletionDefinition {
+    public static final class TaskCompletionDefinition {
         private final int completedCount;
         private final int totalCount;
 
         @JsonCreator
-        TaskCompletionDefinition(@JsonProperty("completedCount") int completedCount,
+        public TaskCompletionDefinition(@JsonProperty("completedCount") int completedCount,
                                  @JsonProperty("totalCount") int totalCount) {
             this.completedCount = completedCount;
             this.totalCount = totalCount;
         }
 
-        int getCompletedCount() {
+        public int getCompletedCount() {
             return completedCount;
         }
 
-        int getTotalCount() {
+        public int getTotalCount() {
             return totalCount;
         }
     }

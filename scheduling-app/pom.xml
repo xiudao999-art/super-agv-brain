@@ -15,6 +15,10 @@
     <name>Kunling Scheduling - Application</name>
     <description>坤灵机器人调度系统可执行主应用</description>
 
+    <properties>
+        <mybatis-plus.version>3.5.7</mybatis-plus.version>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.kunling</groupId>
@@ -24,6 +28,15 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
         </dependency>
         <dependency>
             <groupId>com.kunling</groupId>
