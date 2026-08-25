@@ -1,5 +1,7 @@
 package com.kunling.scheduling.workflow.controller;
 
+import com.kunling.scheduling.common.audit.OperationLog;
+import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import com.kunling.scheduling.workflow.dto.WorkflowRequests;
@@ -29,6 +31,8 @@ public class WorkflowController extends BaseController {
 
     @PostMapping("/definitions/deploy")
     @Operation(summary = "保存并部署bpmn.js导出的BPMN XML")
+    @OperationLog(module = "工作流程", operation = "部署流程定义", type = OperationType.PUBLISH,
+            recordRequest = false, recordResponse = false)
     public ApiResult<WorkflowResponses.Definition> deploy(
             @Valid @RequestBody WorkflowRequests.DeployDefinition request) {
         return success(workflowService.deploy(request));
@@ -36,6 +40,8 @@ public class WorkflowController extends BaseController {
 
     @PostMapping("/instances")
     @Operation(summary = "启动流程实例")
+    @OperationLog(module = "工作流程", operation = "启动流程实例", type = OperationType.EXECUTE,
+            recordResponse = false)
     public ApiResult<WorkflowResponses.Instance> start(@RequestBody WorkflowRequests.StartInstance request) {
         return success(workflowService.start(request));
     }
@@ -70,18 +76,24 @@ public class WorkflowController extends BaseController {
 
     @PostMapping("/instances/{id}/suspend")
     @Operation(summary = "挂起流程实例")
+    @OperationLog(module = "工作流程", operation = "挂起流程实例", type = OperationType.UPDATE,
+            recordResponse = false)
     public ApiResult<WorkflowResponses.Instance> suspend(@PathVariable String id) {
         return success(workflowService.suspend(id));
     }
 
     @PostMapping("/instances/{id}/activate")
     @Operation(summary = "恢复流程实例")
+    @OperationLog(module = "工作流程", operation = "恢复流程实例", type = OperationType.RECOVER,
+            recordResponse = false)
     public ApiResult<WorkflowResponses.Instance> activate(@PathVariable String id) {
         return success(workflowService.activate(id));
     }
 
     @PostMapping("/instances/{id}/terminate")
     @Operation(summary = "人工终止流程实例")
+    @OperationLog(module = "工作流程", operation = "人工终止流程实例", type = OperationType.UPDATE,
+            recordResponse = false)
     public ApiResult<WorkflowResponses.Instance> terminate(
             @PathVariable String id, @RequestBody WorkflowRequests.TerminateInstance request) {
         return success(workflowService.terminate(id, request));
@@ -111,6 +123,8 @@ public class WorkflowController extends BaseController {
 
     @PostMapping("/tasks/{taskId}/claim")
     @Operation(summary = "签收人工任务")
+    @OperationLog(module = "人工任务", operation = "签收人工任务", type = OperationType.EXECUTE,
+            recordResponse = false)
     public ApiResult<Void> claim(@PathVariable String taskId,
                                  @Valid @RequestBody WorkflowRequests.ClaimTask request) {
         workflowService.claimTask(taskId, request);
@@ -119,6 +133,8 @@ public class WorkflowController extends BaseController {
 
     @PostMapping("/tasks/{taskId}/complete")
     @Operation(summary = "完成人工任务并推进流程")
+    @OperationLog(module = "人工任务", operation = "完成人工任务", type = OperationType.EXECUTE,
+            recordResponse = false)
     public ApiResult<Void> complete(@PathVariable String taskId,
                                     @RequestBody WorkflowRequests.CompleteTask request) {
         workflowService.completeTask(taskId, request);

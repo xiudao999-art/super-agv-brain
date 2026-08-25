@@ -1,6 +1,7 @@
-package com.kunling.scheduling.app.hometest;
+package com.kunling.scheduling.app.mapper;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kunling.scheduling.app.domain.HomeOverviewTestData;
 import com.kunling.scheduling.common.exception.ServiceUnavailableException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
@@ -11,26 +12,26 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Objects;
 
-/** 从 classpath JSON 加载运行总览测试数据。 */
+/** 从 classpath JSON 映射运行总览测试数据。 */
 @Component
-class HomeTestDataRepository {
+public class HomeTestDataMapper {
 
-    static final String DEFAULT_RESOURCE_PATH = "mock/home-overview-test-data.json";
+    public static final String DEFAULT_RESOURCE_PATH = "mock/home-overview-test-data.json";
 
     private final ObjectMapper objectMapper;
     private final Resource dataResource;
 
     @Autowired
-    HomeTestDataRepository(ObjectMapper objectMapper) {
+    public HomeTestDataMapper(ObjectMapper objectMapper) {
         this(objectMapper, new ClassPathResource(DEFAULT_RESOURCE_PATH));
     }
 
-    HomeTestDataRepository(ObjectMapper objectMapper, Resource dataResource) {
+    public HomeTestDataMapper(ObjectMapper objectMapper, Resource dataResource) {
         this.objectMapper = Objects.requireNonNull(objectMapper, "JSON 解析器不能为空");
         this.dataResource = Objects.requireNonNull(dataResource, "测试数据资源不能为空");
     }
 
-    HomeOverviewTestData load() {
+    public HomeOverviewTestData load() {
         try (InputStream inputStream = dataResource.getInputStream()) {
             return objectMapper.readValue(inputStream, HomeOverviewTestData.class);
         } catch (IOException exception) {

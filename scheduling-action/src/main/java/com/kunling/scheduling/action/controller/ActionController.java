@@ -3,6 +3,8 @@ package com.kunling.scheduling.action.controller;
 import com.kunling.scheduling.action.definition.application.ActionDefinitionService;
 import com.kunling.scheduling.action.definition.application.ActionDefinitionView;
 import com.kunling.scheduling.action.definition.application.SaveActionDefinitionRequest;
+import com.kunling.scheduling.common.audit.OperationLog;
+import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -71,6 +73,8 @@ public class ActionController extends BaseController {
 
     @Operation(summary = "启用 Action", description = "启用前执行完整结构与参数绑定校验")
     @PostMapping("/{actionKey}/activate")
+    @OperationLog(module = "动作配置", operation = "启用 Action", type = OperationType.PUBLISH,
+            recordResponse = false)
     public ApiResult<ActionDefinitionView> activate(
                                          @Parameter(description = "Action 唯一标识", example = "ARM.PICK")
                                          @PathVariable String actionKey,
@@ -81,6 +85,8 @@ public class ActionController extends BaseController {
 
     @Operation(summary = "停用 Action")
     @PostMapping("/{actionKey}/disable")
+    @OperationLog(module = "动作配置", operation = "停用 Action", type = OperationType.UPDATE,
+            recordResponse = false)
     public ApiResult<ActionDefinitionView> disable(
                                         @Parameter(description = "Action 唯一标识", example = "ARM.PICK")
                                         @PathVariable String actionKey,
@@ -91,6 +97,8 @@ public class ActionController extends BaseController {
 
     @Operation(summary = "删除 Action", description = "执行中的 Action 不允许删除")
     @DeleteMapping("/{actionKey}")
+    @OperationLog(module = "动作配置", operation = "删除 Action", type = OperationType.DELETE,
+            recordResponse = false)
     public ApiResult<Void> delete(
                                        @Parameter(description = "Action 唯一标识", example = "ARM.PICK")
                                        @PathVariable String actionKey,

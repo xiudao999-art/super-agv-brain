@@ -1,7 +1,8 @@
-package com.kunling.scheduling.app.hometest;
+package com.kunling.scheduling.app.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kunling.scheduling.app.controller.HomeTestController;
+import com.kunling.scheduling.app.mapper.HomeTestDataMapper;
+import com.kunling.scheduling.app.service.HomeOverviewTestService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
@@ -28,11 +29,11 @@ class HomeTestControllerTest {
     @BeforeEach
     void setUp() {
         clock = new MutableClock(Instant.parse("2026-08-25T10:00:00Z"), ZoneOffset.UTC);
-        HomeTestDataRepository repository = new HomeTestDataRepository(
+        HomeTestDataMapper dataMapper = new HomeTestDataMapper(
                 new ObjectMapper(),
-                new ClassPathResource(HomeTestDataRepository.DEFAULT_RESOURCE_PATH)
+                new ClassPathResource(HomeTestDataMapper.DEFAULT_RESOURCE_PATH)
         );
-        service = new HomeOverviewTestService(repository, clock);
+        service = new HomeOverviewTestService(dataMapper, clock);
         mockMvc = MockMvcBuilders.standaloneSetup(new HomeTestController(service)).build();
     }
 

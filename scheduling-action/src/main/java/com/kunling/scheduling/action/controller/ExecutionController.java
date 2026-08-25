@@ -5,6 +5,8 @@ import com.kunling.scheduling.action.execution.application.ActionPackagePreview;
 import com.kunling.scheduling.action.execution.application.StartActionExecutionRequest;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionEventView;
+import com.kunling.scheduling.common.audit.OperationLog;
+import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,6 +43,8 @@ public class ExecutionController extends BaseController {
     @Operation(summary = "开始执行完整动作包", description = "必须携带预览返回的 expectedPackageHash；开始后当前任务不可编辑")
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
+    @OperationLog(module = "动作执行", operation = "开始执行完整动作包", type = OperationType.EXECUTE,
+            recordResponse = false)
     public ApiResult<ActionExecutionView> start(@RequestBody StartActionExecutionRequest request) {
         return accepted(executionService.start(request));
     }
@@ -72,6 +76,8 @@ public class ExecutionController extends BaseController {
     @Operation(summary = "查询下游物理执行结果", description = "仅用于 UNKNOWN_HOLD 等结果不确定场景，不会重新下发动作")
     @PostMapping("/{actionInstanceId}/query")
     @ResponseStatus(HttpStatus.ACCEPTED)
+    @OperationLog(module = "动作执行", operation = "对账下游物理执行结果", type = OperationType.RECOVER,
+            recordResponse = false)
     public ApiResult<ActionExecutionView> query(
             @Parameter(description = "动作执行实例标识") @PathVariable String actionInstanceId) {
         return accepted(executionService.query(actionInstanceId));

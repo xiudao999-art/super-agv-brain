@@ -1,7 +1,7 @@
 package com.kunling.scheduling.app.controller;
 
-import com.kunling.scheduling.app.file.ImageStorageService;
-import com.kunling.scheduling.app.file.ImageUploadResult;
+import com.kunling.scheduling.app.domain.ImageUploadResult;
+import com.kunling.scheduling.app.service.ImageStorageService;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;

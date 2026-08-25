@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kunling.scheduling.app.mapper.OperationLogMapper">
+
+    <resultMap id="OperationLogResultMap" type="com.kunling.scheduling.app.domain.SystemOperationLog">
+        <id property="id" column="id"/>
+        <result property="module" column="module"/>
+        <result property="operation" column="operation"/>
+        <result property="operationType" column="operation_type"/>
+        <result property="handlerMethod" column="handler_method"/>
+        <result property="requestMethod" column="request_method"/>
+        <result property="requestUri" column="request_uri"/>
+        <result property="requestParams" column="request_params"/>
+        <result property="responseBody" column="response_body"/>
+        <result property="status" column="status"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="operatedAt" column="operated_at"/>
+        <result property="durationMs" column="duration_ms"/>
+    </resultMap>
+
+    <sql id="SelectColumns">
+        id, module, operation, operation_type, handler_method, request_method, request_uri,
+        request_params, response_body, status, error_message, operated_at, duration_ms
+    </sql>
+
+    <sql id="QueryConditions">
+        <where>
+            <if test="criteria.module != null">
+                AND module = #{criteria.module}
+            </if>
+            <if test="criteria.operationType != null">
+                AND operation_type = #{criteria.operationType}
+            </if>
+            <if test="criteria.status != null">
+                AND status = #{criteria.status}
+            </if>
+            <if test="criteria.requestMethod != null">
+                AND request_method = #{criteria.requestMethod}
+            </if>
+            <if test="criteria.startTime != null">
+                AND operated_at &gt;= #{criteria.startTime}
+            </if>
+            <if test="criteria.endTime != null">
+                AND operated_at &lt;= #{criteria.endTime}
+            </if>
+            <if test="criteria.keyword != null">
+                AND (
+                    module LIKE CONCAT('%', #{criteria.keyword}, '%')
+                    OR operation LIKE CONCAT('%', #{criteria.keyword}, '%')
+                    OR handler_method LIKE CONCAT('%', #{criteria.keyword}, '%')
+                    OR request_uri LIKE CONCAT('%', #{criteria.keyword}, '%')
+                    OR error_message LIKE CONCAT('%', #{criteria.keyword}, '%')
+                )
+            </if>
+        </where>
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO system_operation_log (
+            module, operation, operation_type, handler_method, request_method, request_uri,
+            request_params, response_body, status, error_message, operated_at, duration_ms
+        ) VALUES (
+            #{module}, #{operation}, #{operationType}, #{handlerMethod}, #{requestMethod}, #{requestUri},
+            #{requestParams}, #{responseBody}, #{status}, #{errorMessage}, #{operatedAt}, #{durationMs}
+        )
+    </insert>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*)
+        FROM system_operation_log
+        <include refid="QueryConditions"/>
+    </select>
+
+    <select id="selectPage" resultMap="OperationLogResultMap">
+        SELECT <include refid="SelectColumns"/>
+        FROM system_operation_log
+        <include refid="QueryConditions"/>
+        ORDER BY operated_at DESC, id DESC
+        LIMIT #{criteria.pageSize} OFFSET #{offset}
+    </select>
+
+    <delete id="deleteByIds">
+        DELETE FROM system_operation_log
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+</mapper>

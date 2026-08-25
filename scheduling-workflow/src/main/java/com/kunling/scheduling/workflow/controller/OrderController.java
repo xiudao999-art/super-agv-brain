@@ -1,5 +1,7 @@
 package com.kunling.scheduling.workflow.controller;
 
+import com.kunling.scheduling.common.audit.OperationLog;
+import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import com.kunling.scheduling.workflow.order.api.OrderResponses;
@@ -64,6 +66,8 @@ public class OrderController extends BaseController {
 
     @PostMapping("/orders/sync")
     @Operation(summary = "人工触发客户订单同步")
+    @OperationLog(module = "订单管理", operation = "人工同步客户订单", type = OperationType.EXECUTE,
+            recordResponse = false)
     public ApiResult<OrderSyncResult> sync() {
         return success(syncService.syncAll());
     }

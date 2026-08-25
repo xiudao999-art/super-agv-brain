@@ -1,5 +1,6 @@
-package com.kunling.scheduling.app.file;
+package com.kunling.scheduling.app.service;
 
+import com.kunling.scheduling.app.domain.ImageUploadResult;
 import com.kunling.scheduling.common.exception.InvalidRequestException;
 import com.kunling.scheduling.common.exception.ServiceUnavailableException;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
 
+/** 校验并存储实验室地图图片。 */
 @Service
 public class ImageStorageService {
 

@@ -5,6 +5,8 @@ import com.kunling.scheduling.agvflow.domain.dto.LabConfigVersionResult;
 import com.kunling.scheduling.agvflow.domain.dto.LabSummary;
 import com.kunling.scheduling.agvflow.domain.dto.UpdateLabRequest;
 import com.kunling.scheduling.agvflow.service.LabConfigApplicationService;
+import com.kunling.scheduling.common.audit.OperationLog;
+import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +42,8 @@ public class LabController extends BaseController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "初始化唯一实验室及首个配置草稿")
+    @OperationLog(module = "实验室配置", operation = "初始化实验室", type = OperationType.CREATE,
+            recordResponse = false)
     public ApiResult<LabConfigVersionResult> initialize(
             @Valid @RequestBody InitializeLabRequest request) {
         return created(applicationService.initializeLab(request));

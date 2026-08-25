@@ -1,4 +1,4 @@
-package com.kunling.scheduling.app.hometest;
+package com.kunling.scheduling.app.domain;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;

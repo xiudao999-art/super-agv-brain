@@ -1,4 +1,4 @@
-package com.kunling.scheduling.app.file;
+package com.kunling.scheduling.app.domain;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
