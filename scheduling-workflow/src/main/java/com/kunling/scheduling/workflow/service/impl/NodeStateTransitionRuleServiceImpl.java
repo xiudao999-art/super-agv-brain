@@ -15,6 +15,7 @@ import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
 import com.kunling.scheduling.workflow.mapper.NodeStateTransitionRuleMapper;
+import com.kunling.scheduling.workflow.order.application.OrderTaskOrchestrationService;
 import com.kunling.scheduling.workflow.order.domain.CustomerOrder;
 import com.kunling.scheduling.workflow.order.domain.OrderStatus;
 import com.kunling.scheduling.workflow.order.domain.OrderTask;
@@ -59,6 +60,9 @@ public class NodeStateTransitionRuleServiceImpl
 
     @Resource
     private CustomerOrderMapper customerOrderMapper;
+
+    @Resource
+    private OrderTaskOrchestrationService orderTaskOrchestrationService;
 
 
     @Override
@@ -188,6 +192,9 @@ public class NodeStateTransitionRuleServiceImpl
                 customerOrder.setId(orderTask.getOrderId());
                 customerOrder.setStatus(OrderStatus.SUCCEEDED);
                 customerOrderMapper.updateById(customerOrder);
+            } else {
+                //有下一个任务,执行新的流程
+                orderTaskOrchestrationService.dispatchNext();
             }
 
         } else {
