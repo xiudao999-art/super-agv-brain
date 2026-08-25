@@ -11,7 +11,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("process_details")
+@TableName("flow")
 public class Flow extends BaseEntity {
     @Schema(description = "任务id")
     private Long taskId;

@@ -2,15 +2,19 @@ package com.kunling.scheduling.workflow.controller;
 
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
+import com.kunling.scheduling.workflow.dto.FlowStartRequest;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateRequests;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
+import com.kunling.scheduling.workflow.service.FlowControlService;
 import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+
+import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.List;
 
@@ -18,6 +22,8 @@ import java.util.List;
 @RequestMapping("/api/workflow-templates")
 @Tag(name = "BPMN流程模板")
 public class WorkflowTemplateController extends BaseController {
+    @Resource
+    FlowControlService flowControlService;
     private final WorkflowTemplateService service;
     public WorkflowTemplateController(WorkflowTemplateService service) { this.service = service; }
 
@@ -64,15 +70,6 @@ public class WorkflowTemplateController extends BaseController {
         return service.page(pageNum, pageSize, keyword);
     }
 
-    @GetMapping("/flows/page")
-    @Operation(summary = "分页查询流程列表，支持按流程名称或模板名称搜索")
-    public WorkflowTemplateResponses.FlowPage flowPage(
-            @RequestParam(defaultValue = "1") long pageNum,
-            @RequestParam(defaultValue = "10") long pageSize,
-            @RequestParam(required = false) String keyword) {
-        return service.flowPage(pageNum, pageSize, keyword);
-    }
-
     @GetMapping(value = "/{id}/xml", produces = MediaType.APPLICATION_XML_VALUE)
     @Operation(summary = "获取bpmn.js可重新导入的BPMN XML")
     public ApiResult<String> xml(@PathVariable Long id) {
@@ -85,6 +82,13 @@ public class WorkflowTemplateController extends BaseController {
     @Operation(summary = "删除业务模板，不删除Flowable历史")
     public ApiResult<Void> delete(@PathVariable Long id) {
         service.delete(id);
+        return success();
+    }
+
+    @PostMapping("/start")
+    @Operation(summary = "启动流程")
+    public ApiResult<Void> start(@RequestBody FlowStartRequest flowStartRequest) {
+        flowControlService.start(flowStartRequest);
         return success();
     }
 }

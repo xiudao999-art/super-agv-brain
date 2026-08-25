@@ -3,6 +3,19 @@ server:
   port: 8081
 
 kunling:
+  workflow:
+    order-sync:
+      enabled: true
+      fixed-delay-ms: 10000
+      page-size: 100
+      overlap: 1m
+      # 客户接口确定后填写；为空时定时器使用空实现，不发起HTTP请求。
+      # endpoint: https://customer.example.com/api/orders/incremental
+      # bearer-token: your-token
+      connect-timeout: 5s
+      read-timeout: 15s
+      sources:
+        - MES
   file:
     # 开发期地图图片写入 scheduling-app 模块源码资源目录。
     storage-directory: scheduling-app/src/main/resources/file
@@ -31,6 +44,11 @@ spring:
     username: sunder
     password: "123456qwertQ"
     driver-class-name: com.mysql.cj.jdbc.Driver
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    database: 0
+    timeout: 5s
   jackson:
     default-property-inclusion: non_null
     deserialization:

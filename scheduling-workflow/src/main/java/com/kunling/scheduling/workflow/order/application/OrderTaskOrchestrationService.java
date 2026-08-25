@@ -154,7 +154,7 @@ public class OrderTaskOrchestrationService {
             updateOrderRunning(task.getOrderId());
             return true;
         } catch (RuntimeException exception) {
-            markFailed(taskId, exception.getMessage());
+            markFailed(task.getId(), exception.getMessage());
             return false;
         }
     }

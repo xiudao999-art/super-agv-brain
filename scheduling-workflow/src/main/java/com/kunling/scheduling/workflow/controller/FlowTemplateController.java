@@ -3,7 +3,9 @@ package com.kunling.scheduling.workflow.controller;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import com.kunling.scheduling.workflow.dto.FlowTemplateCreateRequest;
+import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.service.FlowTemplateService;
+import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
@@ -20,6 +22,8 @@ import java.util.Map;
 public class FlowTemplateController extends BaseController {
     @Resource
     private FlowTemplateService templateService;
+    @Resource
+    private WorkflowTemplateService service;
 
     @PostMapping("/create")
     @ResponseStatus(HttpStatus.CREATED)
@@ -29,5 +33,14 @@ public class FlowTemplateController extends BaseController {
         Long template = templateService.createTemplate(request);
         response.put("id",template);
         return created(response);
+    }
+
+    @GetMapping("/flows/page")
+    @Operation(summary = "分页查询流程列表，支持按流程名称或模板名称搜索")
+    public ApiResult<WorkflowTemplateResponses.FlowPage> flowPage(
+            @RequestParam(defaultValue = "1") long pageNum,
+            @RequestParam(defaultValue = "10") long pageSize,
+            @RequestParam(required = false) String keyword) {
+        return ApiResult.success(service.flowPage(pageNum, pageSize, keyword));
     }
 }

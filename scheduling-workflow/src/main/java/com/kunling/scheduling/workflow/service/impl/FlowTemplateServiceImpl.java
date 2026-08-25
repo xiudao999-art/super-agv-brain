@@ -4,26 +4,32 @@ package com.kunling.scheduling.workflow.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import com.kunling.scheduling.workflow.dto.FlowTemplateCreateRequest;
+import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
 import com.kunling.scheduling.workflow.service.FlowTemplateService;
+import com.kunling.scheduling.workflow.service.WorkflowService;
+import com.kunling.scheduling.workflow.service.WorkflowStateService;
+import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
+import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.UUID;
 
 
-
 @Service
 @Slf4j
 public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, FlowTemplate>
         implements FlowTemplateService {
-
+    @Resource
+    private WorkflowTemplateService workflowTemplateService;
+    ;
 
     /**
      * 创建流程模板
@@ -38,8 +44,8 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
             throw new IllegalArgumentException("创建流程参数不能为空");
         }
 
-        FlowTemplate sourceTemplate = getById(request.getSourceTemplateId());
-        if (sourceTemplate == null) {
+        WorkflowTemplateResponses.Detail detail = workflowTemplateService.get(request.getSourceTemplateId());
+        if (detail == null) {
             throw new IllegalArgumentException("引用的流程模板不存在: " + request.getSourceTemplateId());
         }
 
@@ -51,7 +57,7 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
         FlowTemplate template = new FlowTemplate();
         template.setTemplateNumber(generateFlowNumber());
         template.setTemplateName(request.getTemplateName().trim());
-        template.setSourceTemplateId(sourceTemplate.getId());
+        template.setSourceTemplateId(detail.getId());
         template.setDescription(trimToNull(request.getDescription()));
         template.setApplicableScope(trimToNull(request.getApplicableScope()));
         template.setStatus(status);
