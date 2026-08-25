@@ -129,6 +129,17 @@ public class NodeStateTransitionRuleServiceImpl
             throw new IllegalArgumentException("流程节点不存在: " + nodeId);
         }
 
+        //模拟执行过程
+        try {
+            if (flowNode.getNodeCode().contains("MOVE")) {
+                Thread.sleep(120000);
+            } else {
+                Thread.sleep(30000);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
         String eventCode = dto.getEventCode().trim().toUpperCase(java.util.Locale.ROOT);
         log.info("处理节点状态回调: nodeId={}, currentState={}, eventCode={}",
                 flowNode.getId(), flowNode.getStatus(), eventCode);
@@ -137,6 +148,7 @@ public class NodeStateTransitionRuleServiceImpl
                 .eq(NodeStateTransitionRule::getEventCode, dto.getEventCode()).last("limit 1").one();
 
         List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(flowNode.getProcessInstanceId());
+
 
         if (CollectionUtils.isEmpty(activeNodes)) {
             log.warn("回传事件后未找到运行中的流程实例，processInstanceId={}", flowNode.getProcessInstanceId());
