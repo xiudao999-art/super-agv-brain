@@ -7,6 +7,7 @@ import com.kunling.scheduling.workflow.entity.Flow;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
+import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.mapper.FlowNodeMapper;
 import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
 import com.kunling.scheduling.workflow.mapper.WorkflowTemplateMapper;
@@ -24,6 +25,8 @@ import org.flowable.bpmn.converter.BpmnXMLConverter;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.GraphicInfo;
+import org.flowable.bpmn.model.StartEvent;
+import org.flowable.bpmn.model.EndEvent;
 import org.flowable.bpmn.model.SequenceFlow;
 import org.flowable.bpmn.model.SubProcess;
 import org.flowable.common.engine.impl.util.io.InputStreamSource;
@@ -114,44 +117,85 @@ public class OrderService {
     private OrderResponses.ExecutionConfig executionConfig(OrderTask task) {
         if (task == null) return null;
         FlowTemplate flowTemplate = task.getFlowTemplateId() == null ? null : flowTemplateMapper.selectById(task.getFlowTemplateId());
-//        if (flowTemplate == null && StringUtils.isNotBlank(task.getFlowNumber())) {
-//            flowTemplate = flowTemplateMapper.selectOne(Wrappers.<FlowTemplate>lambdaQuery()
-//                    .eq(FlowTemplate::getTemplateNumber, task.getFlowNumber()).last("limit 1"));
-//        }
+        if (flowTemplate == null && StringUtils.isNotBlank(task.getFlowNumber())) {
+            flowTemplate = flowTemplateMapper.selectOne(Wrappers.<FlowTemplate>lambdaQuery()
+                    .eq(FlowTemplate::getTemplateNumber, task.getFlowNumber()).last("limit 1"));
+        }
         if (flowTemplate == null){
             return null;
         }
         //查询flow表数据
-        Flow flow = flowService.getOne(new LambdaQueryWrapper<Flow>().eq(Flow::getTaskId, task.getId()));
+        Flow flow = flowService.getOne(new LambdaQueryWrapper<Flow>().eq(Flow::getTaskId, task.getId())
+                .orderByDesc(Flow::getId).last("limit 1"));
         WorkflowTemplateEntity template = flowTemplate.getSourceTemplateId() == null
                 ? null : workflowTemplateMapper.selectById(flowTemplate.getSourceTemplateId());
-        List<FlowNode> nodes = template == null ? Collections.emptyList()
+        List<FlowNode> runtimeNodes = flow == null ? Collections.emptyList()
                 : flowNodeMapper.selectList(Wrappers.<FlowNode>lambdaQuery()
                         .eq(FlowNode::getTemplateId, flow.getId()).orderByAsc(FlowNode::getSort));
-        List<OrderResponses.ActionItem> actions = nodes.stream().map(node -> {
-            int sort = node.getSort() == null ? 0 : node.getSort();
-            String resource = StringUtils.defaultIfBlank(node.getNodeCode(), actionResource(node));
-            return new OrderResponses.ActionItem(node.getId(), String.format("A%02d", sort), node.getSort(),
-                    node.getNodeName(), resource, node.getNodeName(), node.getNodeCode(),
-                    node.getStatus() == null ? null : node.getStatus().getLabel(), node.getCompletionCriteria(),
-                    node.getCompletionCriteria(),
-                    node.getFailureStrategy() == null ? null : node.getFailureStrategy().getLabel());
-        }).collect(Collectors.toList());
-        String path = nodes.stream().map(FlowNode::getNodeName).filter(StringUtils::isNotBlank)
+        List<OrderResponses.ActionItem> actions = xmlActions(template, runtimeNodes);
+        String path = actions.stream().map(OrderResponses.ActionItem::getActionName).filter(StringUtils::isNotBlank)
                 .collect(Collectors.joining(" → "));
-        String strategies = nodes.stream().map(FlowNode::getFailureStrategy).filter(Objects::nonNull)
-                .map(value -> value.getLabel()).distinct().collect(Collectors.joining("；"));
+        String strategies = actions.stream().map(OrderResponses.ActionItem::getFailureStrategy)
+                .filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining("；"));
         return new OrderResponses.ExecutionConfig(task.getFlowNumber(), flowTemplate == null ? null : flowTemplate.getTemplateName(),
                 flowTemplate == null ? task.getFlowTemplateId() : flowTemplate.getId(), template == null ? null : template.getTemplateName(),
                 path, task.getCurrentStep(), strategies, actions,
                 template == null ? null : template.getBpmnXml(), parseBpmnProcesses(template));
     }
 
+    private List<OrderResponses.ActionItem> xmlActions(WorkflowTemplateEntity template, List<FlowNode> runtimeNodes) {
+        if (template == null || StringUtils.isBlank(template.getBpmnXml())) return Collections.emptyList();
+        Map<String, FlowNode> runtimeByCode = runtimeNodes.stream()
+                .filter(node -> StringUtils.isNotBlank(node.getNodeCode()))
+                .collect(Collectors.toMap(FlowNode::getNodeCode, node -> node, (first, second) -> second));
+        BpmnModel model = parseBpmnModel(template);
+        List<FlowElement> xmlNodes = new ArrayList<>();
+        for (org.flowable.bpmn.model.Process process : model.getProcesses()) {
+            collectActionElements(process.getFlowElements(), xmlNodes);
+        }
+        List<OrderResponses.ActionItem> result = new ArrayList<>();
+        for (int i = 0; i < xmlNodes.size(); i++) {
+            FlowElement xmlNode = xmlNodes.get(i);
+            FlowNode runtime = runtimeByCode.get(xmlNode.getId());
+            int sort = i + 1;
+            String name = StringUtils.defaultIfBlank(xmlNode.getName(), xmlNode.getId());
+            String resource = runtime == null ? xmlNode.getId()
+                    : StringUtils.defaultIfBlank(runtime.getNodeCode(), actionResource(runtime));
+            result.add(new OrderResponses.ActionItem(runtime == null ? null : runtime.getId(),
+                    String.format("A%02d", sort), sort, name, resource, name, xmlNode.getId(),
+                    runtime == null || runtime.getStatus() == null
+                            ? NodeState.PENDING.getLabel() : runtime.getStatus().getLabel(),
+                    runtime == null ? null : runtime.getCompletionCriteria(),
+                    runtime == null ? null : runtime.getCompletionCriteria(),
+                    runtime == null || runtime.getFailureStrategy() == null
+                            ? null : runtime.getFailureStrategy().getLabel()));
+        }
+        return result;
+    }
+
+    private void collectActionElements(Iterable<FlowElement> elements, List<FlowElement> result) {
+        for (FlowElement element : elements) {
+            if (element instanceof SequenceFlow || element instanceof StartEvent || element instanceof EndEvent) continue;
+            result.add(element);
+            if (element instanceof SubProcess) {
+                collectActionElements(((SubProcess) element).getFlowElements(), result);
+            }
+        }
+    }
+
+    private BpmnModel parseBpmnModel(WorkflowTemplateEntity template) {
+        try {
+            ByteArrayInputStream input = new ByteArrayInputStream(template.getBpmnXml().getBytes(StandardCharsets.UTF_8));
+            return new BpmnXMLConverter().convertToBpmnModel(new InputStreamSource(input), true, true);
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("流程模板BPMN XML解析失败: " + template.getTemplateNumber(), exception);
+        }
+    }
+
     private List<OrderResponses.BpmnProcess> parseBpmnProcesses(WorkflowTemplateEntity template) {
         if (template == null || StringUtils.isBlank(template.getBpmnXml())) return Collections.emptyList();
         try {
-            ByteArrayInputStream input = new ByteArrayInputStream(template.getBpmnXml().getBytes(StandardCharsets.UTF_8));
-            BpmnModel model = new BpmnXMLConverter().convertToBpmnModel(new InputStreamSource(input), true, true);
+            BpmnModel model = parseBpmnModel(template);
             List<OrderResponses.BpmnProcess> result = new ArrayList<>();
             for (org.flowable.bpmn.model.Process process : model.getProcesses()) {
                 List<OrderResponses.BpmnNode> bpmnNodes = new ArrayList<>();
