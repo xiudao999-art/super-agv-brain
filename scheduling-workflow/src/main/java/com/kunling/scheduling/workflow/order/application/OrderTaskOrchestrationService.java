@@ -1,10 +1,14 @@
 package com.kunling.scheduling.workflow.order.application;
 
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.kunling.scheduling.workflow.dto.FlowStartRequest;
+import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.entity.Flow;
+import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
+import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
 import com.kunling.scheduling.workflow.mapper.WorkflowTemplateMapper;
 import com.kunling.scheduling.workflow.order.domain.CustomerOrder;
@@ -13,8 +17,11 @@ import com.kunling.scheduling.workflow.order.domain.OrderTask;
 import com.kunling.scheduling.workflow.order.domain.OrderTaskStatus;
 import com.kunling.scheduling.workflow.order.infrastructure.CustomerOrderMapper;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
+import com.kunling.scheduling.workflow.resp.TaskInfoResp;
 import com.kunling.scheduling.workflow.service.FlowControlService;
+import com.kunling.scheduling.workflow.service.FlowNodeService;
 import com.kunling.scheduling.workflow.service.FlowService;
+import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -22,8 +29,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.NoSuchElementException;
 
 @Service
@@ -36,6 +46,12 @@ public class OrderTaskOrchestrationService {
     private final FlowService flowService;
     private final ApplicationEventPublisher publisher;
     private final OrderSyncLockService lockService;
+    @Resource
+    private WorkflowTemplateService workflowTemplateService;
+    @Resource
+    private FlowNodeService flowNodeService;
+
+
 
     public OrderTaskOrchestrationService(CustomerOrderMapper orderMapper, OrderTaskMapper taskMapper,
                                          FlowTemplateMapper flowTemplateMapper,
@@ -68,7 +84,9 @@ public class OrderTaskOrchestrationService {
         lockService.unlockOrderExecution(event.getOrderId());
     }
 
-    /** 定时调度入口：先推进运行中的订单，否则按订单优先级选择一个排队订单。 */
+    /**
+     * 定时调度入口：先推进运行中的订单，否则按订单优先级选择一个排队订单。
+     */
     public boolean dispatchNext() {
         CustomerOrder running = orderMapper.selectOne(Wrappers.<CustomerOrder>lambdaQuery()
                 .eq(CustomerOrder::getStatus, OrderStatus.RUNNING)
@@ -78,7 +96,7 @@ public class OrderTaskOrchestrationService {
             long activeTasks = taskMapper.selectCount(Wrappers.<OrderTask>lambdaQuery()
                     .eq(OrderTask::getOrderId, running.getId())
                     .in(OrderTask::getStatus, OrderTaskStatus.RUNNING));
-            if (activeTasks > 0){
+            if (activeTasks > 0) {
                 return false;
             }
 
@@ -141,7 +159,7 @@ public class OrderTaskOrchestrationService {
             request.setTaskId(task.getId());
             request.setTemplateId(flowTemplate.getId());
             boolean started = flowControlService.start(request);
-            if (!started){
+            if (!started) {
                 throw new IllegalStateException("流程启动或首节点下发失败");
             }
             task.setFlowTemplateId(flowTemplate.getId());
@@ -244,5 +262,40 @@ public class OrderTaskOrchestrationService {
             throw new NoSuchElementException("订单任务不存在: " + id);
         }
         return task;
+    }
+
+    public TaskInfoResp taskInfo() {
+        TaskInfoResp resp = new TaskInfoResp();
+        OrderTask orderTask = taskMapper.selectOne(Wrappers.<OrderTask>lambdaQuery().eq(OrderTask::getStatus, OrderTaskStatus.RUNNING).last("limt 1"));
+        CustomerOrder order = orderMapper.selectById(orderTask.getOrderId());
+        FlowTemplate flowTemplate = flowTemplateMapper.selectById(orderTask.getFlowTemplateId());
+
+        WorkflowTemplateEntity template = workflowTemplateMapper.selectById(flowTemplate.getSourceTemplateId());
+        WorkflowTemplateResponses.Page page = workflowTemplateService.page(1, 10, template.getTemplateNumber());
+        resp.setSystemOrderNo(order.getSystemOrderNo());
+        resp.setUpstreamOrderNo(order.getUpstreamOrderNo());
+        resp.setFlowName(flowTemplate.getTemplateName());
+        resp.setFlowTemplateName(template.getTemplateName());
+        List<String> actionSequence = page.getRecords().get(0).getActionSequence();
+        List<FlowNode> list = flowNodeService.lambdaQuery().eq(FlowNode::getTemplateId, template.getId()).orderByAsc(FlowNode::getSort).list();
+        List<TaskInfoResp.TaskAction> actions = new ArrayList<>();
+        for (int i = 0; i < actionSequence.size(); i++) {
+            String actionName = actionSequence.get(i);
+            TaskInfoResp.TaskAction action = new TaskInfoResp.TaskAction();
+            action.setActionName(actionName);
+            action.setSort(i + 1);
+            action.setResource("");
+            if (i < list.size()) {
+                FlowNode flowNode = list.get(i);
+                action.setStatus(flowNode.getStatus().getLabel());
+                if (flowNode.getStatus() == NodeState.SUCCEEDED) {
+                    action.setCompleteProve("设备状态、扫码或传感器");
+                }
+            }
+            actions.add(action);
+        }
+        resp.setTaskActionList(actions);
+
+        return resp;
     }
 }

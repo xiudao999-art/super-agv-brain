@@ -8,6 +8,7 @@ import com.kunling.scheduling.workflow.order.application.OrderSyncResult;
 import com.kunling.scheduling.workflow.order.application.OrderSyncService;
 import com.kunling.scheduling.workflow.order.application.OrderTaskOrchestrationService;
 import com.kunling.scheduling.workflow.order.domain.OrderStatus;
+import com.kunling.scheduling.workflow.resp.TaskInfoResp;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +24,7 @@ public class OrderController extends BaseController {
     private final OrderQueryService queryService;
     private final OrderSyncService syncService;
     private final OrderTaskOrchestrationService orchestrationService;
+
 
     public OrderController(OrderQueryService queryService, OrderSyncService syncService,
                            OrderTaskOrchestrationService orchestrationService) {
@@ -74,8 +76,14 @@ public class OrderController extends BaseController {
 
     @GetMapping("/taskInfo")
     @Operation(summary = "查看当前进行任务信息")
-    public ApiResult<Object> taskInfo() {
-
-        return null;
+    public ApiResult<TaskInfoResp> taskInfo() {
+        return ApiResult.success(orchestrationService.taskInfo());
     }
+
+
+ /*   @GetMapping("/taskInfo")
+    @Operation(summary = "查看当前订单下的流程任务信息")
+    public ApiResult<TaskInfoResp> taskInfo() {
+        return ApiResult.success(orchestrationService.taskInfo());
+    }*/
 }
