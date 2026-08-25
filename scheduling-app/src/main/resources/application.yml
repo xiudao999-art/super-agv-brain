@@ -25,6 +25,10 @@ kunling:
       enabled: true
       bind-address: 0.0.0.0
       port: 8080
+      # 演示环境的工作流会同步模拟最长 120 秒延时；临时放宽两端心跳判定窗口。
+      # 客户端使用服务端下发的心跳周期，连续 3 个周期无 PONG 才会重连。
+      heartbeat-interval-ms: 60000
+      lease-ms: 240000
 
 spring:
   application:
