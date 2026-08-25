@@ -17,6 +17,9 @@ public class FlowNode extends BaseEntity {
     @Schema(description = "模版id")
     private Long templateId;
 
+    @Schema(description = "processId")
+    private String processInstanceId;
+
     @Schema(description = "节点名称")
     private String nodeName;
 

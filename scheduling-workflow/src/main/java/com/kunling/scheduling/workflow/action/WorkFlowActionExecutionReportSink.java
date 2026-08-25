@@ -8,6 +8,7 @@ import com.kunling.scheduling.workflow.dto.StatusChangedDto;
 import com.kunling.scheduling.workflow.service.NodeStateTransitionRuleService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,10 +19,11 @@ public class WorkFlowActionExecutionReportSink implements ActionExecutionReportS
 
     private static final Logger log = LoggerFactory.getLogger(WorkFlowActionExecutionReportSink.class);
 
-    private final NodeStateTransitionRuleService transitionRuleService;
+    private final ObjectProvider<NodeStateTransitionRuleService> transitionRuleServiceProvider;
 
-    public WorkFlowActionExecutionReportSink(NodeStateTransitionRuleService transitionRuleService) {
-        this.transitionRuleService = transitionRuleService;
+    public WorkFlowActionExecutionReportSink(
+            ObjectProvider<NodeStateTransitionRuleService> transitionRuleServiceProvider) {
+        this.transitionRuleServiceProvider = transitionRuleServiceProvider;
     }
 
     @Override
@@ -49,6 +51,6 @@ public class WorkFlowActionExecutionReportSink implements ActionExecutionReportS
         }
         transition.setWorkflowInstanceId(report.workflowInstanceId());
         transition.setWorkflowNodeInstanceId(report.workflowNodeInstanceId());
-       // transitionRuleService.statusChanged(transition);
+        transitionRuleServiceProvider.getObject().statusChanged(transition);
     }
 }

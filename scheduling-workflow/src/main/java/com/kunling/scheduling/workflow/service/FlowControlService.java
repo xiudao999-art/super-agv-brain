@@ -1,6 +1,8 @@
 package com.kunling.scheduling.workflow.service;
 
 import com.kunling.scheduling.workflow.dto.FlowStartRequest;
+import com.kunling.scheduling.workflow.dto.WorkflowResponses;
+import com.kunling.scheduling.workflow.enums.StartTypeEnum;
 
 public interface FlowControlService {
     boolean start(FlowStartRequest request);
@@ -9,4 +11,9 @@ public interface FlowControlService {
     boolean clear(String processInstanceId, String reason);
 
     boolean processCallback(FlowStartRequest request);
+
+     boolean dispatchDownstreamAction(String processInstanceId,
+                                            Long flowId,
+                                            WorkflowResponses.ActiveNode activeNode,
+                                            StartTypeEnum startType) ;
 }
