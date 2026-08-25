@@ -46,9 +46,9 @@ public class OrderController extends BaseController {
         return success(orderService.page(pageNum, pageSize, status, source, keyword));
     }
 
-    @GetMapping("/orders/{id}")
+    @GetMapping("/detail")
     @Operation(summary = "查询订单详情")
-    public ApiResult<OrderResponses.Detail> detail(@Parameter Long id) {
+    public ApiResult<OrderResponses.Detail> detail(@RequestParam Long id) {
         return success(orderService.detail(id));
     }
 
