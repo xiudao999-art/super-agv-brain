@@ -37,6 +37,14 @@ public class WorkflowTemplateController extends BaseController {
         return success(service.deploy(id));
     }
 
+    @PostMapping("/{id}/publish")
+    @Operation(summary = "发布流程模板；已发布模板再次发布时生成Flowable新版本")
+    @OperationLog(module = "流程模板", operation = "发布流程模板新版本", type = OperationType.PUBLISH,
+            recordResponse = false)
+    public ApiResult<WorkflowResponses.Definition> publish(@PathVariable Long id) {
+        return success(service.deploy(id));
+    }
+
 
     @PostMapping
     @Operation(summary = "保存bpmn.js流程模板")
@@ -45,11 +53,10 @@ public class WorkflowTemplateController extends BaseController {
         return success(service.create(request));
     }
 
-    @PutMapping("/{id}")
-    @Operation(summary = "更新bpmn.js流程模板")
-    public ApiResult<WorkflowTemplateResponses.Detail> update(
-            @PathVariable Long id, @Valid @RequestBody WorkflowTemplateRequests.Save request) {
-        return success(service.update(id, request));
+    @PostMapping("/update")
+    @Operation(summary = "保存流程模板编辑稿；已发布模板编辑后转为草稿")
+    public ApiResult<WorkflowTemplateResponses.Detail> update(@Valid @RequestBody WorkflowTemplateRequests.Save request) {
+        return success(service.update(request));
     }
 
     @GetMapping("/{id}")

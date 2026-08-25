@@ -1,7 +1,9 @@
 package com.kunling.scheduling.workflow.order.application;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kunling.scheduling.workflow.entity.Flow;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
@@ -16,9 +18,20 @@ import com.kunling.scheduling.workflow.order.domain.OrderTaskStatus;
 import com.kunling.scheduling.workflow.order.infrastructure.CustomerOrderMapper;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskCount;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
+import com.kunling.scheduling.workflow.service.FlowService;
 import org.apache.commons.lang3.StringUtils;
+import org.flowable.bpmn.converter.BpmnXMLConverter;
+import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.FlowElement;
+import org.flowable.bpmn.model.GraphicInfo;
+import org.flowable.bpmn.model.SequenceFlow;
+import org.flowable.bpmn.model.SubProcess;
+import org.flowable.common.engine.impl.util.io.InputStreamSource;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -34,15 +47,17 @@ public class OrderService {
     private final FlowTemplateMapper flowTemplateMapper;
     private final WorkflowTemplateMapper workflowTemplateMapper;
     private final FlowNodeMapper flowNodeMapper;
+    private final FlowService flowService;
 
     public OrderService(CustomerOrderMapper orderMapper, OrderTaskMapper taskMapper,
                         FlowTemplateMapper flowTemplateMapper, WorkflowTemplateMapper workflowTemplateMapper,
-                        FlowNodeMapper flowNodeMapper) {
+                        FlowNodeMapper flowNodeMapper, FlowService flowService) {
         this.orderMapper = orderMapper;
         this.taskMapper = taskMapper;
         this.flowTemplateMapper = flowTemplateMapper;
         this.workflowTemplateMapper = workflowTemplateMapper;
         this.flowNodeMapper = flowNodeMapper;
+        this.flowService = flowService;
     }
 
     public OrderResponses.Page page(long pageNum, long pageSize, OrderStatus status, String source, String keyword) {
@@ -98,13 +113,18 @@ public class OrderService {
 
     private OrderResponses.ExecutionConfig executionConfig(OrderTask task) {
         if (task == null) return null;
-        FlowTemplate flow = task.getFlowTemplateId() == null ? null : flowTemplateMapper.selectById(task.getFlowTemplateId());
-        if (flow == null && StringUtils.isNotBlank(task.getFlowNumber())) {
-            flow = flowTemplateMapper.selectOne(Wrappers.<FlowTemplate>lambdaQuery()
-                    .eq(FlowTemplate::getTemplateNumber, task.getFlowNumber()).last("limit 1"));
+        FlowTemplate flowTemplate = task.getFlowTemplateId() == null ? null : flowTemplateMapper.selectById(task.getFlowTemplateId());
+//        if (flowTemplate == null && StringUtils.isNotBlank(task.getFlowNumber())) {
+//            flowTemplate = flowTemplateMapper.selectOne(Wrappers.<FlowTemplate>lambdaQuery()
+//                    .eq(FlowTemplate::getTemplateNumber, task.getFlowNumber()).last("limit 1"));
+//        }
+        if (flowTemplate == null){
+            return null;
         }
-        WorkflowTemplateEntity template = flow == null || flow.getSourceTemplateId() == null
-                ? null : workflowTemplateMapper.selectById(flow.getSourceTemplateId());
+        //查询flow表数据
+        Flow flow = flowService.getOne(new LambdaQueryWrapper<Flow>().eq(Flow::getTaskId, task.getId()));
+        WorkflowTemplateEntity template = flowTemplate.getSourceTemplateId() == null
+                ? null : workflowTemplateMapper.selectById(flowTemplate.getSourceTemplateId());
         List<FlowNode> nodes = template == null ? Collections.emptyList()
                 : flowNodeMapper.selectList(Wrappers.<FlowNode>lambdaQuery()
                         .eq(FlowNode::getTemplateId, flow.getId()).orderByAsc(FlowNode::getSort));
@@ -121,9 +141,49 @@ public class OrderService {
                 .collect(Collectors.joining(" → "));
         String strategies = nodes.stream().map(FlowNode::getFailureStrategy).filter(Objects::nonNull)
                 .map(value -> value.getLabel()).distinct().collect(Collectors.joining("；"));
-        return new OrderResponses.ExecutionConfig(task.getFlowNumber(), flow == null ? null : flow.getTemplateName(),
-                flow == null ? task.getFlowTemplateId() : flow.getId(), template == null ? null : template.getTemplateName(),
-                path, task.getCurrentStep(), strategies, actions);
+        return new OrderResponses.ExecutionConfig(task.getFlowNumber(), flowTemplate == null ? null : flowTemplate.getTemplateName(),
+                flowTemplate == null ? task.getFlowTemplateId() : flowTemplate.getId(), template == null ? null : template.getTemplateName(),
+                path, task.getCurrentStep(), strategies, actions,
+                template == null ? null : template.getBpmnXml(), parseBpmnProcesses(template));
+    }
+
+    private List<OrderResponses.BpmnProcess> parseBpmnProcesses(WorkflowTemplateEntity template) {
+        if (template == null || StringUtils.isBlank(template.getBpmnXml())) return Collections.emptyList();
+        try {
+            ByteArrayInputStream input = new ByteArrayInputStream(template.getBpmnXml().getBytes(StandardCharsets.UTF_8));
+            BpmnModel model = new BpmnXMLConverter().convertToBpmnModel(new InputStreamSource(input), true, true);
+            List<OrderResponses.BpmnProcess> result = new ArrayList<>();
+            for (org.flowable.bpmn.model.Process process : model.getProcesses()) {
+                List<OrderResponses.BpmnNode> bpmnNodes = new ArrayList<>();
+                List<OrderResponses.BpmnFlow> bpmnFlows = new ArrayList<>();
+                collectFlowElements(model, process.getFlowElements(), null, bpmnNodes, bpmnFlows);
+                result.add(new OrderResponses.BpmnProcess(process.getId(), process.getName(), bpmnNodes, bpmnFlows));
+            }
+            return result;
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("流程模板BPMN XML解析失败: " + template.getTemplateNumber(), exception);
+        }
+    }
+
+    private void collectFlowElements(BpmnModel model, Iterable<FlowElement> elements, String parentSubProcessId,
+                                     List<OrderResponses.BpmnNode> nodes, List<OrderResponses.BpmnFlow> flows) {
+        for (FlowElement element : elements) {
+            if (element instanceof SequenceFlow) {
+                SequenceFlow flow = (SequenceFlow) element;
+                flows.add(new OrderResponses.BpmnFlow(flow.getId(), flow.getName(), flow.getSourceRef(),
+                        flow.getTargetRef(), flow.getConditionExpression(), parentSubProcessId));
+            } else {
+                GraphicInfo graphic = model.getGraphicInfo(element.getId());
+                nodes.add(new OrderResponses.BpmnNode(element.getId(), element.getName(),
+                        element.getClass().getSimpleName(), parentSubProcessId,
+                        graphic == null ? null : graphic.getX(), graphic == null ? null : graphic.getY(),
+                        graphic == null ? null : graphic.getWidth(), graphic == null ? null : graphic.getHeight()));
+                if (element instanceof SubProcess) {
+                    SubProcess subProcess = (SubProcess) element;
+                    collectFlowElements(model, subProcess.getFlowElements(), subProcess.getId(), nodes, flows);
+                }
+            }
+        }
     }
 
     private String actionResource(FlowNode node) {

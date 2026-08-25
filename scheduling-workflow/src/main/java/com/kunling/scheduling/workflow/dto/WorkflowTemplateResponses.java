@@ -21,6 +21,8 @@ public final class WorkflowTemplateResponses {
         private String deploymentId;
         private String processDefinitionId;
         private Integer deployedVersion;
+        private String status;
+        private String statusDescription;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
     }

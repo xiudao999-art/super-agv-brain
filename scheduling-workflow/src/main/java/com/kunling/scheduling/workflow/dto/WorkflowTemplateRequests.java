@@ -13,5 +13,6 @@ public final class WorkflowTemplateRequests {
         private String applicableObject;
         @NotBlank private String bpmnXml;
         private JsonNode editorData;
+        private Long id;
     }
 }
