@@ -1,0 +1,27 @@
+# 测试环境配置。参数可由环境变量覆盖，避免测试连接开发数据库。
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:mysql://127.0.0.1:3306/kunling_test?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${TEST_DB_USERNAME:root}
+    password: ${TEST_DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  redis:
+    host: ${TEST_REDIS_HOST:127.0.0.1}
+    port: ${TEST_REDIS_PORT:6379}
+    password: ${TEST_REDIS_PASSWORD:}
+    database: ${TEST_REDIS_DATABASE:1}
+    timeout: 5s
+
+kunling:
+  workflow:
+    order-sync:
+      # 自动化测试默认不主动拉取外部订单。
+      enabled: false
+
+flowable:
+  database-schema-update: true
+  async-executor-activate: false
+
+logging:
+  level:
+    com.kunling.scheduling: info
