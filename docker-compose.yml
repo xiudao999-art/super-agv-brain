@@ -1,0 +1,81 @@
+name: kunling-scheduling
+
+services:
+  redis:
+    image: redis:7.4.9-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - kunling-network
+
+  backend:
+    image: kunling-scheduling-backend:1.0.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms512m -Xmx1024m -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai}
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      KUNLING_FILE_STORAGE_DIRECTORY: /app/data/files
+      KUNLING_ACTION_ROBOT_BRIDGE_BIND_ADDRESS: 0.0.0.0
+      KUNLING_ACTION_ROBOT_BRIDGE_PORT: 8080
+    expose:
+      - "8081"
+    # 机器人 Bridge 使用原始 TCP 协议，不能与 40023 上的 HTTP/Nginx 共用端口。
+    ports:
+      - "${ROBOT_BRIDGE_HOST_PORT:-8080}:8080"
+    volumes:
+      - backend-files:/app/data/files
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - kunling-network
+
+  frontend:
+    image: nginx:1.30.4-alpine
+    restart: unless-stopped
+    ports:
+      - "40023:80"
+    volumes:
+      # 纯 HTML 前端无需打包，直接挂载包含 robot-dispatch-dashboard.html 的源码目录。
+      - type: bind
+        source: ${FRONTEND_HTML_PATH:?请在 .env 中配置 FRONTEND_HTML_PATH}
+        target: /usr/share/nginx/html
+        read_only: true
+      - type: bind
+        source: ./deploy/nginx/default.conf
+        target: /etc/nginx/conf.d/default.conf
+        read_only: true
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kunling-network
+
+volumes:
+  redis-data:
+  backend-files:
+
+networks:
+  kunling-network:
+    driver: bridge
