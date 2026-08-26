@@ -56,6 +56,38 @@ public final class OrderResponses {
         private String pointConfiguration;
         private String failureStrategy;
         private List<ActionItem> actions;
+        private String bpmnXml;
+        private List<BpmnProcess> bpmnProcesses;
+    }
+
+    @Data @AllArgsConstructor
+    public static class BpmnProcess {
+        private String processId;
+        private String processName;
+        private List<BpmnNode> nodes;
+        private List<BpmnFlow> flows;
+    }
+
+    @Data @AllArgsConstructor
+    public static class BpmnNode {
+        private String id;
+        private String name;
+        private String type;
+        private String parentSubProcessId;
+        private Double x;
+        private Double y;
+        private Double width;
+        private Double height;
+    }
+
+    @Data @AllArgsConstructor
+    public static class BpmnFlow {
+        private String id;
+        private String name;
+        private String sourceRef;
+        private String targetRef;
+        private String conditionExpression;
+        private String parentSubProcessId;
     }
 
     @Data @AllArgsConstructor

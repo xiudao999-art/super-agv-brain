@@ -19,8 +19,8 @@ public class RobotBridgeProperties {
     private boolean enabled;
     private String bindAddress;
     private int port;
-    private final int leaseMs;
-    private final int heartbeatIntervalMs;
+    private int leaseMs;
+    private int heartbeatIntervalMs;
     private final int maximumMessageBytes;
     private final List<String> acceptedActionTypes;
 
@@ -75,6 +75,37 @@ public class RobotBridgeProperties {
 
     public int heartbeatIntervalMs() {
         return heartbeatIntervalMs;
+    }
+
+    public int getLeaseMs() {
+        return leaseMs;
+    }
+
+    /**
+     * 配置服务端判定机器人会话失活前允许的最长静默时间。
+     *
+     * <p>该值可按部署环境覆盖；正式环境不应依赖增大租约掩盖业务线程阻塞。</p>
+     */
+    public void setLeaseMs(int leaseMs) {
+        if (leaseMs <= 0) {
+            throw new IllegalArgumentException("robot-bridge.lease-ms 必须大于 0");
+        }
+        this.leaseMs = leaseMs;
+    }
+
+    public int getHeartbeatIntervalMs() {
+        return heartbeatIntervalMs;
+    }
+
+    /**
+     * 配置通过 REGISTER_ACK 下发给客户端的心跳周期。
+     * 客户端连续三个周期未收到 PONG 时会判定会话失效。
+     */
+    public void setHeartbeatIntervalMs(int heartbeatIntervalMs) {
+        if (heartbeatIntervalMs <= 0) {
+            throw new IllegalArgumentException("robot-bridge.heartbeat-interval-ms 必须大于 0");
+        }
+        this.heartbeatIntervalMs = heartbeatIntervalMs;
     }
 
     public int maximumMessageBytes() {

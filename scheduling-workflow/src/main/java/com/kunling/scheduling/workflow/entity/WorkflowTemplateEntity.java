@@ -19,6 +19,7 @@ public class WorkflowTemplateEntity {
     private String deploymentId;
     private String processDefinitionId;
     private Integer deployedVersion;
+    private String publishStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
