@@ -1,32 +1,16 @@
-# 生产环境配置。敏感信息必须通过环境变量提供，不在代码库中保存明文。
-server:
-  port: ${SERVER_PORT:8081}
-
+# 开发环境配置
 spring:
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: jdbc:mysql://121.196.164.163:3306/kunling?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: sunder
+    password: "12ewqdsafd432fdsa"
     driver-class-name: com.mysql.cj.jdbc.Driver
   redis:
-    host: ${REDIS_HOST}
-    port: ${REDIS_PORT:6379}
-    password: ${REDIS_PASSWORD:}
-    database: ${REDIS_DATABASE:0}
-    timeout: ${REDIS_TIMEOUT:5s}
-
-kunling:
-  workflow:
-    order-sync:
-      enabled: ${ORDER_SYNC_ENABLED:true}
-      endpoint: ${ORDER_SYNC_ENDPOINT:}
-      bearer-token: ${ORDER_SYNC_BEARER_TOKEN:}
-
-flowable:
-  database-schema-update: false
-  async-executor-activate: true
+    host: 127.0.0.1
+    port: 6379
+    database: 0
+    timeout: 5s
 
 logging:
   level:
-    root: info
-    com.kunling.scheduling: info
+    com.kunling.scheduling: debug
