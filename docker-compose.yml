@@ -52,9 +52,9 @@ services:
     ports:
       - "40023:80"
     volumes:
-      # Compose 文件不固化前端路径；请在 .env 的 FRONTEND_DIST_PATH 中填写 Vue dist 绝对路径。
+      # 纯 HTML 前端无需打包，直接挂载包含 robot-dispatch-dashboard.html 的源码目录。
       - type: bind
-        source: ${FRONTEND_DIST_PATH}
+        source: ${FRONTEND_HTML_PATH:?请在 .env 中配置 FRONTEND_HTML_PATH}
         target: /usr/share/nginx/html
         read_only: true
       - type: bind
