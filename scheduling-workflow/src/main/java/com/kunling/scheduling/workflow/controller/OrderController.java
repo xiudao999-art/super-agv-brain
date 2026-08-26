@@ -5,6 +5,7 @@ import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import com.kunling.scheduling.workflow.order.api.OrderResponses;
+import com.kunling.scheduling.workflow.order.api.OrderRequests;
 import com.kunling.scheduling.workflow.order.application.OrderService;
 import com.kunling.scheduling.workflow.order.application.OrderSyncResult;
 import com.kunling.scheduling.workflow.order.application.OrderSyncService;
@@ -15,6 +16,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
 
 import java.util.Collections;
 import java.util.List;
@@ -34,6 +37,14 @@ public class OrderController extends BaseController {
         this.orderService = orderService;
         this.syncService = syncService;
         this.orchestrationService = orchestrationService;
+    }
+
+    @PostMapping("/orders")
+    @Operation(summary = "手工创建订单及其任务")
+    @OperationLog(module = "订单管理", operation = "创建订单", type = OperationType.CREATE,
+            recordResponse = false)
+    public ApiResult<OrderResponses.Detail> create(@Valid @RequestBody OrderRequests.Create request) {
+        return created(orderService.create(request));
     }
 
     @GetMapping("/orders")

@@ -2,11 +2,12 @@ server:
   # HTTP 与机器人 TCP 必须分端口。
   port: 8081
 
+
 kunling:
   workflow:
     order-sync:
       enabled: true
-      fixed-delay-ms: 10000
+      fixed-delay-ms: 60000
       page-size: 100
       overlap: 1m
       # 客户接口确定后填写；为空时定时器使用空实现，不发起HTTP请求。
@@ -34,8 +35,8 @@ spring:
   application:
     name: kunling-scheduling
   profiles:
-    # 本地直接启动默认使用开发环境；部署时通过SPRING_PROFILES_ACTIVE覆盖。
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    # 当前固定使用开发环境；仍可通过--spring.profiles.active=prod覆盖。
+    active: dev
   web:
     resources:
       cache:
