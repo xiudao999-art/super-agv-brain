@@ -3,6 +3,7 @@ package com.kunling.scheduling.workflow.order.application;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.entity.Flow;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
@@ -19,6 +20,7 @@ import com.kunling.scheduling.workflow.order.infrastructure.CustomerOrderMapper;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskCount;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import com.kunling.scheduling.workflow.service.FlowService;
+import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.bpmn.converter.BpmnXMLConverter;
 import org.flowable.bpmn.model.BpmnModel;
@@ -30,6 +32,7 @@ import org.flowable.common.engine.impl.util.io.InputStreamSource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.annotation.RequestScope;
 
+import javax.annotation.Resource;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -119,20 +122,13 @@ public class OrderService {
 //            flowTemplate = flowTemplateMapper.selectOne(Wrappers.<FlowTemplate>lambdaQuery()
 //                    .eq(FlowTemplate::getTemplateNumber, task.getFlowNumber()).last("limit 1"));
 //        }
-        if (flowTemplate == null){
+        if (flowTemplate == null) {
             return null;
         }
         //查询flow表数据
         Flow flow = flowService.getOne(new LambdaQueryWrapper<Flow>().eq(Flow::getTaskId, task.getId()));
         WorkflowTemplateEntity template = flowTemplate.getSourceTemplateId() == null
                 ? null : workflowTemplateMapper.selectById(flowTemplate.getSourceTemplateId());
-
-        WorkflowTemplateResponses.Page page = workflowTemplateService.page(1, 10, template.getTemplateNumber());
-        List<String> actionSequence = page.getRecords().get(0).getActionSequence();
-        List<String> newList = actionSequence.stream()
-                .filter(s -> !s.equals("开始") && !s.equals("结束"))
-                .collect(Collectors.toList());
-
         List<FlowNode> nodes = template == null ? Collections.emptyList()
                 : flowNodeMapper.selectList(Wrappers.<FlowNode>lambdaQuery()
                 .eq(FlowNode::getTemplateId, flow.getId()).orderByAsc(FlowNode::getSort));
