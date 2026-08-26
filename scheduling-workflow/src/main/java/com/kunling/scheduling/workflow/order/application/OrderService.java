@@ -13,6 +13,9 @@ import com.kunling.scheduling.workflow.mapper.FlowNodeMapper;
 import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
 import com.kunling.scheduling.workflow.mapper.WorkflowTemplateMapper;
 import com.kunling.scheduling.workflow.order.api.OrderResponses;
+import com.kunling.scheduling.workflow.order.api.OrderRequests;
+import com.kunling.scheduling.workflow.order.client.PulledOrder;
+import com.kunling.scheduling.workflow.order.client.PulledTask;
 import com.kunling.scheduling.workflow.order.domain.CustomerOrder;
 import com.kunling.scheduling.workflow.order.domain.OrderStatus;
 import com.kunling.scheduling.workflow.order.domain.OrderTask;
@@ -39,6 +42,7 @@ import org.springframework.web.context.annotation.RequestScope;
 import javax.annotation.Resource;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -56,16 +60,48 @@ public class OrderService {
     private final WorkflowTemplateMapper workflowTemplateMapper;
     private final FlowNodeMapper flowNodeMapper;
     private final ObjectMapper objectMapper;
+    private final OrderPersistenceService orderPersistenceService;
 
     public OrderService(CustomerOrderMapper orderMapper, OrderTaskMapper taskMapper,
                         FlowTemplateMapper flowTemplateMapper, WorkflowTemplateMapper workflowTemplateMapper,
-                        FlowNodeMapper flowNodeMapper, ObjectMapper objectMapper) {
+                        FlowNodeMapper flowNodeMapper, ObjectMapper objectMapper,
+                        OrderPersistenceService orderPersistenceService) {
         this.orderMapper = orderMapper;
         this.taskMapper = taskMapper;
         this.flowTemplateMapper = flowTemplateMapper;
         this.workflowTemplateMapper = workflowTemplateMapper;
         this.flowNodeMapper = flowNodeMapper;
         this.objectMapper = objectMapper;
+        this.orderPersistenceService = orderPersistenceService;
+    }
+
+    public OrderResponses.Detail create(OrderRequests.Create request) {
+        PulledOrder pulled = new PulledOrder();
+        pulled.setSource(StringUtils.trim(request.getSource()));
+        pulled.setUpstreamOrderNo(StringUtils.trim(request.getUpstreamOrderNo()));
+        pulled.setPriority(request.getPriority());
+        pulled.setIssuedAt(request.getIssuedAt() == null ? LocalDateTime.now() : request.getIssuedAt());
+        pulled.setUpstreamUpdatedAt(LocalDateTime.now());
+
+        List<PulledTask> tasks = new ArrayList<>();
+        for (OrderRequests.Task item : request.getTasks()) {
+            FlowTemplate template = flowTemplateMapper.selectById(item.getFlowTemplateId());
+            if (template == null || !Integer.valueOf(1).equals(template.getStatus())) {
+                throw new IllegalArgumentException("流程模板不存在或未启用: " + item.getFlowTemplateId());
+            }
+            PulledTask task = new PulledTask();
+            task.setTaskSeq(item.getTaskSeq());
+            task.setTaskName(StringUtils.trim(item.getTaskName()));
+            task.setFlowTemplateId(template.getId());
+            task.setFlowNumber(template.getTemplateNumber());
+            tasks.add(task);
+        }
+        pulled.setTasks(tasks);
+        OrderPersistResult result = orderPersistenceService.persist(pulled.getSource(), pulled);
+        if (!result.isCreated()) {
+            throw new IllegalArgumentException("订单已存在: " + pulled.getSource() + "/" + pulled.getUpstreamOrderNo());
+        }
+        return detail(result.getOrderId());
     }
 
     public OrderResponses.Page page(long pageNum, long pageSize, OrderStatus status, String source, String keyword) {

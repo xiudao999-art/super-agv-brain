@@ -87,12 +87,12 @@ public class OrderTaskOrchestrationService {
      */
     public boolean dispatchNext() {
         CustomerOrder running = orderMapper.selectOne(Wrappers.<CustomerOrder>lambdaQuery()
-                .eq(CustomerOrder::getStatus, OrderStatus.RUNNING)
+                .in(CustomerOrder::getStatus, OrderStatus.RUNNING, OrderStatus.FAILED)
                 .last("limit 1"));
         if (running != null) {
             long activeTasks = taskMapper.selectCount(Wrappers.<OrderTask>lambdaQuery()
                     .eq(OrderTask::getOrderId, running.getId())
-                    .in(OrderTask::getStatus, OrderTaskStatus.RUNNING));
+                    .in(OrderTask::getStatus, OrderTaskStatus.RUNNING, OrderTaskStatus.FAILED));
             if (activeTasks > 0) {
                 return false;
             }

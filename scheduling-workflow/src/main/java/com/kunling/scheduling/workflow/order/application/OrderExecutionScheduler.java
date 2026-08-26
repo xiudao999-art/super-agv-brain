@@ -13,7 +13,7 @@ public class OrderExecutionScheduler {
         this.orchestrationService = orchestrationService;
     }
 
-    @Scheduled(fixedDelayString = "${kunling.workflow.order-execution.fixed-delay-ms:5000}")
+    @Scheduled(fixedDelayString = "${kunling.workflow.order-execution.fixed-delay-ms:120000}")
     public void dispatch() {
         try {
             orchestrationService.dispatchNext();
