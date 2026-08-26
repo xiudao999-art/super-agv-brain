@@ -137,8 +137,7 @@ public class OrderService {
                 : flowNodeMapper.selectList(Wrappers.<FlowNode>lambdaQuery()
                         .eq(FlowNode::getTemplateId, flow.getId()).orderByAsc(FlowNode::getSort));
         List<OrderResponses.ActionItem> actions = xmlActions(template, runtimeNodes);
-        String path = actions.stream().map(OrderResponses.ActionItem::getActionName).filter(StringUtils::isNotBlank)
-                .collect(Collectors.joining(" → "));
+        String path = xmlCompletePath(template);
         String strategies = actions.stream().map(OrderResponses.ActionItem::getFailureStrategy)
                 .filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining("；"));
         return new OrderResponses.ExecutionConfig(task.getFlowNumber(), flowTemplate == null ? null : flowTemplate.getTemplateName(),
@@ -175,6 +174,41 @@ public class OrderService {
                             ? null : runtime.getFailureStrategy().getLabel()));
         }
         return result;
+    }
+
+    /** 完整路径用于页面展示，包含开始和结束；动作列表仍排除开始和结束。 */
+    private String xmlCompletePath(WorkflowTemplateEntity template) {
+        if (template == null || StringUtils.isBlank(template.getBpmnXml())) return null;
+        BpmnModel model = parseBpmnModel(template);
+        List<String> startNames = new ArrayList<>();
+        List<String> actionNames = new ArrayList<>();
+        List<String> endNames = new ArrayList<>();
+        for (org.flowable.bpmn.model.Process process : model.getProcesses()) {
+            collectPathNames(process.getFlowElements(), startNames, actionNames, endNames);
+        }
+        List<String> names = new ArrayList<>(startNames.size() + actionNames.size() + endNames.size());
+        names.addAll(startNames);
+        names.addAll(actionNames);
+        names.addAll(endNames);
+        return names.stream().filter(StringUtils::isNotBlank).collect(Collectors.joining(" → "));
+    }
+
+    private void collectPathNames(Iterable<FlowElement> elements, List<String> startNames,
+                                  List<String> actionNames, List<String> endNames) {
+        for (FlowElement element : elements) {
+            if (element instanceof SequenceFlow) continue;
+            String name = StringUtils.defaultIfBlank(element.getName(), element.getId());
+            if (element instanceof StartEvent) {
+                startNames.add(name);
+            } else if (element instanceof EndEvent) {
+                endNames.add(name);
+            } else {
+                actionNames.add(name);
+            }
+            if (element instanceof SubProcess) {
+                collectPathNames(((SubProcess) element).getFlowElements(), startNames, actionNames, endNames);
+            }
+        }
     }
 
     private void collectActionElements(Iterable<FlowElement> elements, List<FlowElement> result) {
@@ -249,8 +283,10 @@ public class OrderService {
 
     private OrderResponses.TaskItem taskItem(OrderTask value) {
         String taskNumber = String.format("TRN-%04d-%02d", value.getOrderId(), value.getTaskSeq());
+        String currentStep = value.getStatus() == OrderTaskStatus.SUCCEEDED
+                ? "结束" : value.getCurrentStep();
         return new OrderResponses.TaskItem(value.getId(), taskNumber, value.getTaskSeq(), value.getTaskName(),
-                value.getFlowNumber(), value.getStatus(), value.getCurrentStep(), value.getStartedAt(),
+                value.getFlowNumber(), value.getStatus(), currentStep, value.getStartedAt(),
                 value.getCompletedAt(), value.getUpdateTime(), value.getErrorMessage());
     }
 
