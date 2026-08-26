@@ -230,23 +230,11 @@ public class FlowControlServiceImpl implements FlowControlService {
             }
         }
         String parameterSetId = parameterSets.get(0).id();
-
-        Flow flow = flowService.getById(flowId);
-        FlowTemplate flowTemplate = flowTemplateMapper.selectById(flow.getTemplateId());
-        WorkflowTemplateEntity template = workflowTemplateMapper.selectById(flowTemplate.getSourceTemplateId());
-        //查询当前节点所有动作
-        WorkflowTemplateResponses.Page page = workflowTemplateService.page(1, 10, template.getTemplateNumber());
-        List<String> actionSequence = page.getRecords().get(0).getActionSequence();
-        List<String> newList = actionSequence.stream()
-                .filter(s -> !s.equals("开始") && !s.equals("结束"))
-                .collect(Collectors.toList());
         //处理业务node表
         List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(processInstanceId);
         int count = flowNodeService.lambdaQuery().eq(FlowNode::getTemplateId, flowId).count().intValue();
         FlowNode flowNode = new FlowNode();
-
-
-        flow.setFlowName(newList.get(count));
+        flowNode.setNodeName(activeNodes.get(0).getActivityName());
         flowNode.setTemplateId(flowId);
         flowNode.setProcessInstanceId(processInstanceId);
         flowNode.setSort(count + 1);
@@ -254,8 +242,6 @@ public class FlowControlServiceImpl implements FlowControlService {
         flowNode.setNodeCode(activeNodes.get(0).getActivityId());
         flowNodeService.save(flowNode);
         log.info("流程节点----{}--开始进行", activeNodes.get(0).getActivityId());
-
-
         ExecuteActionCommand command = new ExecuteActionCommand(
                 flowId.toString(),
                 flowNode.getId().toString(),

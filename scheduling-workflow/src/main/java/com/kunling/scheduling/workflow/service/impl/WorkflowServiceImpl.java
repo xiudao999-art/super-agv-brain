@@ -16,6 +16,8 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.repository.ProcessDefinitionQuery;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ProcessInstance;
+import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.FlowElement;
 import org.flowable.task.api.Task;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -127,12 +129,19 @@ public class WorkflowServiceImpl implements WorkflowService {
 
     @Override
     public List<WorkflowResponses.ActiveNode> listActiveNodes(String id) {
-        requiredActiveInstance(id);
+        ProcessInstance instance = requiredActiveInstance(id);
+        BpmnModel bpmnModel = repositoryService.getBpmnModel(instance.getProcessDefinitionId());
         return runtimeService.createExecutionQuery().processInstanceId(id).list().stream()
                 .filter(item -> StringUtils.isNotBlank(item.getActivityId()))
                 .map(item -> new WorkflowResponses.ActiveNode(item.getId(), item.getActivityId(),
+                        getActivityName(bpmnModel, item.getActivityId()),
                         item.getProcessInstanceId(), item.isSuspended()))
                 .collect(Collectors.toList());
+    }
+
+    private String getActivityName(BpmnModel bpmnModel, String activityId) {
+        FlowElement flowElement = bpmnModel == null ? null : bpmnModel.getFlowElement(activityId);
+        return flowElement == null ? null : flowElement.getName();
     }
 
     @Override @Transactional
