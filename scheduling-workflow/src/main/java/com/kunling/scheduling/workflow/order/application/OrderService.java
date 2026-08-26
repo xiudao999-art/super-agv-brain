@@ -1,10 +1,10 @@
 package com.kunling.scheduling.workflow.order.application;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
-import com.kunling.scheduling.workflow.entity.Flow;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
@@ -20,7 +20,6 @@ import com.kunling.scheduling.workflow.order.domain.OrderTaskStatus;
 import com.kunling.scheduling.workflow.order.infrastructure.CustomerOrderMapper;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskCount;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
-import com.kunling.scheduling.workflow.service.FlowService;
 import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.bpmn.converter.BpmnXMLConverter;
@@ -29,6 +28,8 @@ import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.GraphicInfo;
 import org.flowable.bpmn.model.StartEvent;
 import org.flowable.bpmn.model.EndEvent;
+import org.flowable.bpmn.model.ExtensionAttribute;
+import org.flowable.bpmn.model.ExtensionElement;
 import org.flowable.bpmn.model.SequenceFlow;
 import org.flowable.bpmn.model.SubProcess;
 import org.flowable.common.engine.impl.util.io.InputStreamSource;
@@ -54,17 +55,17 @@ public class OrderService {
     private final FlowTemplateMapper flowTemplateMapper;
     private final WorkflowTemplateMapper workflowTemplateMapper;
     private final FlowNodeMapper flowNodeMapper;
-    private final FlowService flowService;
+    private final ObjectMapper objectMapper;
 
     public OrderService(CustomerOrderMapper orderMapper, OrderTaskMapper taskMapper,
                         FlowTemplateMapper flowTemplateMapper, WorkflowTemplateMapper workflowTemplateMapper,
-                        FlowNodeMapper flowNodeMapper, FlowService flowService) {
+                        FlowNodeMapper flowNodeMapper, ObjectMapper objectMapper) {
         this.orderMapper = orderMapper;
         this.taskMapper = taskMapper;
         this.flowTemplateMapper = flowTemplateMapper;
         this.workflowTemplateMapper = workflowTemplateMapper;
         this.flowNodeMapper = flowNodeMapper;
-        this.flowService = flowService;
+        this.objectMapper = objectMapper;
     }
 
     public OrderResponses.Page page(long pageNum, long pageSize, OrderStatus status, String source, String keyword) {
@@ -128,21 +129,19 @@ public class OrderService {
         if (flowTemplate == null){
             return null;
         }
-        //查询flow表数据
-        Flow flow = flowService.getOne(new LambdaQueryWrapper<Flow>().eq(Flow::getTaskId, task.getId())
-                .orderByDesc(Flow::getId).last("limit 1"));
         WorkflowTemplateEntity template = flowTemplate.getSourceTemplateId() == null
                 ? null : workflowTemplateMapper.selectById(flowTemplate.getSourceTemplateId());
-        List<FlowNode> runtimeNodes = flow == null ? Collections.emptyList()
-                : flowNodeMapper.selectList(Wrappers.<FlowNode>lambdaQuery()
-                        .eq(FlowNode::getTemplateId, flow.getId()).orderByAsc(FlowNode::getSort));
+        List<FlowNode> runtimeNodes = flowNodeMapper.selectList(Wrappers.<FlowNode>lambdaQuery()
+                .eq(FlowNode::getTaskId, task.getId()).orderByAsc(FlowNode::getSort));
         List<OrderResponses.ActionItem> actions = xmlActions(template, runtimeNodes);
         String path = xmlCompletePath(template);
         String strategies = actions.stream().map(OrderResponses.ActionItem::getFailureStrategy)
                 .filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining("；"));
+        String completionCriteria = actions.stream().map(OrderResponses.ActionItem::getCompletionCriteria)
+                .filter(StringUtils::isNotBlank).distinct().collect(Collectors.joining("；"));
         return new OrderResponses.ExecutionConfig(task.getFlowNumber(), flowTemplate == null ? null : flowTemplate.getTemplateName(),
-                flowTemplate == null ? task.getFlowTemplateId() : flowTemplate.getId(), template == null ? null : template.getTemplateName(),
-                path, task.getCurrentStep(), strategies, actions,
+                template == null ? null : template.getTemplateName(),
+                path, resolveCurrentStep(task, runtimeNodes), strategies, completionCriteria, actions,
                 template == null ? null : template.getBpmnXml(), parseBpmnProcesses(template));
     }
 
@@ -151,6 +150,7 @@ public class OrderService {
         Map<String, FlowNode> runtimeByCode = runtimeNodes.stream()
                 .filter(node -> StringUtils.isNotBlank(node.getNodeCode()))
                 .collect(Collectors.toMap(FlowNode::getNodeCode, node -> node, (first, second) -> second));
+        Map<String, JsonNode> templateProperties = templateNodeProperties(template);
         BpmnModel model = parseBpmnModel(template);
         List<FlowElement> xmlNodes = new ArrayList<>();
         for (org.flowable.bpmn.model.Process process : model.getProcesses()) {
@@ -160,20 +160,95 @@ public class OrderService {
         for (int i = 0; i < xmlNodes.size(); i++) {
             FlowElement xmlNode = xmlNodes.get(i);
             FlowNode runtime = runtimeByCode.get(xmlNode.getId());
+            JsonNode configured = templateProperties.get(xmlNode.getId());
             int sort = i + 1;
             String name = StringUtils.defaultIfBlank(xmlNode.getName(), xmlNode.getId());
             String resource = runtime == null ? xmlNode.getId()
                     : StringUtils.defaultIfBlank(runtime.getNodeCode(), actionResource(runtime));
+            String completionCriteria = StringUtils.firstNonBlank(
+                    xmlNodeProperty(xmlNode, "completionCriteria"),
+                    jsonText(configured, "completionCriteria"));
+            String failureStrategy = failureStrategyLabel(StringUtils.firstNonBlank(
+                    xmlNodeProperty(xmlNode, "failureStrategy"),
+                    jsonText(configured, "failureStrategy")));
             result.add(new OrderResponses.ActionItem(runtime == null ? null : runtime.getId(),
                     String.format("A%02d", sort), sort, name, resource, name, xmlNode.getId(),
                     runtime == null || runtime.getStatus() == null
                             ? NodeState.PENDING.getLabel() : runtime.getStatus().getLabel(),
-                    runtime == null ? null : runtime.getCompletionCriteria(),
-                    runtime == null ? null : runtime.getCompletionCriteria(),
-                    runtime == null || runtime.getFailureStrategy() == null
-                            ? null : runtime.getFailureStrategy().getLabel()));
+                    completionCriteria, completionCriteria, failureStrategy));
         }
         return result;
+    }
+
+    /** 读取BPMN节点上的自定义属性或extensionElements配置。 */
+    private String xmlNodeProperty(FlowElement node, String propertyName) {
+        String direct = extensionAttributeValue(node.getAttributes(), propertyName);
+        if (StringUtils.isNotBlank(direct)) return direct;
+        for (List<ExtensionElement> elements : node.getExtensionElements().values()) {
+            for (ExtensionElement element : elements) {
+                String value = extensionElementValue(element, propertyName);
+                if (StringUtils.isNotBlank(value)) return value;
+            }
+        }
+        return null;
+    }
+
+    private String extensionElementValue(ExtensionElement element, String propertyName) {
+        if (propertyName.equals(element.getName())) {
+            String text = StringUtils.trimToNull(element.getElementText());
+            if (text != null) return text;
+            String value = extensionAttributeValue(element.getAttributes(), "value");
+            if (value != null) return value;
+        }
+        String configuredName = extensionAttributeValue(element.getAttributes(), "name");
+        if (propertyName.equals(configuredName)) {
+            String value = extensionAttributeValue(element.getAttributes(), "value");
+            return StringUtils.defaultIfBlank(value, StringUtils.trimToNull(element.getElementText()));
+        }
+        for (List<ExtensionElement> children : element.getChildElements().values()) {
+            for (ExtensionElement child : children) {
+                String value = extensionElementValue(child, propertyName);
+                if (StringUtils.isNotBlank(value)) return value;
+            }
+        }
+        return null;
+    }
+
+    private String extensionAttributeValue(Map<String, List<ExtensionAttribute>> attributes, String name) {
+        for (Map.Entry<String, List<ExtensionAttribute>> entry : attributes.entrySet()) {
+            for (ExtensionAttribute attribute : entry.getValue()) {
+                if (name.equals(entry.getKey()) || name.equals(attribute.getName())) {
+                    return StringUtils.trimToNull(attribute.getValue());
+                }
+            }
+        }
+        return null;
+    }
+
+    private Map<String, JsonNode> templateNodeProperties(WorkflowTemplateEntity template) {
+        if (template == null || StringUtils.isBlank(template.getEditorData())) return Collections.emptyMap();
+        try {
+            JsonNode properties = objectMapper.readTree(template.getEditorData()).path("nodeProperties");
+            if (!properties.isObject()) return Collections.emptyMap();
+            Map<String, JsonNode> result = new HashMap<>();
+            properties.fields().forEachRemaining(entry -> result.put(entry.getKey(), entry.getValue()));
+            return result;
+        } catch (Exception exception) {
+            throw new IllegalStateException("流程模板editorData解析失败: " + template.getTemplateNumber(), exception);
+        }
+    }
+
+    private String jsonText(JsonNode node, String field) {
+        if (node == null || node.path(field).isMissingNode() || node.path(field).isNull()) return null;
+        return StringUtils.trimToNull(node.path(field).asText());
+    }
+
+    private String failureStrategyLabel(String strategy) {
+        if (StringUtils.isBlank(strategy)) return null;
+        if ("RETRY_THEN_SUSPEND".equals(strategy)) return "按策略重试后挂起";
+        if ("SUSPEND_AFTER_RETRYING".equals(strategy)) return "重试后挂起";
+        if ("NOTIFY_OPERATORS".equals(strategy)) return "立即挂起并通知操作人员";
+        return strategy;
     }
 
     /** 完整路径用于页面展示，包含开始和结束；动作列表仍排除开始和结束。 */
@@ -283,11 +358,29 @@ public class OrderService {
 
     private OrderResponses.TaskItem taskItem(OrderTask value) {
         String taskNumber = String.format("TRN-%04d-%02d", value.getOrderId(), value.getTaskSeq());
-        String currentStep = value.getStatus() == OrderTaskStatus.SUCCEEDED
-                ? "结束" : value.getCurrentStep();
+        String currentStep = resolveCurrentStep(value, null);
         return new OrderResponses.TaskItem(value.getId(), taskNumber, value.getTaskSeq(), value.getTaskName(),
                 value.getFlowNumber(), value.getStatus(), currentStep, value.getStartedAt(),
                 value.getCompletedAt(), value.getUpdateTime(), value.getErrorMessage());
+    }
+
+    /**
+     * 当前步骤不再存order_task，而是取该任务最后一条flow_node。
+     */
+    private String resolveCurrentStep(OrderTask task, List<FlowNode> loadedNodes) {
+        if (task.getStatus() == OrderTaskStatus.SUCCEEDED) return "结束";
+        List<FlowNode> nodes = loadedNodes;
+        if (nodes == null) {
+            FlowNode latest = flowNodeMapper.selectOne(Wrappers.<FlowNode>lambdaQuery()
+                    .eq(FlowNode::getTaskId, task.getId())
+                    .orderByDesc(FlowNode::getSort).orderByDesc(FlowNode::getId).last("limit 1"));
+            nodes = latest == null ? Collections.emptyList() : Collections.singletonList(latest);
+        }
+        if (nodes.isEmpty()) {
+            return task.getStatus() == OrderTaskStatus.QUEUED ? "等待前序任务完成" : null;
+        }
+        FlowNode latest = nodes.get(nodes.size() - 1);
+        return StringUtils.defaultIfBlank(latest.getNodeName(), latest.getNodeCode());
     }
 
     private Map<Long, OrderTaskCount> taskCounts(List<Long> orderIds) {

@@ -10,9 +10,11 @@ import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateRequests;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
-import com.kunling.scheduling.workflow.entity.Flow;
+import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.mapper.WorkflowTemplateMapper;
-import com.kunling.scheduling.workflow.service.FlowService;
+import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
+import com.kunling.scheduling.workflow.order.domain.OrderTask;
+import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
@@ -47,14 +49,17 @@ public class WorkflowTemplateService {
     private final WorkflowTemplateMapper mapper;
     private final WorkflowService workflowService;
     private final ObjectMapper objectMapper;
-    private final FlowService flowService;
+    private final OrderTaskMapper orderTaskMapper;
+    private final FlowTemplateMapper flowTemplateMapper;
 
     public WorkflowTemplateService(WorkflowTemplateMapper mapper, WorkflowService workflowService,
-                                   ObjectMapper objectMapper, FlowService flowService) {
+                                   ObjectMapper objectMapper, OrderTaskMapper orderTaskMapper,
+                                   FlowTemplateMapper flowTemplateMapper) {
         this.mapper = mapper;
         this.workflowService = workflowService;
         this.objectMapper = objectMapper;
-        this.flowService = flowService;
+        this.orderTaskMapper = orderTaskMapper;
+        this.flowTemplateMapper = flowTemplateMapper;
     }
 
     @Transactional
@@ -123,32 +128,43 @@ public class WorkflowTemplateService {
         String value = keyword == null ? "" : keyword.trim();
         List<Long> matchingTemplateIds = Collections.emptyList();
         if (!value.isEmpty()) {
-            matchingTemplateIds = mapper.selectList(Wrappers.<WorkflowTemplateEntity>lambdaQuery()
-                            .like(WorkflowTemplateEntity::getTemplateName, value))
-                    .stream().map(WorkflowTemplateEntity::getId).collect(Collectors.toList());
+            matchingTemplateIds = flowTemplateMapper.selectList(Wrappers.<FlowTemplate>lambdaQuery()
+                            .like(FlowTemplate::getTemplateName, value))
+                    .stream().map(FlowTemplate::getId).collect(Collectors.toList());
         }
 
         final List<Long> templateIdsForSearch = matchingTemplateIds;
-        Page<Flow> flowResult = flowService.page(new Page<>(pageNum, pageSize),
-                Wrappers.<Flow>lambdaQuery()
+        Page<OrderTask> flowResult = orderTaskMapper.selectPage(new Page<>(pageNum, pageSize),
+                Wrappers.<OrderTask>lambdaQuery()
                         .and(!value.isEmpty(), query -> {
-                            query.like(Flow::getFlowName, value);
+                            query.like(OrderTask::getTaskName, value).or().like(OrderTask::getFlowNumber, value);
                             if (!templateIdsForSearch.isEmpty()) {
-                                query.or().in(Flow::getTemplateId, templateIdsForSearch);
+                                query.or().in(OrderTask::getFlowTemplateId, templateIdsForSearch);
                             }
                         })
-                        .orderByDesc(Flow::getUpdateTime)
-                        .orderByDesc(Flow::getId));
+                        .orderByDesc(OrderTask::getUpdateTime)
+                        .orderByDesc(OrderTask::getId));
 
-        Set<Long> templateIds = flowResult.getRecords().stream().map(Flow::getTemplateId)
+        Set<Long> templateIds = flowResult.getRecords().stream().map(OrderTask::getFlowTemplateId)
                 .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
-        Map<Long, WorkflowTemplateEntity> templates = templateIds.isEmpty()
+        Map<Long, FlowTemplate> flowTemplates = templateIds.isEmpty()
                 ? Collections.emptyMap()
-                : mapper.selectBatchIds(templateIds).stream()
-                        .collect(Collectors.toMap(WorkflowTemplateEntity::getId, item -> item));
+                : flowTemplateMapper.selectBatchIds(templateIds).stream()
+                        .collect(Collectors.toMap(FlowTemplate::getId, item -> item));
+        Set<Long> sourceTemplateIds = flowTemplates.values().stream().map(FlowTemplate::getSourceTemplateId)
+                .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, WorkflowTemplateEntity> templates = sourceTemplateIds.isEmpty()
+                ? Collections.emptyMap()
+                : mapper.selectBatchIds(sourceTemplateIds).stream()
+                .collect(Collectors.toMap(WorkflowTemplateEntity::getId, item -> item));
 
         List<WorkflowTemplateResponses.FlowPageItem> records = flowResult.getRecords().stream()
-                .map(flow -> flowPageItem(flow, templates.get(flow.getTemplateId())))
+                .map(task -> {
+                    FlowTemplate flowTemplate = flowTemplates.get(task.getFlowTemplateId());
+                    WorkflowTemplateEntity template = flowTemplate == null ? null
+                            : templates.get(flowTemplate.getSourceTemplateId());
+                    return flowPageItem(task, flowTemplate, template);
+                })
                 .collect(Collectors.toList());
         return new WorkflowTemplateResponses.FlowPage(
                 flowResult.getTotal(), flowResult.getCurrent(), flowResult.getSize(), records);
@@ -273,15 +289,15 @@ public class WorkflowTemplateService {
     }
 
     private WorkflowTemplateResponses.FlowPageItem flowPageItem(
-            Flow flow, WorkflowTemplateEntity template) {
-        String displayNumber = "FLOW-" + flow.getId();
-        String templateName = template == null ? null : template.getTemplateName();
+            OrderTask task, FlowTemplate flowTemplate, WorkflowTemplateEntity template) {
+        String displayNumber = StringUtils.defaultIfBlank(task.getFlowNumber(), "FLOW-" + task.getId());
+        String templateName = flowTemplate == null ? null : flowTemplate.getTemplateName();
         Integer nodeCount = template == null ? 0 : parseMainActionSequence(template.getBpmnXml()).size();
 //        String processDefinitionId = StringUtils.defaultIfBlank(flow.getProcessDefinitionId(),
 //                template == null ? null : template.getProcessDefinitionId());
         return new WorkflowTemplateResponses.FlowPageItem(
-                flow.getId(), displayNumber, flow.getFlowName(), flow.getTemplateId(), templateName,
-                nodeCount, flow.getUpdateTime());
+                task.getId(), displayNumber, task.getTaskName(), task.getFlowTemplateId(), templateName,
+                nodeCount, task.getUpdateTime());
     }
 
     /**

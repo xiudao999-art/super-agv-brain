@@ -7,10 +7,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import com.kunling.scheduling.workflow.dto.StatusChangedDto;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
-import com.kunling.scheduling.workflow.entity.Flow;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.NodeStateTransitionRule;
-import com.kunling.scheduling.workflow.enums.FlowState;
 import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
@@ -29,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,9 +50,6 @@ public class NodeStateTransitionRuleServiceImpl
 
     @Resource
     private FlowControlService flowControlService;
-
-    @Resource
-    private FlowService flowService;
 
     @Resource
     private OrderTaskMapper orderTaskMapper;
@@ -191,11 +187,10 @@ public class NodeStateTransitionRuleServiceImpl
         WorkflowResponses.Instance instance = workflowStateService.completeExecution(activeNode.getExecutionId(), variables);
         //完成当前节点后,判断流程是否结束
         if ("COMPLETED".equals(instance.getState())) {
-            updateOrderTaskAndFlow(currentNode.getTemplateId(), FlowState.SUCCEEDED, OrderTaskStatus.SUCCEEDED);
-            log.info("当前流程flow{}全部完成", currentNode.getTemplateId());
+            updateOrderTask(currentNode.getTaskId(), OrderTaskStatus.SUCCEEDED);
+            log.info("当前任务{}的流程全部完成", currentNode.getTaskId());
             //判断订单下的任务是否都完成
-            Flow flow = flowService.getById(currentNode.getTemplateId());
-            OrderTask orderTask = orderTaskMapper.selectById(flow.getTaskId());
+            OrderTask orderTask = orderTaskMapper.selectById(currentNode.getTaskId());
             List<OrderTask> orderTasks = orderTaskMapper.selectList(Wrappers.<OrderTask>lambdaQuery().eq(OrderTask::getOrderId, orderTask.getOrderId()));
             //
             List<OrderTask> unCompleteTask = orderTasks.stream().filter(s -> !OrderTaskStatus.SUCCEEDED.equals(s.getStatus())).collect(Collectors.toList());
@@ -211,17 +206,29 @@ public class NodeStateTransitionRuleServiceImpl
 
         } else {
             //未完成的话,执行下发下一节点
-            flowControlService.dispatchDownstreamAction(currentNode.getProcessInstanceId(), currentNode.getTemplateId(), activeNode, StartTypeEnum.START);
+            List<WorkflowResponses.ActiveNode> nextNodes = workflowService.listActiveNodes(instance.getId());
+            if (CollectionUtils.isEmpty(nextNodes)) {
+                throw new IllegalStateException("流程未结束但没有找到下一个活动节点: " + instance.getId());
+            }
+            flowControlService.dispatchDownstreamAction(currentNode.getProcessInstanceId(), currentNode.getTaskId(),
+                    nextNodes.get(0), StartTypeEnum.START);
         }
 
     }
 
-    private void updateOrderTaskAndFlow(Long flowId, FlowState flowState, OrderTaskStatus orderTaskStatus) {
-        Flow flow = flowService.getById(flowId);
-        flow.setFlowState(flowState);
-        flowService.updateById(flow);
-        OrderTask orderTask = orderTaskMapper.selectById(flow.getTaskId());
+    private void updateOrderTask(Long taskId, OrderTaskStatus orderTaskStatus) {
+        OrderTask orderTask = orderTaskMapper.selectById(taskId);
+        if (orderTask == null) {
+            throw new IllegalArgumentException("订单任务不存在: " + taskId);
+        }
         orderTask.setStatus(orderTaskStatus);
+        if (orderTaskStatus == OrderTaskStatus.SUCCEEDED) {
+            orderTask.setCompletedAt(LocalDateTime.now());
+        } else if (orderTaskStatus == OrderTaskStatus.FAILED) {
+            orderTask.setCompletedAt(LocalDateTime.now());
+        } else if (orderTaskStatus == OrderTaskStatus.CANCELLED) {
+            orderTask.setCompletedAt(LocalDateTime.now());
+        }
         orderTaskMapper.updateById(orderTask);
     }
 
@@ -230,30 +237,30 @@ public class NodeStateTransitionRuleServiceImpl
                 && currentNode.getStatus() != NodeState.WAITING) {
             throw new IllegalStateException("当前节点状态不允许重试: " + currentNode.getStatus());
         }
-        flowControlService.dispatchDownstreamAction(currentNode.getProcessInstanceId(), currentNode.getTemplateId(), activeNode, StartTypeEnum.START);
+        flowControlService.dispatchDownstreamAction(currentNode.getProcessInstanceId(), currentNode.getTaskId(), activeNode, StartTypeEnum.START);
 
     }
 
     //将当前节点任务挂起
     private void handleManual(FlowNode currentNode) {
         WorkflowResponses.Instance suspend = workflowStateService.suspend(currentNode.getProcessInstanceId());
-        updateOrderTaskAndFlow(currentNode.getTemplateId(), FlowState.FAILED, OrderTaskStatus.FAILED);
+        updateOrderTask(currentNode.getTaskId(), OrderTaskStatus.FAILED);
     }
 
     private void handleCritical(FlowNode currentNode) {
         // 严重错误终止流程，尚未启动的节点统一取消。
         workflowStateService.terminate(currentNode.getProcessInstanceId(), "严重错误终止流程，尚未启动的节点统一取消");
         List<FlowNode> pendingNodes = flowNodeService.list(Wrappers.<FlowNode>lambdaQuery()
-                .eq(FlowNode::getTemplateId, currentNode.getTemplateId()));
+                .eq(FlowNode::getTaskId, currentNode.getTaskId()));
         for (FlowNode pendingNode : pendingNodes) {
             pendingNode.setStatus(NodeState.CANCELLED);
         }
         if (!pendingNodes.isEmpty()) {
             flowNodeService.updateBatchById(pendingNodes);
-            updateOrderTaskAndFlow(currentNode.getTemplateId(), FlowState.CANCELLED, OrderTaskStatus.CANCELLED);
+            updateOrderTask(currentNode.getTaskId(), OrderTaskStatus.CANCELLED);
         }
         log.error("流程因严重错误终止: flowId={}, nodeId={}",
-                currentNode.getTemplateId(), currentNode.getId());
+                currentNode.getTaskId(), currentNode.getId());
     }
 
     private void updateNodeState(FlowNode node, NodeState state) {

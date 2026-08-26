@@ -50,11 +50,11 @@ public final class OrderResponses {
     public static class ExecutionConfig {
         private String flowNumber;
         private String flowName;
-        private Long flowTemplateId;
         private String flowTemplateName;
         private String completePath;
         private String pointConfiguration;
         private String failureStrategy;
+        private String completionCriteria;
         private List<ActionItem> actions;
         private String bpmnXml;
         private List<BpmnProcess> bpmnProcesses;

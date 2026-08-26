@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.kunling.scheduling.workflow.dto.FlowStartRequest;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
-import com.kunling.scheduling.workflow.entity.Flow;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
@@ -20,7 +19,6 @@ import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import com.kunling.scheduling.workflow.resp.TaskInfoResp;
 import com.kunling.scheduling.workflow.service.FlowControlService;
 import com.kunling.scheduling.workflow.service.FlowNodeService;
-import com.kunling.scheduling.workflow.service.FlowService;
 import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -45,7 +43,6 @@ public class OrderTaskOrchestrationService {
     private final FlowTemplateMapper flowTemplateMapper;
     private final WorkflowTemplateMapper workflowTemplateMapper;
     private final FlowControlService flowControlService;
-    private final FlowService flowService;
     private final ApplicationEventPublisher publisher;
     private final OrderSyncLockService lockService;
     @Resource
@@ -58,14 +55,13 @@ public class OrderTaskOrchestrationService {
     public OrderTaskOrchestrationService(CustomerOrderMapper orderMapper, OrderTaskMapper taskMapper,
                                          FlowTemplateMapper flowTemplateMapper,
                                          WorkflowTemplateMapper workflowTemplateMapper,
-                                         FlowControlService flowControlService, FlowService flowService,
+                                         FlowControlService flowControlService,
                                          ApplicationEventPublisher publisher, OrderSyncLockService lockService) {
         this.orderMapper = orderMapper;
         this.taskMapper = taskMapper;
         this.flowTemplateMapper = flowTemplateMapper;
         this.workflowTemplateMapper = workflowTemplateMapper;
         this.flowControlService = flowControlService;
-        this.flowService = flowService;
         this.publisher = publisher;
         this.lockService = lockService;
     }
@@ -149,13 +145,8 @@ public class OrderTaskOrchestrationService {
                 log.error("流程启动或首节点下发失败: {}", task.getId());
                 throw new IllegalStateException("流程启动或首节点下发失败: " + task.getId());
             }
-            task.setFlowTemplateId(flowTemplate.getId());
-            task.setStatus(OrderTaskStatus.RUNNING);
-            task.setStartedAt(LocalDateTime.now());
-            task.setCompletedAt(null);
-            task.setErrorCode(null);
-            task.setErrorMessage(null);
-            taskMapper.updateById(task);
+            // FlowControlService.start已在同一张order_task表中保存流程实例和运行状态。
+            // 这里不再用启动前的旧version重复update，避免乐观锁冲突。
             updateOrderRunning(task.getOrderId());
             return true;
         } catch (RuntimeException exception) {
@@ -188,7 +179,6 @@ public class OrderTaskOrchestrationService {
     public void markWaiting(Long taskId, String step, String message) {
         OrderTask task = requireTask(taskId);
         task.setStatus(OrderTaskStatus.QUEUED);
-        task.setCurrentStep(step);
         task.setErrorCode("DISPATCH_WAITING");
         task.setErrorMessage(message);
         taskMapper.updateById(task);

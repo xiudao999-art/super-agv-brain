@@ -26,12 +26,4 @@ public class FlowStartRequest {
     @Schema(description = "任务id", example = "1")
     private Long taskId;
 
-    @NotBlank
-    @Schema(description = "Flowable流程定义ID", example = "agvMoveProcess:1:de9d58d6")
-    private String executionId;
-
-
-    @NotNull
-    @Schema(description = "Flowable流程定义ID", example = "agvMoveProcess:1:de9d58d6")
-    private Long flowId;
 }

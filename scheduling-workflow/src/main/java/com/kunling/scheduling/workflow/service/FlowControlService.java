@@ -3,7 +3,6 @@ package com.kunling.scheduling.workflow.service;
 import com.kunling.scheduling.workflow.dto.FlowStartRequest;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
-import com.kunling.scheduling.workflow.dto.FlowFailureCallbackRequest;
 
 public interface FlowControlService {
     boolean start(FlowStartRequest request);
@@ -18,8 +17,8 @@ public interface FlowControlService {
 
 //    boolean processFailure(FlowFailureCallbackRequest request);
 
-     boolean dispatchDownstreamAction(String processInstanceId,
-                                            Long flowId,
-                                            WorkflowResponses.ActiveNode activeNode,
-                                            StartTypeEnum startType) ;
+    boolean dispatchDownstreamAction(String processInstanceId,
+                                     Long taskId,
+                                     WorkflowResponses.ActiveNode activeNode,
+                                     StartTypeEnum startType);
 }

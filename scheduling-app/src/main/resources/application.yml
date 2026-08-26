@@ -33,6 +33,9 @@ kunling:
 spring:
   application:
     name: kunling-scheduling
+  profiles:
+    # 本地直接启动默认使用开发环境；部署时通过SPRING_PROFILES_ACTIVE覆盖。
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   web:
     resources:
       cache:
@@ -43,16 +46,6 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-  datasource:
-    url: jdbc:mysql://39.105.68.15:50013/kunling?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: sunder
-    password: "123456qwertQ"
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  redis:
-    host: 127.0.0.1
-    port: 6379
-    database: 0
-    timeout: 5s
   jackson:
     default-property-inclusion: non_null
     deserialization:
@@ -61,6 +54,7 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: none
+    database-platform: org.hibernate.dialect.MySQL8Dialect
 
 flowable:
   database-schema-update: false

@@ -7,17 +7,18 @@ import com.kunling.scheduling.action.execution.application.ExecuteActionCommand;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionTransport;
 import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
 import com.kunling.scheduling.workflow.dto.*;
-import com.kunling.scheduling.workflow.entity.Flow;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
-import com.kunling.scheduling.workflow.enums.FlowState;
 import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
 import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
 import com.kunling.scheduling.workflow.mapper.WorkflowTemplateMapper;
 import com.kunling.scheduling.workflow.order.application.TaskFlowStatusEvent;
+import com.kunling.scheduling.workflow.order.domain.OrderTask;
+import com.kunling.scheduling.workflow.order.domain.OrderTaskStatus;
+import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import com.kunling.scheduling.workflow.service.*;
 import com.kunling.scheduling.workflow.service.WorkflowStateService;
 import org.apache.commons.lang3.StringUtils;
@@ -48,7 +49,7 @@ public class FlowControlServiceImpl implements FlowControlService {
     @Resource
     private ActionParameterSetService parameterSetService;
     @Resource
-    private FlowService flowService;
+    private OrderTaskMapper orderTaskMapper;
     @Resource
     private ActionExecutionService actionExecutionService;
     @Resource
@@ -71,25 +72,27 @@ public class FlowControlServiceImpl implements FlowControlService {
     @Override
     @Transactional
     public boolean start(FlowStartRequest request) {
-        //创建流程数据
-        Flow flow = new Flow();
-        flow.setFlowState(FlowState.RUNNING);
         if (request == null || StringUtils.isBlank(request.getProcessDefinitionId())
-                || request.getBusinessKey() == null || request.getTemplateId() == null) {
-            flow.setFlowState(FlowState.FAILED);
-            flow.setErrorMessage("参数异常");
-            flowService.save(flow);
+                || request.getBusinessKey() == null || request.getTemplateId() == null
+                || request.getTaskId() == null) {
             throw new IllegalArgumentException("参数异常");
         }
-        flow.setTaskId(request.getTaskId());
-        flow.setOrderNumber(String.valueOf(request.getBusinessKey()));
-        flow.setTemplateId(request.getTemplateId());
+        OrderTask task = orderTaskMapper.selectById(request.getTaskId());
+        if (task == null) throw new NoSuchElementException("订单任务不存在: " + request.getTaskId());
+        task.setFlowTemplateId(request.getTemplateId());
+        task.setProcessDefinitionId(request.getProcessDefinitionId());
+        task.setStatus(OrderTaskStatus.RUNNING);
+        task.setStartedAt(LocalDateTime.now());
+        task.setCompletedAt(null);
+        task.setErrorCode(null);
+        task.setErrorMessage(null);
+        task.setAttempt(task.getAttempt() == null ? 0 : task.getAttempt());
         //机器人不存在
         List<RobotSessionView> robotSessions = robotActionTransport.listSessions();
         if (CollectionUtils.isEmpty(robotSessions)) {
-            flow.setFlowState(FlowState.FAILED);
-            flow.setErrorMessage("当前没有可用的机器人");
-            flowService.save(flow);
+            task.setStatus(OrderTaskStatus.FAILED);
+            task.setErrorMessage("当前没有可用的机器人");
+            orderTaskMapper.updateById(task);
             throw new NoSuchElementException("当前没有可用的机器人");
         }
 
@@ -109,9 +112,9 @@ public class FlowControlServiceImpl implements FlowControlService {
             activeNodes = workflowService.listActiveNodes(id);
         } catch (NoSuchElementException exception) {
             // 流程可能已经自动结束，此时ACT_RU_EXECUTION本身已经没有数据。
-            flow.setFlowState(FlowState.FAILED);
-            flow.setErrorMessage("启动后未找到运行中的流程实例");
-            flowService.save(flow);
+            task.setStatus(OrderTaskStatus.FAILED);
+            task.setErrorMessage("启动后未找到运行中的流程实例");
+            orderTaskMapper.updateById(task);
             log.warn("启动后未找到运行中的流程实例，processInstanceId={}", id, exception);
             return false;
         }
@@ -120,9 +123,9 @@ public class FlowControlServiceImpl implements FlowControlService {
         }
         WorkflowResponses.ActiveNode activeNode = activeNodes.get(0);
         String processInstanceId = activeNode.getProcessInstanceId();
-        flow.setProcessInstanceId(processInstanceId);
-        flowService.save(flow);
-        return dispatchDownstreamAction(id, flow.getId(), activeNode, StartTypeEnum.START);
+        task.setProcessInstanceId(processInstanceId);
+        orderTaskMapper.updateById(task);
+        return dispatchDownstreamAction(id, task.getId(), activeNode, StartTypeEnum.START);
     }
 
 //
@@ -202,7 +205,7 @@ public class FlowControlServiceImpl implements FlowControlService {
      * 选择在线机器人和节点参数集，并将当前Flowable节点下发给Action系统。
      */
     public boolean dispatchDownstreamAction(String processInstanceId,
-                                            Long flowId,
+                                            Long taskId,
                                             WorkflowResponses.ActiveNode activeNode,
                                             StartTypeEnum startType) {
         if (activeNode == null || StringUtils.isBlank(activeNode.getActivityId())
@@ -215,7 +218,7 @@ public class FlowControlServiceImpl implements FlowControlService {
             if (startType == StartTypeEnum.START) {
                 return failAndClear(processInstanceId, "未找到在线机器人");
             } else {
-                return suspendAndWait(processInstanceId, flowId, "未找到在线机器人，等待人工恢复");
+                return suspendAndWait(processInstanceId, taskId, "未找到在线机器人，等待人工恢复");
             }
         }
         String robotId = robotSessions.get(0).robotId();
@@ -226,24 +229,33 @@ public class FlowControlServiceImpl implements FlowControlService {
             if (startType == StartTypeEnum.START) {
                 return failAndClear(processInstanceId, "节点未配置动作参数: " + actionKey);
             } else {
-                return suspendAndWait(processInstanceId, flowId, "节点未配置动作参数: " + actionKey);
+                return suspendAndWait(processInstanceId, taskId, "节点未配置动作参数: " + actionKey);
             }
         }
         String parameterSetId = parameterSets.get(0).id();
         //处理业务node表
         List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(processInstanceId);
-        int count = flowNodeService.lambdaQuery().eq(FlowNode::getTemplateId, flowId).count().intValue();
+        int count = flowNodeService.lambdaQuery().eq(FlowNode::getTaskId, taskId).count().intValue();
         FlowNode flowNode = new FlowNode();
         flowNode.setNodeName(activeNodes.get(0).getActivityName());
-        flowNode.setTemplateId(flowId);
+        flowNode.setTaskId(taskId);
         flowNode.setProcessInstanceId(processInstanceId);
         flowNode.setSort(count + 1);
         flowNode.setStatus(NodeState.RUNNING);
         flowNode.setNodeCode(activeNodes.get(0).getActivityId());
         flowNodeService.save(flowNode);
+        OrderTask task = orderTaskMapper.selectById(taskId);
+        if (task == null) {
+            throw new NoSuchElementException("订单任务不存在: " + taskId);
+        }
+        task.setProcessInstanceId(processInstanceId);
+        task.setStatus(OrderTaskStatus.RUNNING);
+        task.setErrorCode(null);
+        task.setErrorMessage(null);
+        orderTaskMapper.updateById(task);
         log.info("流程节点----{}--开始进行", activeNodes.get(0).getActivityId());
         ExecuteActionCommand command = new ExecuteActionCommand(
-                flowId.toString(),
+                taskId.toString(),
                 flowNode.getId().toString(),
                 UUID.randomUUID().toString(),
                 robotId,
@@ -257,28 +269,22 @@ public class FlowControlServiceImpl implements FlowControlService {
      * 保留当前流程运行数据，将Flowable实例挂起，并把业务节点标记为等待中。
      * 后续恢复时应先激活processInstanceId，再重新下发当前活动节点。
      */
-    private boolean suspendAndWait(String processInstanceId, Long flowId, String reason) {
+    private boolean suspendAndWait(String processInstanceId, Long taskId, String reason) {
         workflowStateService.suspend(processInstanceId);
 
-        Flow flow = flowService.getById(flowId);
-        if (flow == null) {
-            throw new NoSuchElementException("流程业务记录不存在: " + flowId);
+        OrderTask task = orderTaskMapper.selectById(taskId);
+        if (task == null) {
+            throw new NoSuchElementException("订单任务不存在: " + taskId);
         }
-        flow.setCurrentNodeState(NodeStateEnum.WAITING);
-        flow.setErrorCode("ROBOT_OFFLINE");
-        flow.setErrorMessage(reason);
-        if (!flowService.updateById(flow)) {
-            throw new IllegalStateException("流程等待状态保存失败: " + flowId);
+        task.setStatus(OrderTaskStatus.QUEUED);
+        task.setErrorCode("ROBOT_OFFLINE");
+        task.setErrorMessage(reason);
+        if (orderTaskMapper.updateById(task) != 1) {
+            throw new IllegalStateException("任务等待状态保存失败: " + taskId);
         }
 
-        log.warn("流程因无在线机器人已挂起，processInstanceId={}, flowId={}", processInstanceId, flowId);
+        log.warn("流程因无在线机器人已挂起，processInstanceId={}, taskId={}", processInstanceId, taskId);
         return false;
-    }
-
-    private void settleSucceeded(Flow flow) {
-        flow.setFlowState(FlowState.SUCCEEDED);
-        flow.setCurrentNodeState(NodeStateEnum.SUCCEEDED);
-        flow.setCompletedAt(LocalDateTime.now());
     }
 
 //    @Override
@@ -318,24 +324,21 @@ public class FlowControlServiceImpl implements FlowControlService {
     @Transactional
     public boolean resumeTask(Long taskId) {
         if (taskId == null) throw new IllegalArgumentException("taskId不能为空");
-        Flow flow = flowService.getOne(Wrappers.<Flow>lambdaQuery()
-                .eq(Flow::getTaskId, taskId).orderByDesc(Flow::getId).last("limit 1"));
-        if (flow == null || StringUtils.isBlank(flow.getProcessInstanceId())) {
+        OrderTask task = orderTaskMapper.selectById(taskId);
+        if (task == null || StringUtils.isBlank(task.getProcessInstanceId())) {
             throw new NoSuchElementException("任务没有可恢复的流程实例: " + taskId);
         }
-        workflowStateService.activate(flow.getProcessInstanceId());
-        List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(flow.getProcessInstanceId());
+        workflowStateService.activate(task.getProcessInstanceId());
+        List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(task.getProcessInstanceId());
         if (activeNodes.isEmpty()) throw new NoSuchElementException("恢复后没有活动节点: " + taskId);
         WorkflowResponses.ActiveNode activeNode = activeNodes.get(0);
-        boolean dispatched = dispatchDownstreamAction(flow.getProcessInstanceId(),
-                flow.getId(), activeNode, StartTypeEnum.CALLBACK);
+        boolean dispatched = dispatchDownstreamAction(task.getProcessInstanceId(),
+                task.getId(), activeNode, StartTypeEnum.CALLBACK);
         if (dispatched) {
-            flow.setCurrentNode(activeNode.getActivityId());
-            flow.setCurrentNodeState(NodeStateEnum.RUNNING);
-            flow.setFlowState(FlowState.RUNNING);
-            flow.setErrorCode(null);
-            flow.setErrorMessage(null);
-            flowService.updateById(flow);
+            task.setStatus(OrderTaskStatus.RUNNING);
+            task.setErrorCode(null);
+            task.setErrorMessage(null);
+            orderTaskMapper.updateById(task);
         }
         return dispatched;
     }

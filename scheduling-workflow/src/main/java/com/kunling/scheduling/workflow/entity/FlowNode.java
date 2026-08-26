@@ -14,8 +14,8 @@ import java.util.List;
 @Data
 @TableName(value = "flow_node", autoResultMap = true)
 public class FlowNode extends BaseEntity {
-    @Schema(description = "模版id")
-    private Long templateId;
+    @Schema(description = "订单任务ID")
+    private Long taskId;
 
     @Schema(description = "processId")
     private String processInstanceId;

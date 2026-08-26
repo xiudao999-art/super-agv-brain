@@ -70,7 +70,6 @@ public class OrderPersistenceService {
         task.setFlowNumber(pulled.getFlowNumber().trim());
         task.setFlowTemplateId(pulled.getFlowTemplateId());
         task.setStatus(OrderTaskStatus.QUEUED);
-        task.setVersion(0);
         task.setIsDeleted(0);
         taskMapper.insert(task);
     }
