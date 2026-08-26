@@ -20,15 +20,15 @@ public class MockOrderPullClient implements OrderPullClient {
 
         LocalDateTime issuedAt = LocalDateTime.of(2026, 8, 25, 14, 0);
         PulledOrder high = order(source, "MES-ORDER-0001", 1, issuedAt,
-                task(1, "移动到贴标机台", "FLOW-WH-LABEL", 5L),
-                task(2, "单次取料", "FLOW-WH-FEED", 5L));
+                task(1, "移动到贴标机台", "FLOW-WH-LABEL", 7L),
+                task(2, "单次取料", "FLOW-WH-FEED", 7L));
         PulledOrder medium = order(source, "MES-ORDER-0002", 2, issuedAt.plusMinutes(1),
-                task(1, "移动到仓库位", "FLOW-WH-FEED", 5L),
-                task(2, "单次放料", "FLOW-WH-LABEL", 5L));
+                task(1, "移动到仓库位", "FLOW-WH-FEED", 7L),
+                task(2, "单次放料", "FLOW-WH-LABEL", 7L));
         PulledOrder low = order(source, "MES-ORDER-0003", 3, issuedAt.plusMinutes(2),
-                task(1, "移动到反应区", "FLOW-WH-REACTION", 5L),
-                task(2, "复合取料", "FLOW-WH-REACTION", 5L),
-                task(3, "协作臂归零", "FLOW-WH-REACTION", 5L));
+                task(1, "移动到反应区", "FLOW-WH-REACTION", 7L),
+                task(2, "复合取料", "FLOW-WH-REACTION", 7L),
+                task(3, "协作臂归零", "FLOW-WH-REACTION", 7L));
         return new PullOrderResponse(Arrays.asList(high, medium, low), false);
     }
 

@@ -244,7 +244,7 @@ public class NodeStateTransitionRuleServiceImpl
     //将当前节点任务挂起
     private void handleManual(FlowNode currentNode) {
         WorkflowResponses.Instance suspend = workflowStateService.suspend(currentNode.getProcessInstanceId());
-        updateOrderTask(currentNode.getTaskId(), OrderTaskStatus.FAILED);
+      // updateOrderTask(currentNode.getTaskId(), OrderTaskStatus.FAILED);
     }
 
     private void handleCritical(FlowNode currentNode) {
