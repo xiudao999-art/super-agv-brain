@@ -56,6 +56,7 @@ class KunlingSchedulingApplicationTest {
     @Test
     void openApiGroupsMatchTheirModuleBoundaries() {
         GroupedOpenApi group = new AgvFlowModuleConfiguration().agvFlowApiGroup();
+        GroupedOpenApi workflowGroup = new WorkflowModuleConfiguration().workflowApiGroup();
         GroupedOpenApi resourceConfigGroup =
                 new SchedulingAppOpenApiConfiguration().resourceConfigApiGroup();
 
@@ -63,6 +64,9 @@ class KunlingSchedulingApplicationTest {
                 .containsExactly("com.kunling.scheduling.agvflow");
         assertThat(group.getPathsToMatch())
                 .containsExactly("/api/flow-templates/**", "/nodeRules/**");
+        assertThat(workflowGroup.getPackagesToScan())
+                .containsExactly("com.kunling.scheduling.workflow.controller");
+        assertThat(workflowGroup.getPathsToMatch()).containsExactly("/api/**");
         assertThat(resourceConfigGroup.getPackagesToScan())
                 .containsExactly("com.kunling.scheduling.app.controller");
         assertThat(resourceConfigGroup.getPathsToMatch()).containsExactly(

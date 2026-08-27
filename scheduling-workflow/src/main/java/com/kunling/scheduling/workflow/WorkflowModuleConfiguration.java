@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springdoc.core.GroupedOpenApi;
 
 @Configuration
 @ComponentScan(basePackageClasses = WorkflowModuleConfiguration.class)
@@ -16,6 +17,16 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @EnableConfigurationProperties(com.kunling.scheduling.workflow.order.config.OrderSyncProperties.class)
 public class WorkflowModuleConfiguration {
+    @Bean
+    public GroupedOpenApi workflowApiGroup() {
+        return GroupedOpenApi.builder()
+                .group("workflow")
+                .displayName("Workflow 工作流接口")
+                .packagesToScan("com.kunling.scheduling.workflow.controller")
+                .pathsToMatch("/api/**")
+                .build();
+    }
+
     @Bean
     @ConditionalOnMissingBean(OrderPullClient.class)
     public OrderPullClient noopOrderPullClient() {
