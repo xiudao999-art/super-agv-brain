@@ -44,10 +44,16 @@ public class WorkFlowActionExecutionReportSink implements ActionExecutionReportS
         }
 
         StatusChangedDto transition = new StatusChangedDto();
+        transition.setSuccess(report.success());
+        transition.setActionInstanceId(report.actionInstanceId());
+        transition.setActionKey(report.actionKey());
+        transition.setPhysicalOutcome(report.physicalOutcome() == null ? null : report.physicalOutcome().name());
         if (report.success()) {
             transition.setEventCode("SUCCEEDED");
         } else {
             transition.setEventCode(report.failure().handling().name());
+            transition.setBusinessCode(report.failure().businessCode());
+            transition.setReasonCode(report.failure().reasonCode());
         }
         transition.setWorkflowInstanceId(report.workflowInstanceId());
         transition.setWorkflowNodeInstanceId(report.workflowNodeInstanceId());

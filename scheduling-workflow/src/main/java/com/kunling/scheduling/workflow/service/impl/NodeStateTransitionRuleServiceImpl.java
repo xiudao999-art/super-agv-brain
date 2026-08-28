@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -150,40 +151,40 @@ public class NodeStateTransitionRuleServiceImpl
             log.warn("回传事件后未找到运行中的流程实例，processInstanceId={}", flowNode.getProcessInstanceId());
             return;
         }
-        switch (eventCode) {
-            case "SUCCEEDED":
-                handleSucceeded(flowNode, activeNodes.get(0));
-                break;
-            case "RETRYABLE":
-                handleRetryable(flowNode, activeNodes.get(0));
-                break;
-            case "MANUAL_INTERVENTION":
-                // 维持当前节点状态，等待人工接口再次触发。
-                handleManual(flowNode);
-                log.warn("节点需要人工介入，保持当前状态: nodeId={}, state={}",
-                        flowNode.getId(), flowNode.getStatus());
-                break;
-            case "NON_RETRYABLE":
-                //不可重试失败也同样挂起处理,等待外部唤醒
-                handleManual(flowNode);
-                log.warn("节点发生不可重试失败，等待外部处理: nodeId={}", flowNode.getId());
-                break;
-            case "CRITICAL":
-                handleCritical(flowNode);
-                break;
-            default:
-                throw new IllegalArgumentException("不支持的节点事件状态: " + eventCode);
+        WorkflowResponses.ActiveNode activeNode = activeNodes.get(0);
+        boolean routeException = !"SUCCEEDED".equals(eventCode)
+                && workflowService.hasExceptionGatewayAfter(flowNode.getProcessInstanceId(), activeNode.getActivityId());
+        if (routeException) {
+            handleExceptionBranch(flowNode, activeNode, dto);
+        } else {
+            switch (eventCode) {
+                case "SUCCEEDED":
+                    handleSucceeded(flowNode, activeNode, dto);
+                    break;
+                case "RETRYABLE":
+                    handleRetryable(flowNode, activeNode);
+                    break;
+                case "MANUAL_INTERVENTION":
+                    handleManual(flowNode);
+                    log.warn("节点需要人工介入，保持当前状态: nodeId={}, state={}", flowNode.getId(), flowNode.getStatus());
+                    break;
+                case "NON_RETRYABLE":
+                    handleManual(flowNode);
+                    log.warn("节点发生不可重试失败，等待外部处理: nodeId={}", flowNode.getId());
+                    break;
+                case "CRITICAL":
+                    handleCritical(flowNode);
+                    break;
+                default:
+                    throw new IllegalArgumentException("不支持的节点事件状态: " + eventCode);
+            }
         }
         updateNodeState(flowNode, rule.getNextState());
     }
 
-    private void handleSucceeded(FlowNode currentNode, WorkflowResponses.ActiveNode activeNode) {
+    private void handleSucceeded(FlowNode currentNode, WorkflowResponses.ActiveNode activeNode, StatusChangedDto dto) {
         // 终态回调可能被重复投递，已成功的节点不能再次启动下一节点。
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("executionId", activeNode.getExecutionId());
-        variables.put("success", true);
-        variables.put("nodeState", NodeStateEnum.SUCCEEDED.name());
-        variables.put("deviceStatus", "COMPLETED");
+        Map<String, Object> variables = completionVariables(activeNode, dto, true);
         WorkflowResponses.Instance instance = workflowStateService.completeExecution(activeNode.getExecutionId(), variables);
         //完成当前节点后,判断流程是否结束
         if ("COMPLETED".equals(instance.getState())) {
@@ -214,6 +215,43 @@ public class NodeStateTransitionRuleServiceImpl
                     nextNodes.get(0), StartTypeEnum.START);
         }
 
+    }
+
+    private void handleExceptionBranch(FlowNode currentNode, WorkflowResponses.ActiveNode activeNode,
+                                       StatusChangedDto dto) {
+        Map<String, Object> variables = completionVariables(activeNode, dto, false);
+        WorkflowResponses.Instance instance = workflowStateService.completeExecution(activeNode.getExecutionId(), variables);
+        if ("COMPLETED".equals(instance.getState())) {
+            updateOrderTask(currentNode.getTaskId(), OrderTaskStatus.FAILED);
+            throw new IllegalStateException("异常分支不能直接结束流程: " + activeNode.getActivityId());
+        }
+        List<WorkflowResponses.ActiveNode> nextNodes = workflowService.listActiveNodes(instance.getId());
+        if (CollectionUtils.isEmpty(nextNodes)) {
+            throw new IllegalStateException("异常分支没有找到恢复动作: " + instance.getId());
+        }
+        flowControlService.dispatchDownstreamAction(currentNode.getProcessInstanceId(), currentNode.getTaskId(),
+                nextNodes.get(0), StartTypeEnum.CALLBACK);
+        log.info("动作异常已按模板分支推进: nodeId={}, eventCode={}, businessCode={}, reasonCode={}",
+                currentNode.getId(), dto.getEventCode(), dto.getBusinessCode(), dto.getReasonCode());
+    }
+
+    private Map<String, Object> completionVariables(WorkflowResponses.ActiveNode activeNode,
+                                                    StatusChangedDto dto, boolean success) {
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("executionId", activeNode.getExecutionId());
+        variables.put("success", success);
+        variables.put("nodeState", success ? NodeStateEnum.SUCCEEDED.name() : NodeStateEnum.FAILED.name());
+        variables.put("deviceStatus", success ? "COMPLETED" : "FAILED");
+        Map<String, Object> actionResult = new LinkedHashMap<>();
+        actionResult.put("success", success);
+        actionResult.put("eventCode", dto.getEventCode());
+        actionResult.put("businessCode", dto.getBusinessCode());
+        actionResult.put("reasonCode", dto.getReasonCode());
+        actionResult.put("physicalOutcome", dto.getPhysicalOutcome());
+        actionResult.put("actionKey", dto.getActionKey());
+        actionResult.put("actionInstanceId", dto.getActionInstanceId());
+        variables.put("actionResult", actionResult);
+        return variables;
     }
 
     private void updateOrderTask(Long taskId, OrderTaskStatus orderTaskStatus) {

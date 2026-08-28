@@ -17,7 +17,10 @@ import org.flowable.engine.repository.ProcessDefinitionQuery;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.ExclusiveGateway;
 import org.flowable.bpmn.model.FlowElement;
+import org.flowable.bpmn.model.FlowNode;
+import org.flowable.bpmn.model.SequenceFlow;
 import org.flowable.task.api.Task;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -137,6 +140,23 @@ public class WorkflowServiceImpl implements WorkflowService {
                         getActivityName(bpmnModel, item.getActivityId()),
                         item.getProcessInstanceId(), item.isSuspended()))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public boolean hasExceptionGatewayAfter(String processInstanceId, String activityId) {
+        ProcessInstance instance = requiredActiveInstance(processInstanceId);
+        BpmnModel model = repositoryService.getBpmnModel(instance.getProcessDefinitionId());
+        FlowElement current = model == null ? null : model.getFlowElement(activityId);
+        if (!(current instanceof FlowNode)) return false;
+        for (SequenceFlow flow : ((FlowNode) current).getOutgoingFlows()) {
+            FlowElement target = model.getFlowElement(flow.getTargetRef());
+            if (target instanceof ExclusiveGateway
+                    && "true".equalsIgnoreCase(target.getAttributeValue(
+                    "http://flowable.org/bpmn", "exceptionGateway"))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String getActivityName(BpmnModel bpmnModel, String activityId) {

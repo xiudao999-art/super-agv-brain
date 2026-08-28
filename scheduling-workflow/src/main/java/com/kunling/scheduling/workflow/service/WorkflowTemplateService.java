@@ -60,6 +60,7 @@ public class WorkflowTemplateService {
     @Transactional
     public WorkflowTemplateResponses.Detail create(WorkflowTemplateRequests.Save request) {
         validateBpmnXml(request.getBpmnXml());
+        WorkflowTemplateValidator.validate(request.getBpmnXml(), request.getEditorData());
         WorkflowTemplateEntity entity = new WorkflowTemplateEntity();
         entity.setTemplateNumber("WFT" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HHmmss")));
         copy(request, entity);
@@ -76,10 +77,12 @@ public class WorkflowTemplateService {
         WorkflowTemplateEntity entity = require(id);
         String oldProcessId = processId(entity.getBpmnXml());
         String newProcessId = validateBpmnXml(request.getBpmnXml());
+        WorkflowTemplateValidator.validate(request.getBpmnXml(), request.getEditorData());
         if (StringUtils.isNotBlank(entity.getProcessDefinitionId())
                 && !java.util.Objects.equals(oldProcessId, newProcessId)) {
             request.setBpmnXml(normalizeProcessId(request.getBpmnXml(), newProcessId, oldProcessId));
             validateBpmnXml(request.getBpmnXml());
+            WorkflowTemplateValidator.validate(request.getBpmnXml(), request.getEditorData());
         }
         copy(request, entity);
         // 保留上次Flowable定义信息，当前XML标记为待发布草稿。
@@ -163,6 +166,7 @@ public class WorkflowTemplateService {
     public WorkflowResponses.Definition deploy(Long id) {
         WorkflowTemplateEntity entity = require(id);
         validateBpmnXml(entity.getBpmnXml());
+        WorkflowTemplateValidator.validate(entity.getBpmnXml(), readJson(entity.getEditorData()));
         WorkflowRequests.DeployDefinition request = new WorkflowRequests.DeployDefinition();
         request.setName(entity.getTemplateName());
         request.setCategory("AGV_TEMPLATE");
@@ -360,6 +364,8 @@ public class WorkflowTemplateService {
             Element process = (Element) processes.item(0);
             Map<String, String> nodeNames = new LinkedHashMap<>();
             Map<String, List<String>> outgoing = new HashMap<>();
+            Map<String, String> edgeLabels = new HashMap<>();
+            Set<String> gatewayIds = new HashSet<>();
             List<String> starts = new ArrayList<>();
             NodeList children = process.getChildNodes();
             for (int i = 0; i < children.getLength(); i++) {
@@ -370,6 +376,9 @@ public class WorkflowTemplateService {
                 if ("sequenceFlow".equals(type)) {
                     outgoing.computeIfAbsent(element.getAttribute("sourceRef"), key -> new ArrayList<>())
                             .add(element.getAttribute("targetRef"));
+                    String label = StringUtils.trimToNull(element.getAttribute("name"));
+                    if (label != null) edgeLabels.put(
+                            element.getAttribute("sourceRef") + "\u0000" + element.getAttribute("targetRef"), label);
                     continue;
                 }
                 String id = element.getAttribute("id");
@@ -377,24 +386,30 @@ public class WorkflowTemplateService {
                 String name = StringUtils.defaultIfBlank(element.getAttribute("name"), id);
                 nodeNames.put(id, name);
                 if ("startEvent".equals(type)) starts.add(id);
+                if ("exclusiveGateway".equals(type)) gatewayIds.add(id);
             }
 
             List<String> result = new ArrayList<>();
             Set<String> visited = new HashSet<>();
-            for (String start : starts) appendSequence(start, nodeNames, outgoing, visited, result);
+            for (String start : starts) appendSequence(start, null, nodeNames, outgoing,
+                    edgeLabels, gatewayIds, visited, result);
             return result;
         } catch (Exception e) {
             throw new IllegalStateException("模板BPMN XML无法解析", e);
         }
     }
 
-    private void appendSequence(String nodeId, Map<String, String> nodeNames,
-                                Map<String, List<String>> outgoing, Set<String> visited, List<String> result) {
+    private void appendSequence(String nodeId, String incomingLabel, Map<String, String> nodeNames,
+                                Map<String, List<String>> outgoing, Map<String, String> edgeLabels,
+                                Set<String> gatewayIds, Set<String> visited, List<String> result) {
         if (!visited.add(nodeId)) return;
         String name = nodeNames.get(nodeId);
-        if (name != null) result.add(name);
+        if (name != null && !gatewayIds.contains(nodeId)) {
+            result.add(StringUtils.isBlank(incomingLabel) ? name : "[" + incomingLabel + "] " + name);
+        }
         for (String target : outgoing.getOrDefault(nodeId, Collections.emptyList())) {
-            appendSequence(target, nodeNames, outgoing, visited, result);
+            String label = gatewayIds.contains(nodeId) ? edgeLabels.get(nodeId + "\u0000" + target) : null;
+            appendSequence(target, label, nodeNames, outgoing, edgeLabels, gatewayIds, visited, result);
         }
     }
 

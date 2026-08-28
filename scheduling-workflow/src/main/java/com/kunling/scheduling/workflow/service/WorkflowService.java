@@ -17,6 +17,8 @@ public interface WorkflowService {
     WorkflowResponses.Instance terminate(String processInstanceId, WorkflowRequests.TerminateInstance request);
     //查询当前节点
     List<WorkflowResponses.ActiveNode> listActiveNodes(String processInstanceId);
+    /** 当前活动节点是否直接连接受控异常判断网关。 */
+    boolean hasExceptionGatewayAfter(String processInstanceId, String activityId);
     WorkflowResponses.Instance trigger(WorkflowRequests.TriggerExecution request);
     List<WorkflowResponses.HistoryNode> listHistory(String processInstanceId);
     List<WorkflowResponses.UserTask> listTasks(String processInstanceId, String assignee);
