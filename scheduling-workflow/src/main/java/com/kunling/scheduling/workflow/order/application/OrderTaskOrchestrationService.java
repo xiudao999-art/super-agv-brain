@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.util.CollectionUtils;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
@@ -34,6 +35,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -45,12 +47,8 @@ public class OrderTaskOrchestrationService {
     private final FlowControlService flowControlService;
     private final ApplicationEventPublisher publisher;
     private final OrderSyncLockService lockService;
-    @Resource
-    private WorkflowTemplateService workflowTemplateService;
-    @Resource
-    private FlowNodeService flowNodeService;
 
-
+    private static final String KEY_PREFIX = "order:task:";
 
     public OrderTaskOrchestrationService(CustomerOrderMapper orderMapper, OrderTaskMapper taskMapper,
                                          FlowTemplateMapper flowTemplateMapper,
@@ -66,16 +64,16 @@ public class OrderTaskOrchestrationService {
         this.lockService = lockService;
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
-    public void onTaskFlowStatus(TaskFlowStatusEvent event) {
-        if (event.getType() == TaskFlowStatusEvent.Type.SUCCEEDED) {
-            completeAndStartNext(event.getTaskId());
-        } else if (event.getType() == TaskFlowStatusEvent.Type.WAITING) {
-            markWaiting(event.getTaskId(), event.getCurrentStep(), event.getMessage());
-        } else {
-            markFailed(event.getTaskId(), event.getMessage());
-        }
-    }
+//    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+//    public void onTaskFlowStatus(TaskFlowStatusEvent event) {
+//        if (event.getType() == TaskFlowStatusEvent.Type.SUCCEEDED) {
+//            completeAndStartNext(event.getTaskId());
+//        } else if (event.getType() == TaskFlowStatusEvent.Type.WAITING) {
+//            markWaiting(event.getTaskId(), event.getCurrentStep(), event.getMessage());
+//        } else {
+//            markFailed(event.getTaskId(), event.getMessage());
+//        }
+//    }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onOrderExecutionReleased(OrderExecutionReleasedEvent event) {
@@ -86,27 +84,47 @@ public class OrderTaskOrchestrationService {
      * 定时调度入口：先推进运行中的订单，否则按订单优先级选择一个排队订单。
      */
     public boolean dispatchNext() {
-        CustomerOrder running = orderMapper.selectOne(Wrappers.<CustomerOrder>lambdaQuery()
-                .in(CustomerOrder::getStatus, OrderStatus.RUNNING, OrderStatus.FAILED)
-                .last("limit 1"));
-        if (running != null) {
-            long activeTasks = taskMapper.selectCount(Wrappers.<OrderTask>lambdaQuery()
-                    .eq(OrderTask::getOrderId, running.getId())
-                    .in(OrderTask::getStatus, OrderTaskStatus.RUNNING, OrderTaskStatus.FAILED));
-            if (activeTasks > 0) {
-                return false;
+        String key = KEY_PREFIX + "start";
+        boolean locked = lockService.tryLock(key, "1", Duration.ofSeconds(10));
+        if (!locked) return false;
+        try {
+            List<CustomerOrder> runningList = orderMapper.selectList(Wrappers.<CustomerOrder>lambdaQuery()
+                    .in(CustomerOrder::getStatus, OrderStatus.RUNNING, OrderStatus.FAILED, OrderStatus.WAITING)
+                    .last("limit 1"));
+            if (!CollectionUtils.isEmpty(runningList)) {
+                //获取进行中的代码
+                List<CustomerOrder> runningOrder = runningList.stream()
+                        .filter(order -> order.getStatus() == OrderStatus.RUNNING)
+                        .collect(Collectors.toList());
+                if (!CollectionUtils.isEmpty(runningOrder)){
+                    long activeTasks = taskMapper.selectCount(Wrappers.<OrderTask>lambdaQuery()
+                            .eq(OrderTask::getOrderId, runningList.get(0).getId())
+                            .in(OrderTask::getStatus, OrderTaskStatus.RUNNING, OrderTaskStatus.FAILED));
+                    if (activeTasks > 0) {
+                        return false;
+                    }
+                    return activeTasks == 0 && startFirstQueued(runningOrder.get(0).getId());
+                }
+                List<CustomerOrder> failedOrder = runningList.stream()
+                        .filter(order -> order.getStatus() == OrderStatus.FAILED)
+                        .collect(Collectors.toList());
+                if (!CollectionUtils.isEmpty(failedOrder)) {
+                    return false;
+                }
             }
 
-            return activeTasks == 0 && startFirstQueued(running.getId());
+            CustomerOrder queued = orderMapper.selectOne(Wrappers.<CustomerOrder>lambdaQuery()
+                    .eq(CustomerOrder::getStatus, OrderStatus.QUEUED)
+                    .orderByDesc(CustomerOrder::getPriority)
+                    .orderByAsc(CustomerOrder::getIssuedAt)
+                    .orderByAsc(CustomerOrder::getId)
+                    .last("limit 1"));
+            return queued != null && startFirstQueued(queued.getId());
+        }finally {
+            lockService.unlock(key, "1");
         }
 
-        CustomerOrder queued = orderMapper.selectOne(Wrappers.<CustomerOrder>lambdaQuery()
-                .eq(CustomerOrder::getStatus, OrderStatus.QUEUED)
-                .orderByDesc(CustomerOrder::getPriority)
-                .orderByAsc(CustomerOrder::getIssuedAt)
-                .orderByAsc(CustomerOrder::getId)
-                .last("limit 1"));
-        return queued != null && startFirstQueued(queued.getId());
+
     }
 
     public boolean startFirstQueued(Long orderId) {

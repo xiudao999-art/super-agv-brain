@@ -6,6 +6,7 @@ import lombok.Getter;
 @Getter
 public enum OrderStatus {
     QUEUED("排队中", "订单已同步入库，正在等待首个任务开始执行"),
+    WAITING("等待中", "订单挂起，待执行"),
     RUNNING("执行中", "订单至少有一个任务正在执行或等待外部处理"),
     SUCCEEDED("执行成功", "订单下的全部任务均已成功完成"),
     FAILED("执行失败", "订单中的任务执行失败，后续任务停止并等待人工处理"),
