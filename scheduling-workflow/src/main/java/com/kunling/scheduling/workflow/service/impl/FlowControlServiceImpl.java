@@ -237,6 +237,7 @@ public class FlowControlServiceImpl implements FlowControlService {
         flowNode.setNodeName(activeNodes.get(0).getActivityName());
         flowNode.setTaskId(taskId);
         flowNode.setProcessInstanceId(processInstanceId);
+        flowNode.setRobotId(robotSessions.get(0).robotId());
         flowNode.setSort(count + 1);
         flowNode.setStatus(NodeState.RUNNING);
         flowNode.setNodeCode(activeNodes.get(0).getActivityId());
@@ -258,6 +259,7 @@ public class FlowControlServiceImpl implements FlowControlService {
                 robotId,
                 actionKey,
                 parameterSetId);
+        log.info("执行下发参数为{}",command.toString());
         actionExecutionService.execute(command);
         return true;
     }

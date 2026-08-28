@@ -5,14 +5,17 @@ import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
+import com.kunling.scheduling.action.execution.domain.ActionExecutionReport;
 import com.kunling.scheduling.workflow.dto.StatusChangedDto;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.NodeStateTransitionRule;
+import com.kunling.scheduling.workflow.entity.RobotAlarmRecord;
 import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
 import com.kunling.scheduling.workflow.mapper.NodeStateTransitionRuleMapper;
+import com.kunling.scheduling.workflow.mapper.RobotAlarmRecordMapper;
 import com.kunling.scheduling.workflow.order.application.OrderTaskOrchestrationService;
 import com.kunling.scheduling.workflow.order.domain.CustomerOrder;
 import com.kunling.scheduling.workflow.order.domain.OrderStatus;
@@ -59,6 +62,9 @@ public class NodeStateTransitionRuleServiceImpl
 
     @Resource
     private OrderTaskOrchestrationService orderTaskOrchestrationService;
+
+    @Resource
+    private RobotAlarmRecordMapper robotAlarmRecordMapper;
 
 
     @Override
@@ -110,23 +116,21 @@ public class NodeStateTransitionRuleServiceImpl
 
     @Override
     @Transactional
-    public void statusChanged(StatusChangedDto dto) {
-        if (dto == null || dto.getWorkflowNodeInstanceId() == null
-                || dto.getWorkflowNodeInstanceId().trim().isEmpty()) {
+    public void statusChanged(ActionExecutionReport report) {
+        if (report == null || report.workflowNodeInstanceId() == null
+                || report.workflowInstanceId().trim().isEmpty()) {
             throw new IllegalArgumentException("workflowNodeInstanceId 不能为空");
         }
-        if (dto.getEventCode() == null || dto.getEventCode().trim().isEmpty()) {
-            throw new IllegalArgumentException("eventCode 不能为空");
-        }
 
-        Integer nodeId = Integer.valueOf(dto.getWorkflowNodeInstanceId());
+        Integer nodeId = Integer.valueOf(report.workflowNodeInstanceId());
         FlowNode flowNode = flowNodeService.getById(nodeId);
         if (flowNode == null) {
             throw new IllegalArgumentException("流程节点不存在: " + nodeId);
         }
 
+
         //模拟执行过程
-        try {
+  /*      try {
             if (flowNode.getNodeCode().contains("MOVE")) {
                 Thread.sleep(120000);
             } else {
@@ -134,14 +138,18 @@ public class NodeStateTransitionRuleServiceImpl
             }
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        }*/
+
+        String eventCode = "";
+        if (report.success()) {
+            eventCode = "SUCCEEDED";
+        } else {
+            eventCode = report.failure().handling().name();
         }
 
-        String eventCode = dto.getEventCode().trim().toUpperCase(java.util.Locale.ROOT);
-        log.info("处理节点状态回调: nodeId={}, currentState={}, eventCode={}",
-                flowNode.getId(), flowNode.getStatus(), eventCode);
 
         NodeStateTransitionRule rule = this.lambdaQuery().eq(NodeStateTransitionRule::getCurrentState, flowNode.getStatus())
-                .eq(NodeStateTransitionRule::getEventCode, dto.getEventCode()).last("limit 1").one();
+                .eq(NodeStateTransitionRule::getEventCode, eventCode).last("limit 1").one();
 
         List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(flowNode.getProcessInstanceId());
 
@@ -175,6 +183,16 @@ public class NodeStateTransitionRuleServiceImpl
                 throw new IllegalArgumentException("不支持的节点事件状态: " + eventCode);
         }
         updateNodeState(flowNode, rule.getNextState());
+        //增加异常日志
+        if (!report.success()) {
+            RobotAlarmRecord record = new RobotAlarmRecord();
+            record.setNodeId(Long.valueOf(nodeId));
+            record.setAlarmNo(report.failure().businessCode());
+            record.setAlarmDescription(report.failure().message());
+            record.setHandlingLevel(3);
+            record.setHandlingStatus(0);
+            robotAlarmRecordMapper.insert(record);
+        }
     }
 
     private void handleSucceeded(FlowNode currentNode, WorkflowResponses.ActiveNode activeNode) {
@@ -244,7 +262,7 @@ public class NodeStateTransitionRuleServiceImpl
     //将当前节点任务挂起
     private void handleManual(FlowNode currentNode) {
         WorkflowResponses.Instance suspend = workflowStateService.suspend(currentNode.getProcessInstanceId());
-      // updateOrderTask(currentNode.getTaskId(), OrderTaskStatus.FAILED);
+        // updateOrderTask(currentNode.getTaskId(), OrderTaskStatus.FAILED);
     }
 
     private void handleCritical(FlowNode currentNode) {
