@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import javax.validation.Valid;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -42,5 +43,12 @@ public class FlowTemplateController extends BaseController {
             @RequestParam(defaultValue = "10") long pageSize,
             @RequestParam(required = false) String keyword) {
         return ApiResult.success(service.flowPage(pageNum, pageSize, keyword));
+    }
+
+
+    @GetMapping("/list")
+    @Operation(summary = "查询流程模板列表")
+    public ApiResult<List<WorkflowTemplateResponses.FlowPageItem>> list() {
+        return ApiResult.success(templateService.flowTemplateList());
     }
 }
