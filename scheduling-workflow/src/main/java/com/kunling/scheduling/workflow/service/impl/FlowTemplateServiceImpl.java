@@ -8,8 +8,6 @@ import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
 import com.kunling.scheduling.workflow.service.FlowTemplateService;
-import com.kunling.scheduling.workflow.service.WorkflowService;
-import com.kunling.scheduling.workflow.service.WorkflowStateService;
 import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,8 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -29,7 +30,6 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
         implements FlowTemplateService {
     @Resource
     private WorkflowTemplateService workflowTemplateService;
-    ;
 
     /**
      * 创建流程模板
@@ -67,6 +67,21 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
             throw new IllegalStateException("流程保存失败");
         }
         return template.getId();
+    }
+
+    @Override
+    public List<WorkflowTemplateResponses.FlowPageItem> flowTemplateList() {
+        List<FlowTemplate> list = list();
+        if (list != null && !list.isEmpty()) {
+            return list.stream().map(item -> {
+                WorkflowTemplateResponses.FlowPageItem flowPageItem = new WorkflowTemplateResponses.FlowPageItem();
+                flowPageItem.setId(item.getId());
+                flowPageItem.setFlowName(item.getTemplateName());
+                flowPageItem.setFlowNumber(item.getTemplateNumber());
+                return flowPageItem;
+            }).collect(Collectors.toList());
+        }
+        return Collections.emptyList();
     }
 
     private String generateFlowNumber() {
