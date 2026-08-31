@@ -7,9 +7,9 @@ import lombok.EqualsAndHashCode;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
-@TableName("agv_device")
-@Schema(description = "AGV设备")
-public class AgvDevice extends BaseEntity {
+@TableName("hardware_info")
+@Schema(description = "硬件信息")
+public class HardwareInfo extends BaseEntity {
 
     @Schema(description = "设备名称")
     private String deviceName;

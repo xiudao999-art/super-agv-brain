@@ -16,7 +16,7 @@ public class BaseEntity  implements Serializable {
     private Long id;
 
     @TableLogic
-    private Integer isDeleted;
+    private Integer isDeleted = 0;
 
 
     @TableField(fill = FieldFill.INSERT, updateStrategy = FieldStrategy.NOT_EMPTY)
