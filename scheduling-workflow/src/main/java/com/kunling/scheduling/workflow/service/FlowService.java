@@ -94,7 +94,7 @@ public class FlowService {
         //执行下一个节点流程
         List<WorkflowResponses.ActiveNode> current = workflowService.listActiveNodes(currentNode.getProcessInstanceId());
         flowControlService.dispatchDownstreamAction(currentNode.getProcessInstanceId(), currentNode.getTaskId(),
-                current.get(0), StartTypeEnum.START);
+                current.get(0), StartTypeEnum.CALLBACK);
 
     }
 }

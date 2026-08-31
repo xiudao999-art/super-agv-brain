@@ -2,6 +2,7 @@ package com.kunling.scheduling.workflow.service.impl;
 
 import com.kunling.scheduling.workflow.dto.WorkflowRequests;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
+import com.kunling.scheduling.workflow.action.WorkflowActionBindingValidator;
 import com.kunling.scheduling.workflow.service.WorkflowService;
 import com.kunling.scheduling.workflow.service.WorkflowStateService;
 import org.apache.commons.lang3.StringUtils;
@@ -40,20 +41,27 @@ public class WorkflowServiceImpl implements WorkflowService {
     private final HistoryService historyService;
     private final TaskService taskService;
     private final WorkflowStateService workflowStateService;
+    private final WorkflowActionBindingValidator actionBindingValidator;
 
     public WorkflowServiceImpl(RepositoryService repositoryService, RuntimeService runtimeService,
                                HistoryService historyService, TaskService taskService,
-                               WorkflowStateService workflowStateService) {
+                               WorkflowStateService workflowStateService,
+                               WorkflowActionBindingValidator actionBindingValidator) {
         this.repositoryService = repositoryService;
         this.runtimeService = runtimeService;
         this.historyService = historyService;
         this.taskService = taskService;
         this.workflowStateService = workflowStateService;
+        this.actionBindingValidator = actionBindingValidator;
     }
 
     @Override
     @Transactional
     public WorkflowResponses.Definition deploy(WorkflowRequests.DeployDefinition request) {
+        if (request == null) {
+            throw new IllegalArgumentException("流程部署请求不能为空");
+        }
+        actionBindingValidator.validate(request.getBpmnXml());
         String resourceName = StringUtils.defaultIfBlank(request.getResourceName(), "process.bpmn20.xml");
         if (!resourceName.endsWith(".bpmn") && !resourceName.endsWith(".bpmn20.xml")) {
             resourceName += ".bpmn20.xml";

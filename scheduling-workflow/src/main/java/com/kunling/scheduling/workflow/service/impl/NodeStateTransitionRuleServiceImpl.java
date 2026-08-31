@@ -1,12 +1,12 @@
 package com.kunling.scheduling.workflow.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.toolkit.CollectionUtils;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import com.kunling.scheduling.action.execution.domain.ActionExecutionReport;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionResult;
+import com.kunling.scheduling.workflow.action.ActionReportEventResolver;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.NodeStateTransitionRule;
@@ -14,6 +14,7 @@ import com.kunling.scheduling.workflow.entity.RobotAlarmRecord;
 import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
+import com.kunling.scheduling.workflow.mapper.FlowNodeMapper;
 import com.kunling.scheduling.workflow.mapper.NodeStateTransitionRuleMapper;
 import com.kunling.scheduling.workflow.mapper.RobotAlarmRecordMapper;
 import com.kunling.scheduling.workflow.order.application.OrderTaskOrchestrationService;
@@ -25,7 +26,6 @@ import com.kunling.scheduling.workflow.order.infrastructure.CustomerOrderMapper;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import com.kunling.scheduling.workflow.service.*;
 import lombok.extern.slf4j.Slf4j;
-import org.hibernate.criterion.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +44,12 @@ public class NodeStateTransitionRuleServiceImpl
 
     @Resource
     private FlowNodeService flowNodeService;
+
+    @Resource
+    private FlowNodeMapper flowNodeMapper;
+
+    @Resource
+    private ActionReportEventResolver actionReportEventResolver;
 
     @Resource
     private WorkflowStateService workflowStateService;
@@ -122,13 +128,16 @@ public class NodeStateTransitionRuleServiceImpl
             throw new IllegalArgumentException("actionInstanceId 不能为空");
         }
 
-        FlowNode flowNode = flowNodeService.lambdaQuery()
-                .eq(FlowNode::getActionInstanceId, report.actionInstanceId())
-                .last("limit 1")
-                .one();
+        // 通过行锁串行化同一 Action 实例的重复或并发最终报告。
+        FlowNode flowNode = flowNodeMapper.selectByActionInstanceIdForUpdate(report.actionInstanceId());
         if (flowNode == null) {
             throw new IllegalArgumentException(
                     "未找到 actionInstanceId 对应的流程节点: " + report.actionInstanceId());
+        }
+        if (flowNode.getStatus() != NodeState.RUNNING) {
+            log.info("忽略已处理的 Action 最终报告，actionInstanceId={}, nodeId={}, state={}",
+                    report.actionInstanceId(), flowNode.getId(), flowNode.getStatus());
+            return;
         }
         Long nodeId = flowNode.getId();
 
@@ -144,37 +153,26 @@ public class NodeStateTransitionRuleServiceImpl
             throw new RuntimeException(e);
         }*/
 
-        String eventCode;
-        if (report.result() == ActionExecutionResult.SUCCEEDED) {
-            eventCode = "SUCCEEDED";
-        } else {
-            if (report.failure() == null || report.failure().handlingConstraint() == null) {
-                throw new IllegalArgumentException("失败报告缺少 handlingConstraint");
-            }
-            eventCode = report.failure().handlingConstraint().name();
-        }
+        String eventCode = actionReportEventResolver.resolve(report);
 
 
-        NodeStateTransitionRule rule = this.lambdaQuery().eq(NodeStateTransitionRule::getCurrentState, flowNode.getStatus())
-                .eq(NodeStateTransitionRule::getEventCode, eventCode).last("limit 1").one();
+        NodeStateTransitionRule rule = this.lambdaQuery()
+                .eq(NodeStateTransitionRule::getCurrentState, flowNode.getStatus())
+                .eq(NodeStateTransitionRule::getEventCode, eventCode)
+                .eq(NodeStateTransitionRule::getEnabled, 1)
+                .last("limit 1")
+                .one();
         if (rule == null) {
             throw new IllegalStateException("未配置节点状态转换规则: currentState="
                     + flowNode.getStatus() + ", eventCode=" + eventCode);
         }
 
-        List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(flowNode.getProcessInstanceId());
-
-
-        if (CollectionUtils.isEmpty(activeNodes)) {
-            log.warn("回传事件后未找到运行中的流程实例，processInstanceId={}", flowNode.getProcessInstanceId());
-            return;
-        }
         switch (eventCode) {
             case "SUCCEEDED":
-                handleSucceeded(flowNode, activeNodes.get(0));
+                handleSucceeded(flowNode, requireCurrentActiveNode(flowNode));
                 break;
             case "RETRYABLE":
-                handleRetryable(flowNode, activeNodes.get(0));
+                handleRetryable(flowNode, requireCurrentActiveNode(flowNode));
                 break;
             case "MANUAL_INTERVENTION":
                 // 维持当前节点状态，等待人工接口再次触发。
@@ -204,6 +202,17 @@ public class NodeStateTransitionRuleServiceImpl
             record.setHandlingStatus(0);
             robotAlarmRecordMapper.insert(record);
         }
+    }
+
+    /** 串行流程也必须按 activityId 匹配，避免将回报推进到其他活动节点。 */
+    private WorkflowResponses.ActiveNode requireCurrentActiveNode(FlowNode flowNode) {
+        List<WorkflowResponses.ActiveNode> activeNodes =
+                workflowService.listActiveNodes(flowNode.getProcessInstanceId());
+        return activeNodes.stream()
+                .filter(node -> flowNode.getNodeCode().equals(node.getActivityId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Action 回报对应的 Flowable 活动节点不存在: " + flowNode.getNodeCode()));
     }
 
     private void handleSucceeded(FlowNode currentNode, WorkflowResponses.ActiveNode activeNode) {
@@ -240,7 +249,7 @@ public class NodeStateTransitionRuleServiceImpl
                 throw new IllegalStateException("流程未结束但没有找到下一个活动节点: " + instance.getId());
             }
             flowControlService.dispatchDownstreamAction(currentNode.getProcessInstanceId(), currentNode.getTaskId(),
-                    nextNodes.get(0), StartTypeEnum.START);
+                    nextNodes.get(0), StartTypeEnum.CALLBACK);
         }
 
     }
@@ -266,7 +275,8 @@ public class NodeStateTransitionRuleServiceImpl
                 && currentNode.getStatus() != NodeState.WAITING) {
             throw new IllegalStateException("当前节点状态不允许重试: " + currentNode.getStatus());
         }
-        flowControlService.dispatchDownstreamAction(currentNode.getProcessInstanceId(), currentNode.getTaskId(), activeNode, StartTypeEnum.START);
+        flowControlService.dispatchDownstreamAction(currentNode.getProcessInstanceId(), currentNode.getTaskId(),
+                activeNode, StartTypeEnum.CALLBACK);
 
     }
 

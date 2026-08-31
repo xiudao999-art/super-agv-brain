@@ -4,8 +4,10 @@
 
 - 全新空数据库：只执行 `../create/kunling_action_schema.sql`，不要再执行已包含在基线中的历史迁移。
 - `20260825_01` 之前的文件是已发布的 1.0 历史迁移记录，保留用于数据库审计，不属于 2.0 运行时兼容代码。
-- 已处于旧 Action 2.0 最终结构的开发数据库：备份并停止 Action 服务、确认没有活动
-  Action 后执行 `20260831_01_simplify_action_composition.sql`。
+- 当前已部署的动态 Action 旧结构：备份并停止 Action 服务、确认没有活动 Action 后，
+  直接执行 `20260831_01_simplify_action_composition.sql`，不要先执行 20260825、20260826。
+- 如果历史 `_01` 已中断并形成已知半迁移结构，禁止重跑 `_01`。完成备份并确认定义、
+  执行和事件表均为空后，只执行 `20260831_02_repair_partial_action_composition.sql`。
 - 其他历史结构不得猜测或跨号执行，必须先依据该环境的迁移登记确认前置结构。
 - 2.0 上线后的新变更继续按时间顺序追加，并只执行该环境尚未登记的脚本。
 
@@ -14,5 +16,9 @@
 `20260826_01_remove_cancelled_action_state.sql` 将历史 `CANCELLED` 保守收敛为
 `UNKNOWN_HOLD + UNKNOWN`；它只迁移历史数据，不增加运行时兼容分支。
 
-`20260831_01_simplify_action_composition.sql` 是一次明确的不兼容切换：清空旧定义和执行数据，
-删除参数集及所有配置快照字段，只保留实际下发的 `command_input_json` 作为执行证据。
+`20260831_01_simplify_action_composition.sql` 是一次明确的不兼容切换：它会严格识别当前旧结构，
+重建定义、执行和事件表，删除参数集及所有旧列；异常映射规则保留。新执行仅通过
+`command_input_json` 保存实际下发证据。
+
+`20260831_02_repair_partial_action_composition.sql` 只处理 `_01` 中断后的精确半迁移状态；
+它要求待重建的定义、执行和事件表全部为空，不处理或猜测其他数据库状态。

@@ -4,36 +4,24 @@ import com.kunling.scheduling.action.execution.application.ExecuteActionCommand;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionTransport;
 import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
 import com.kunling.scheduling.workflow.dto.*;
-import com.kunling.scheduling.workflow.action.WorkFlowExecutionsGateway;
+import com.kunling.scheduling.workflow.action.WorkflowActionCommandDispatcher;
 import com.kunling.scheduling.workflow.entity.FlowNode;
-import com.kunling.scheduling.workflow.entity.FlowTemplate;
-import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
 import com.kunling.scheduling.workflow.enums.NodeState;
-import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
-import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
-import com.kunling.scheduling.workflow.mapper.WorkflowTemplateMapper;
-import com.kunling.scheduling.workflow.order.application.TaskFlowStatusEvent;
 import com.kunling.scheduling.workflow.order.domain.OrderTask;
 import com.kunling.scheduling.workflow.order.domain.OrderTaskStatus;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import com.kunling.scheduling.workflow.service.*;
-import com.kunling.scheduling.workflow.service.WorkflowStateService;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
-
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 
 @Service
 public class FlowControlServiceImpl implements FlowControlService {
@@ -47,22 +35,11 @@ public class FlowControlServiceImpl implements FlowControlService {
     @Resource
     private OrderTaskMapper orderTaskMapper;
     @Resource
-    private WorkFlowExecutionsGateway workFlowExecutionsGateway;
+    private WorkflowActionCommandDispatcher actionCommandDispatcher;
     @Resource
     private WorkflowStateService workflowStateService;
     @Resource
-    private ApplicationEventPublisher eventPublisher;
-
-    @Resource
     private FlowNodeService flowNodeService;
-    @Resource
-    private WorkflowTemplateMapper workflowTemplateMapper;
-
-    @Resource
-    private FlowTemplateMapper flowTemplateMapper;
-
-    @Resource
-    private WorkflowTemplateService workflowTemplateService;
 
 
     @Override
@@ -240,7 +217,9 @@ public class FlowControlServiceImpl implements FlowControlService {
         flowNode.setNodeCode(activeNode.getActivityId());
         flowNode.setActionDefinitionId(actionDefinitionId);
         flowNode.setActionInstanceId(actionInstanceId);
-        flowNodeService.save(flowNode);
+        if (!flowNodeService.save(flowNode)) {
+            throw new IllegalStateException("流程节点执行身份保存失败: " + activeNode.getActivityId());
+        }
         OrderTask task = orderTaskMapper.selectById(taskId);
         if (task == null) {
             throw new NoSuchElementException("订单任务不存在: " + taskId);
@@ -249,14 +228,16 @@ public class FlowControlServiceImpl implements FlowControlService {
         task.setStatus(OrderTaskStatus.RUNNING);
         task.setErrorCode(null);
         task.setErrorMessage(null);
-        orderTaskMapper.updateById(task);
+        if (orderTaskMapper.updateById(task) != 1) {
+            throw new IllegalStateException("订单任务执行状态保存失败: " + taskId);
+        }
         log.info("流程节点----{}--开始进行", activeNode.getActivityId());
         ExecuteActionCommand command = new ExecuteActionCommand(
                 actionInstanceId,
                 actionDefinitionId,
                 robotId);
-        log.info("执行下发参数为{}",command.toString());
-        workFlowExecutionsGateway.execute(command);
+        // 必须等待本事务提交，否则下游的快速回报可能无法查到当前节点。
+        actionCommandDispatcher.dispatchAfterCommit(command);
         return true;
     }
 
