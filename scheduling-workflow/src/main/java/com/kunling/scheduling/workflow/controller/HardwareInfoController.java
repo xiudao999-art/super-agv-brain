@@ -5,8 +5,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.kunling.scheduling.common.exception.ResourceNotFoundException;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
-import com.kunling.scheduling.workflow.entity.AgvDevice;
-import com.kunling.scheduling.workflow.service.AgvDeviceService;
+import com.kunling.scheduling.workflow.entity.HardwareInfo;
+import com.kunling.scheduling.workflow.service.HardwareInfoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
@@ -22,61 +22,61 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/agv-devices")
-@Tag(name = "AGV设备管理", description = "AGV设备基础增删改查")
+@RequestMapping("/api/hardware-info")
+@Tag(name = "硬件信息管理", description = "硬件信息基础增删改查")
 
-public class AgvDeviceController extends BaseController {
+public class HardwareInfoController extends BaseController {
 
-    private final AgvDeviceService agvDeviceService;
+    private final HardwareInfoService hardwareInfoService;
 
-    public AgvDeviceController(AgvDeviceService agvDeviceService) {
-        this.agvDeviceService = agvDeviceService;
+    public HardwareInfoController(HardwareInfoService hardwareInfoService) {
+        this.hardwareInfoService = hardwareInfoService;
     }
 
     @GetMapping
-    @Operation(summary = "分页查询AGV设备")
-    public ApiResult<IPage<AgvDevice>> page(
+    @Operation(summary = "分页查询硬件信息")
+    public ApiResult<IPage<HardwareInfo>> page(
             @RequestParam(defaultValue = "1") long pageNum,
             @RequestParam(defaultValue = "10") long pageSize) {
-        return success(agvDeviceService.page(new Page<>(pageNum, pageSize)));
+        return success(hardwareInfoService.page(new Page<>(pageNum, pageSize)));
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "查询AGV设备详情")
-    public ApiResult<AgvDevice> get(@PathVariable Long id) {
+    @Operation(summary = "查询硬件信息详情")
+    public ApiResult<HardwareInfo> get(@PathVariable Long id) {
         return success(required(id));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "新增AGV设备")
-    public ApiResult<AgvDevice> create(@RequestBody AgvDevice entity) {
+    @Operation(summary = "新增硬件信息")
+    public ApiResult<HardwareInfo> create(@RequestBody HardwareInfo entity) {
         entity.setId(null);
-        agvDeviceService.save(entity);
+        hardwareInfoService.save(entity);
         return created(entity);
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "修改AGV设备")
-    public ApiResult<AgvDevice> update(@PathVariable Long id, @RequestBody AgvDevice entity) {
+    @Operation(summary = "修改硬件信息")
+    public ApiResult<HardwareInfo> update(@PathVariable Long id, @RequestBody HardwareInfo entity) {
         required(id);
         entity.setId(id);
-        agvDeviceService.updateById(entity);
+        hardwareInfoService.updateById(entity);
         return success(required(id));
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除AGV设备")
+    @Operation(summary = "删除硬件信息")
     public ApiResult<Void> delete(@PathVariable Long id) {
         required(id);
-        agvDeviceService.removeById(id);
+        hardwareInfoService.removeById(id);
         return success();
     }
 
-    private AgvDevice required(Long id) {
-        AgvDevice entity = agvDeviceService.getById(id);
+    private HardwareInfo required(Long id) {
+        HardwareInfo entity = hardwareInfoService.getById(id);
         if (entity == null) {
-            throw new ResourceNotFoundException("AGV设备不存在: " + id);
+            throw new ResourceNotFoundException("硬件信息不存在: " + id);
         }
         return entity;
     }
