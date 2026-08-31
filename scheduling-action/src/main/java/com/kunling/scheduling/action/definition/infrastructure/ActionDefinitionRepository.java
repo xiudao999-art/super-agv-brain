@@ -1,6 +1,5 @@
 package com.kunling.scheduling.action.definition.infrastructure;
 
-import com.kunling.scheduling.action.definition.domain.ActionDefinitionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -12,13 +11,9 @@ import java.util.Optional;
 
 public interface ActionDefinitionRepository extends JpaRepository<ActionDefinitionEntity, String> {
 
-    Optional<ActionDefinitionEntity> findByActionKey(String actionKey);
-
-    List<ActionDefinitionEntity> findAllByOrderByActionKeyAsc();
-
-    List<ActionDefinitionEntity> findByStatusOrderByActionKeyAsc(ActionDefinitionStatus status);
+    List<ActionDefinitionEntity> findAllByOrderByNameAscIdAsc();
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select action from ActionDefinitionEntity action where action.actionKey = :actionKey")
-    Optional<ActionDefinitionEntity> findByActionKeyForUpdate(@Param("actionKey") String actionKey);
+    @Query("select action from ActionDefinitionEntity action where action.id = :id")
+    Optional<ActionDefinitionEntity> findByIdForUpdate(@Param("id") String id);
 }

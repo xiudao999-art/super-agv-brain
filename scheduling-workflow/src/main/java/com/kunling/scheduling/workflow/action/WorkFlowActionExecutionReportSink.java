@@ -2,9 +2,7 @@ package com.kunling.scheduling.workflow.action;
 
 import com.kunling.scheduling.action.execution.application.ActionExecutionReportSink;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionReport;
-
-
-import com.kunling.scheduling.workflow.dto.StatusChangedDto;
+import com.kunling.scheduling.action.execution.domain.ActionExecutionResult;
 import com.kunling.scheduling.workflow.service.NodeStateTransitionRuleService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,16 +26,18 @@ public class WorkFlowActionExecutionReportSink implements ActionExecutionReportS
 
     @Override
     public void accept(ActionExecutionReport report) {
-        log.info("收到回调状态的内容: {}",
-                report.toString());
-        if (report.workflowNodeInstanceId() == null
-                || report.workflowNodeInstanceId().trim().isEmpty()) {
-            log.info("Action 报告未关联流程节点，仅记录结果: actionInstanceId={}",
-                    report.actionInstanceId());
+        if (report == null) {
+            log.error("收到空 Action 最终报告，不能推进流程");
             return;
         }
-        if (!report.success() && (report.failure() == null
-                || report.failure().handling() == null)) {
+        log.info("收到回调状态的内容: {}",
+                report.toString());
+        if (report.actionInstanceId() == null || report.actionInstanceId().trim().isEmpty()) {
+            log.error("Action 最终报告缺少 actionInstanceId，不能关联流程节点");
+            return;
+        }
+        if (report.result() != ActionExecutionResult.SUCCEEDED
+                && (report.failure() == null || report.failure().handlingConstraint() == null)) {
             log.error("失败的 Action 报告缺少处置类型，不能推进流程: actionInstanceId={}",
                     report.actionInstanceId());
             return;

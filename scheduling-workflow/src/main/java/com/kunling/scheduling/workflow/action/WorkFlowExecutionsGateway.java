@@ -1,6 +1,10 @@
 package com.kunling.scheduling.workflow.action;
 
-import com.kunling.scheduling.action.execution.application.*;
+import com.kunling.scheduling.action.execution.application.ActionExecutionReceipt;
+import com.kunling.scheduling.action.execution.application.ActionExecutionService;
+import com.kunling.scheduling.action.execution.application.ActionPackagePreview;
+import com.kunling.scheduling.action.execution.application.ActionPackagePreviewRequest;
+import com.kunling.scheduling.action.execution.application.ExecuteActionCommand;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionEventView;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
 import org.springframework.beans.factory.ObjectProvider;
@@ -26,16 +30,12 @@ public class WorkFlowExecutionsGateway {
 
 
 
-    /**
-     * 预览最终动作包；正式执行前必须先调用本方法取得 packageHash。
-     */
-    public ActionPackagePreview preview(StartActionExecutionRequest request) {
+    /** 预览当前 Action 定义编译出的完整动作包。 */
+    public ActionPackagePreview preview(ActionPackagePreviewRequest request) {
         return actionExecutionServiceProvider.getObject().preview(request);
     }
 
-    /**
-     * 下发已预览并确认 packageHash 的动作。
-     */
+    /** 根据 Action 定义标识发起一次幂等执行，不再回传或校验预览哈希。 */
     public ActionExecutionReceipt execute(ExecuteActionCommand request) {
         return actionExecutionServiceProvider.getObject().execute(request);
     }
@@ -48,10 +48,4 @@ public class WorkFlowExecutionsGateway {
         return actionExecutionServiceProvider.getObject().getEvents(actionInstanceId, limit);
     }
 
-    /**
-     * 主动向机器人查询动作状态，并返回当前持久化状态。
-     */
-    public ActionExecutionView query(String actionInstanceId) {
-        return actionExecutionServiceProvider.getObject().query(actionInstanceId);
-    }
 }

@@ -32,17 +32,12 @@ public class ActionExecutionReportPublisher {
     }
 
     public void publish(ActionExecutionReport report) {
-        log.info("Action 最终结果: actionInstanceId={}, workflowInstanceId={}, workflowNodeInstanceId={}, " +
-                        "actionKey={}, robotId={}, success={}, physicalResultKnown={}, physicalOutcome={}, " +
-                        "completedAt={}, businessCode={}, reasonCode={}, businessDisposition={}, " +
-                        "output={}, failure={}",
-                report.actionInstanceId(), report.workflowInstanceId(), report.workflowNodeInstanceId(),
-                report.actionKey(), report.robotId(), report.success(), report.physicalResultKnown(),
-                report.physicalOutcome(), report.completedAt(),
+        log.info("Action 最终结果: actionInstanceId={}, result={}, physicalOutcome={}, " +
+                        "businessCode={}, handlingConstraint={}, failure={}",
+                report.actionInstanceId(), report.result(), report.physicalOutcome(),
                 report.failure() == null ? "-" : report.failure().businessCode(),
-                report.failure() == null ? "-" : report.failure().reasonCode(),
-                report.failure() == null ? "-" : report.failure().businessDisposition(),
-                report.output(), report.failure());
+                report.failure() == null ? "-" : report.failure().handlingConstraint(),
+                report.failure());
         for (ActionExecutionReportSink sink : sinks) {
             try {
                 sink.accept(report);

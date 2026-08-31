@@ -2,6 +2,8 @@ package com.kunling.scheduling.action.controller;
 
 import com.kunling.scheduling.action.exceptionmapping.application.ActionErrorMappingRuleService;
 import com.kunling.scheduling.action.exceptionmapping.application.ActionErrorMappingRuleView;
+import com.kunling.scheduling.action.exceptionmapping.application.BusinessErrorDecision;
+import com.kunling.scheduling.action.exceptionmapping.application.ErrorMappingPreviewRequest;
 import com.kunling.scheduling.action.exceptionmapping.application.SaveErrorMappingRuleRequest;
 import com.kunling.scheduling.action.exceptionmapping.domain.ErrorMappingRuleStatus;
 import com.kunling.scheduling.common.audit.OperationLog;
@@ -26,7 +28,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import java.util.List;
 
 /** 动态维护厂家原始异常到平台业务异常的映射规则。 */
-@Tag(name = "异常映射管理", description = "维护厂家、型号、适配器及原始码到业务异常的映射")
+@Tag(name = "异常映射管理", description = "维护厂家、设备类型及原始码到业务异常的映射")
 @RestController
 @RequestMapping("/api/action-error-mappings")
 public class ActionErrorMappingController extends BaseController {
@@ -48,6 +50,13 @@ public class ActionErrorMappingController extends BaseController {
     @GetMapping("/{ruleId}")
     public ApiResult<ActionErrorMappingRuleView> get(@PathVariable String ruleId) {
         return success(ruleService.get(ruleId));
+    }
+
+    @Operation(summary = "预览厂家异常映射", description = "只读取当前 ACTIVE 规则，不修改配置")
+    @PostMapping("/preview")
+    public ApiResult<BusinessErrorDecision> preview(@RequestBody ErrorMappingPreviewRequest request) {
+        if (request == null) throw new IllegalArgumentException("异常映射预览请求不能为空。");
+        return success(ruleService.preview(request.toContext()));
     }
 
     @Operation(summary = "新建异常映射草稿")

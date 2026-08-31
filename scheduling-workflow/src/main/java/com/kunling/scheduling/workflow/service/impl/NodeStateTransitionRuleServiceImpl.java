@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import com.kunling.scheduling.action.execution.domain.ActionExecutionReport;
-import com.kunling.scheduling.workflow.dto.StatusChangedDto;
+import com.kunling.scheduling.action.execution.domain.ActionExecutionResult;
 import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.NodeStateTransitionRule;
@@ -117,16 +117,20 @@ public class NodeStateTransitionRuleServiceImpl
     @Override
     @Transactional
     public void statusChanged(ActionExecutionReport report) {
-        if (report == null || report.workflowNodeInstanceId() == null
-                || report.workflowInstanceId().trim().isEmpty()) {
-            throw new IllegalArgumentException("workflowNodeInstanceId 不能为空");
+        if (report == null || report.actionInstanceId() == null
+                || report.actionInstanceId().trim().isEmpty()) {
+            throw new IllegalArgumentException("actionInstanceId 不能为空");
         }
 
-        Integer nodeId = Integer.valueOf(report.workflowNodeInstanceId());
-        FlowNode flowNode = flowNodeService.getById(nodeId);
+        FlowNode flowNode = flowNodeService.lambdaQuery()
+                .eq(FlowNode::getActionInstanceId, report.actionInstanceId())
+                .last("limit 1")
+                .one();
         if (flowNode == null) {
-            throw new IllegalArgumentException("流程节点不存在: " + nodeId);
+            throw new IllegalArgumentException(
+                    "未找到 actionInstanceId 对应的流程节点: " + report.actionInstanceId());
         }
+        Long nodeId = flowNode.getId();
 
 
         //模拟执行过程
@@ -140,16 +144,23 @@ public class NodeStateTransitionRuleServiceImpl
             throw new RuntimeException(e);
         }*/
 
-        String eventCode = "";
-        if (report.success()) {
+        String eventCode;
+        if (report.result() == ActionExecutionResult.SUCCEEDED) {
             eventCode = "SUCCEEDED";
         } else {
-            eventCode = report.failure().handling().name();
+            if (report.failure() == null || report.failure().handlingConstraint() == null) {
+                throw new IllegalArgumentException("失败报告缺少 handlingConstraint");
+            }
+            eventCode = report.failure().handlingConstraint().name();
         }
 
 
         NodeStateTransitionRule rule = this.lambdaQuery().eq(NodeStateTransitionRule::getCurrentState, flowNode.getStatus())
                 .eq(NodeStateTransitionRule::getEventCode, eventCode).last("limit 1").one();
+        if (rule == null) {
+            throw new IllegalStateException("未配置节点状态转换规则: currentState="
+                    + flowNode.getStatus() + ", eventCode=" + eventCode);
+        }
 
         List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(flowNode.getProcessInstanceId());
 
@@ -184,9 +195,9 @@ public class NodeStateTransitionRuleServiceImpl
         }
         updateNodeState(flowNode, rule.getNextState());
         //增加异常日志
-        if (!report.success()) {
+        if (report.result() != ActionExecutionResult.SUCCEEDED) {
             RobotAlarmRecord record = new RobotAlarmRecord();
-            record.setNodeId(Long.valueOf(nodeId));
+            record.setNodeId(nodeId);
             record.setAlarmNo(report.failure().businessCode());
             record.setAlarmDescription(report.failure().message());
             record.setHandlingLevel(3);

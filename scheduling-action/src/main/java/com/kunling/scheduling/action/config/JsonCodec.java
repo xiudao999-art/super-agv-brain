@@ -25,7 +25,7 @@ public class JsonCodec {
     public JsonCodec(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
         ObjectMapper canonicalObjectMapper = objectMapper.copy();
-        // 通过不可变配置快照启用稳定排序，避免使用 Jackson 已废弃的可变 MapperFeature 接口。
+        // 通过不可变配置副本启用稳定排序，避免使用 Jackson 已废弃的可变 MapperFeature 接口。
         canonicalObjectMapper.setConfig(canonicalObjectMapper.getSerializationConfig()
                 .with(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
                 .with(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS));

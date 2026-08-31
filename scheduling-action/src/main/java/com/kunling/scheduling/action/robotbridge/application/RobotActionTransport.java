@@ -8,8 +8,6 @@ public interface RobotActionTransport {
 
     DispatchReceipt dispatch(RobotActionCommand command);
 
-    void query(RobotActionQuery query);
-
     Optional<RobotSessionView> findSession(String robotId);
 
     List<RobotSessionView> listSessions();

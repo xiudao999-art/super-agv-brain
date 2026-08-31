@@ -5,44 +5,36 @@ import lombok.experimental.Accessors;
 
 import java.beans.ConstructorProperties;
 
-/**
- * 一次下游异常参与业务映射的稳定输入。
- *
- * <p>phaseId 仅用于在报告中定位失败节点；真正参与匹配的是 subAction、vendor、deviceType 和
- * deviceCode。厂家原始消息单独保留用于诊断，不会被平台业务码覆盖。</p>
- */
+/** 一次真实厂家异常参与 Action 业务映射的最小输入。 */
 @Value
 @Accessors(fluent = true)
 public class ErrorMappingContext {
-    String phaseId;
-    String subAction;
+    String stepId;
+    String operation;
     String vendor;
     String deviceType;
-    String deviceCode;
+    String rawCode;
     String deviceMessage;
-    boolean physicalResultKnown;
 
-    @ConstructorProperties({"phaseId", "subAction", "vendor", "deviceType", "deviceCode",
-            "deviceMessage", "physicalResultKnown"})
-    public ErrorMappingContext(String phaseId,
-                               String subAction,
-                               String vendor,
-                               String deviceType,
-                               String deviceCode,
-                               String deviceMessage,
-                               boolean physicalResultKnown) {
-        this.phaseId = normalize(phaseId);
-        this.subAction = normalize(subAction);
+    @ConstructorProperties({"stepId", "operation", "vendor", "deviceType", "rawCode", "deviceMessage"})
+    public ErrorMappingContext(String stepId, String operation, String vendor,
+                               String deviceType, String rawCode, String deviceMessage) {
+        this.stepId = normalize(stepId);
+        this.operation = normalize(operation);
         this.vendor = normalize(vendor);
         this.deviceType = normalize(deviceType);
-        this.deviceCode = normalize(deviceCode);
+        this.rawCode = preserveNonBlank(rawCode);
         this.deviceMessage = normalize(deviceMessage);
-        this.physicalResultKnown = physicalResultKnown;
     }
 
     private static String normalize(String value) {
         if (value == null) return null;
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    /** 厂家码保持原样，确保预览和执行都遵循精确匹配。 */
+    private static String preserveNonBlank(String value) {
+        return value == null || value.trim().isEmpty() ? null : value;
     }
 }

@@ -8,14 +8,13 @@
 /scheduling-app/src/main/resources/file/*
 !/scheduling-app/src/main/resources/file/.gitkeep
 /.mvn/
-/scheduling-action/docs/
+/scheduling-action/docs/*
+!/scheduling-action/docs/Action模块-下游模块联调清单.md
+!/scheduling-action/docs/Action动作执行机制说明.md
+!/scheduling-action/docs/Action模块-下游模块对接约束说明.md
 /scheduling-app/src/test/
 
 /scheduling-app/src/test/java/
-/scheduling-action/src/test/java/
-/scheduling-action/src/test/java/com/kunling/scheduling/action/execution/
-/scheduling-action/src/test/java/com/kunling/scheduling/action/
-
 # scheduling-app 中已交付的实验室配置 API 测试需要纳入版本控制；本地 systemlog 草稿继续忽略。
 !/scheduling-app/src/test/
 !/scheduling-app/src/test/java/

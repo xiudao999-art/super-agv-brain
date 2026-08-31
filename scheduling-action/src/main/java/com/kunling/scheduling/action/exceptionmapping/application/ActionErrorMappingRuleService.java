@@ -13,27 +13,31 @@ import java.time.Clock;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/** 映射规则管理的唯一入口；只有启用规则会进入新执行快照。 */
+/** 映射规则管理的唯一入口；只有启用规则参与组包和最终异常解释。 */
 @Service
 public class ActionErrorMappingRuleService {
     private final ActionErrorMappingRuleRepository repository;
     private final ActionErrorMappingRuleValidator validator;
+    private final BusinessErrorMappingEngine mappingEngine;
     private final JsonCodec jsonCodec;
     private final Clock clock;
 
     @Autowired
     public ActionErrorMappingRuleService(ActionErrorMappingRuleRepository repository,
                                          ActionErrorMappingRuleValidator validator,
+                                         BusinessErrorMappingEngine mappingEngine,
                                          JsonCodec jsonCodec) {
-        this(repository, validator, jsonCodec, Clock.systemUTC());
+        this(repository, validator, mappingEngine, jsonCodec, Clock.systemUTC());
     }
 
     ActionErrorMappingRuleService(ActionErrorMappingRuleRepository repository,
                                   ActionErrorMappingRuleValidator validator,
+                                  BusinessErrorMappingEngine mappingEngine,
                                   JsonCodec jsonCodec,
                                   Clock clock) {
         this.repository = repository;
         this.validator = validator;
+        this.mappingEngine = mappingEngine;
         this.jsonCodec = jsonCodec;
         this.clock = clock;
     }
@@ -55,6 +59,16 @@ public class ActionErrorMappingRuleService {
     public List<ActionErrorMappingRule> activeRules() {
         return repository.findByStatusOrderByPriorityDescRuleIdAsc(ErrorMappingRuleStatus.ACTIVE)
                 .stream().map(entity -> entity.rule(jsonCodec)).collect(Collectors.toList());
+    }
+
+    /** 使用当前启用规则预览一次精确匹配；该结果不会改变任何配置。 */
+    @Transactional(readOnly = true)
+    public BusinessErrorDecision preview(ErrorMappingContext context) {
+        if (context == null || context.vendor() == null || context.deviceType() == null
+                || context.rawCode() == null) {
+            throw new IllegalArgumentException("预览必须提供 vendor、deviceType 和 rawCode。");
+        }
+        return mappingEngine.resolve(activeRules(), context);
     }
 
     @Transactional
@@ -87,9 +101,45 @@ public class ActionErrorMappingRuleService {
     public ActionErrorMappingRuleView activate(String ruleId, long expectedRevision) {
         ActionErrorMappingRuleEntity entity = requiredForUpdate(ruleId);
         assertRevision(entity, expectedRevision);
-        validator.validate(entity.rule(jsonCodec));
+        ActionErrorMappingRule candidate = entity.rule(jsonCodec);
+        validator.validate(candidate);
+        rejectConflictingActiveRule(candidate);
         entity.changeStatus(ErrorMappingRuleStatus.ACTIVE, clock.instant());
         return toView(repository.save(entity));
+    }
+
+    private void rejectConflictingActiveRule(ActionErrorMappingRule candidate) {
+        for (ActionErrorMappingRule active : activeRules()) {
+            if (active.ruleId().equals(candidate.ruleId()) || !keysOverlap(active, candidate)) continue;
+            if (!sameResult(active, candidate)) {
+                throw new ErrorMappingRuleConflictException("异常映射核心键与已启用规则冲突："
+                        + active.ruleId());
+            }
+        }
+    }
+
+    private boolean keysOverlap(ActionErrorMappingRule left, ActionErrorMappingRule right) {
+        return same(left.match().vendor(), right.match().vendor())
+                && same(left.match().deviceType(), right.match().deviceType())
+                && exact(left.match().rawCode(), right.match().rawCode())
+                && (left.match().operation() == null || right.match().operation() == null
+                || same(left.match().operation(), right.match().operation()));
+    }
+
+    private boolean sameResult(ActionErrorMappingRule left, ActionErrorMappingRule right) {
+        return exact(left.result().businessCode(), right.result().businessCode())
+                && exact(left.result().businessMessage(), right.result().businessMessage())
+                && exact(left.result().reasonCode(), right.result().reasonCode())
+                && left.result().handlingConstraint() == right.result().handlingConstraint()
+                && exact(left.result().handlingAdvice(), right.result().handlingAdvice());
+    }
+
+    private boolean same(String left, String right) {
+        return left != null && right != null && left.equalsIgnoreCase(right);
+    }
+
+    private boolean exact(String left, String right) {
+        return left == null ? right == null : left.equals(right);
     }
 
     @Transactional

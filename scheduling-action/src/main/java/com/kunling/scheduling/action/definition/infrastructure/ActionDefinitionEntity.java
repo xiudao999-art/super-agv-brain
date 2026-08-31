@@ -1,19 +1,19 @@
 package com.kunling.scheduling.action.definition.infrastructure;
 
 import com.kunling.scheduling.action.definition.domain.ActionDefinition;
-import com.kunling.scheduling.action.definition.domain.ActionDefinitionStatus;
+import com.kunling.scheduling.action.definition.domain.ActionStepDefinition;
 import com.kunling.scheduling.action.config.JsonCodec;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
-import javax.persistence.EnumType;
-import javax.persistence.Enumerated;
 import javax.persistence.Id;
 import javax.persistence.Lob;
 import javax.persistence.Table;
 import java.time.Instant;
+import java.beans.ConstructorProperties;
+import java.util.List;
 
-/** 当前 Action 配置表；每个 actionKey 永远只有一行。 */
+/** Action 定义持久化；名称和启用态独立列存储，JSON 仅保存可执行内容。 */
 @Entity
 @Table(name = "action_definition")
 public class ActionDefinitionEntity {
@@ -22,18 +22,11 @@ public class ActionDefinitionEntity {
     @Column(name = "id", length = 36, nullable = false)
     private String id;
 
-    @Column(name = "action_key", length = 128, nullable = false, unique = true)
-    private String actionKey;
+    @Column(name = "name", length = 128, nullable = false)
+    private String name;
 
-    @Column(name = "downstream_action_type", length = 64, nullable = false)
-    private String downstreamActionType;
-
-    @Column(name = "revision", nullable = false)
-    private long revision;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", length = 32, nullable = false)
-    private ActionDefinitionStatus status;
+    @Column(name = "enabled", nullable = false)
+    private boolean enabled;
 
     @Lob
     @Column(name = "definition_json", nullable = false, columnDefinition = "longtext")
@@ -50,37 +43,51 @@ public class ActionDefinitionEntity {
 
     public ActionDefinitionEntity(String id, ActionDefinition definition, JsonCodec jsonCodec, Instant now) {
         this.id = id;
-        this.actionKey = definition.actionKey();
-        this.downstreamActionType = definition.downstreamActionType().wireName();
-        this.revision = 1L;
-        this.status = ActionDefinitionStatus.DRAFT;
-        this.definitionJson = jsonCodec.write(definition);
+        this.name = definition.name();
+        this.enabled = false;
+        this.definitionJson = encodeContent(definition, jsonCodec);
         this.createdAt = now;
         this.updatedAt = now;
     }
 
     public void update(ActionDefinition definition, JsonCodec jsonCodec, Instant now) {
-        this.downstreamActionType = definition.downstreamActionType().wireName();
-        this.definitionJson = jsonCodec.write(definition);
-        this.status = ActionDefinitionStatus.DRAFT;
-        this.revision++;
+        this.name = definition.name();
+        this.definitionJson = encodeContent(definition, jsonCodec);
         this.updatedAt = now;
     }
 
-    public void changeStatus(ActionDefinitionStatus target, Instant now) {
-        this.status = target;
-        this.revision++;
+    public void changeEnabled(boolean target, Instant now) {
+        this.enabled = target;
         this.updatedAt = now;
     }
 
     public ActionDefinition definition(JsonCodec jsonCodec) {
-        return jsonCodec.read(definitionJson, ActionDefinition.class);
+        DefinitionContent content = jsonCodec.read(definitionJson, DefinitionContent.class);
+        return new ActionDefinition(id, name, enabled, content.timeoutMs, content.steps);
+    }
+
+    private String encodeContent(ActionDefinition definition, JsonCodec jsonCodec) {
+        return jsonCodec.write(new DefinitionContent(definition.timeoutMs(), definition.steps()));
     }
 
     public String getId() { return id; }
-    public String getActionKey() { return actionKey; }
-    public long getRevision() { return revision; }
-    public ActionDefinitionStatus getStatus() { return status; }
+    public String getName() { return name; }
+    public boolean isEnabled() { return enabled; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+
+    /** definition_json 的稳定最小结构。 */
+    public static class DefinitionContent {
+        private final int timeoutMs;
+        private final List<ActionStepDefinition> steps;
+
+        @ConstructorProperties({"timeoutMs", "steps"})
+        public DefinitionContent(int timeoutMs, List<ActionStepDefinition> steps) {
+            this.timeoutMs = timeoutMs;
+            this.steps = steps;
+        }
+
+        public int getTimeoutMs() { return timeoutMs; }
+        public List<ActionStepDefinition> getSteps() { return steps; }
+    }
 }

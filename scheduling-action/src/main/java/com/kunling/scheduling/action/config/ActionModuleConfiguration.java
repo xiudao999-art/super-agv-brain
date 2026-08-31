@@ -1,8 +1,6 @@
 package com.kunling.scheduling.action.config;
 
 import com.kunling.scheduling.action.ActionModulePackage;
-import com.kunling.scheduling.action.commissioning.infrastructure.ActionParameterSetEntity;
-import com.kunling.scheduling.action.commissioning.infrastructure.ActionParameterSetRepository;
 import com.kunling.scheduling.action.definition.infrastructure.ActionDefinitionEntity;
 import com.kunling.scheduling.action.definition.infrastructure.ActionDefinitionRepository;
 import com.kunling.scheduling.action.execution.infrastructure.ActionExecutionEventEntity;
@@ -28,14 +26,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @ComponentScan(basePackageClasses = ActionModulePackage.class)
 @EntityScan(basePackageClasses = {
         ActionDefinitionEntity.class,
-        ActionParameterSetEntity.class,
         ActionExecutionEntity.class,
         ActionExecutionEventEntity.class,
         ActionErrorMappingRuleEntity.class
 })
 @EnableJpaRepositories(basePackageClasses = {
         ActionDefinitionRepository.class,
-        ActionParameterSetRepository.class,
         ActionExecutionRepository.class,
         ActionExecutionEventRepository.class,
         ActionErrorMappingRuleRepository.class

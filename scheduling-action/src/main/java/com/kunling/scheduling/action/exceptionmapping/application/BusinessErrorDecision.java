@@ -1,19 +1,17 @@
 package com.kunling.scheduling.action.exceptionmapping.application;
 
-import com.kunling.scheduling.action.exceptionmapping.domain.BusinessDisposition;
-import com.kunling.scheduling.action.exceptionmapping.domain.PhysicalOutcome;
+import com.kunling.scheduling.action.exceptionmapping.domain.HandlingConstraint;
 import lombok.Value;
 import lombok.experimental.Accessors;
 
-/** 映射引擎输出；既能驱动作包策略，也能生成状态机最终报告。 */
+/** 厂家原始异常映射后的业务事实。 */
 @Value
 @Accessors(fluent = true)
 public class BusinessErrorDecision {
     String businessCode;
     String businessMessage;
     String reasonCode;
-    BusinessDisposition businessDisposition;
-    PhysicalOutcome physicalOutcome;
+    HandlingConstraint handlingConstraint;
     String matchedRuleId;
     String mappingProfileId;
     String handlingAdvice;

@@ -53,9 +53,9 @@ public class ActionExecutionEventEntity {
         return new ActionExecutionEventView(messageId, messageType,
                 text(payload, "sessionId"), robotId, actionInstanceId,
                 text(payload, "deviceCommandId"), eventSequence, eventState,
-                nullable(payload.get("phaseEvent")), nullable(payload.get("reportState")),
-                nullable(payload.get("resolvedSteps")), nullable(payload.get("physicalResult")),
-                nullable(payload.get("error")), instant(payload, "timestamp"), receivedAt);
+                nullable(payload.get("stepEvent")), nullable(payload.get("resolvedSteps")),
+                enumValue(payload, "physicalOutcome"), nullable(payload.get("error")),
+                instant(payload, "timestamp"), receivedAt);
     }
 
     private String text(com.fasterxml.jackson.databind.JsonNode payload, String field) {
@@ -70,20 +70,19 @@ public class ActionExecutionEventEntity {
         return value == null || value.isNull() ? null : value.deepCopy();
     }
 
-    /** 同时兼容 Spring Boot 的 ISO-8601 和 Jackson JavaTime 默认的数字秒格式。 */
+    private com.kunling.scheduling.action.exceptionmapping.domain.PhysicalOutcome enumValue(
+            com.fasterxml.jackson.databind.JsonNode payload, String field) {
+        com.fasterxml.jackson.databind.JsonNode value = payload.get(field);
+        return value == null || value.isNull() ? null
+                : com.kunling.scheduling.action.exceptionmapping.domain.PhysicalOutcome.valueOf(value.asText());
+    }
+
     private Instant instant(com.fasterxml.jackson.databind.JsonNode payload, String field) {
         com.fasterxml.jackson.databind.JsonNode value = payload.get(field);
         if (value == null || value.isNull()) {
             throw new IllegalStateException("执行事件缺少持久化字段：" + field);
         }
         if (value.isTextual()) return Instant.parse(value.textValue());
-        if (value.isNumber()) {
-            java.math.BigDecimal seconds = value.decimalValue();
-            long wholeSeconds = seconds.longValue();
-            int nanos = seconds.subtract(java.math.BigDecimal.valueOf(wholeSeconds))
-                    .movePointRight(9).intValue();
-            return Instant.ofEpochSecond(wholeSeconds, nanos);
-        }
-        throw new IllegalStateException("执行事件时间字段格式不受支持：" + field);
+        throw new IllegalStateException("执行事件时间字段必须是 ISO-8601 字符串：" + field);
     }
 }

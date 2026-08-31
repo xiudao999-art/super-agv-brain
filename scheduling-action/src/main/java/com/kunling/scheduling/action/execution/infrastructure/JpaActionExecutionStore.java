@@ -4,6 +4,7 @@ import com.kunling.scheduling.action.definition.application.ActionConflictExcept
 import com.kunling.scheduling.action.definition.application.ActionNotFoundException;
 import com.kunling.scheduling.action.execution.application.ActionExecutionStore;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionState;
+import com.kunling.scheduling.action.execution.domain.ActionEventApplyResult;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionEventView;
 import com.kunling.scheduling.action.execution.domain.CreateActionExecutionResult;
@@ -13,6 +14,8 @@ import com.kunling.scheduling.action.config.ImmutableCollections;
 import com.kunling.scheduling.action.config.JsonCodec;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -28,6 +31,7 @@ import java.util.function.Supplier;
 
 @Component
 public class JpaActionExecutionStore implements ActionExecutionStore {
+    private static final Logger log = LoggerFactory.getLogger(JpaActionExecutionStore.class);
 
     private static final List<ActionExecutionState> ACTIVE_STATES = ImmutableCollections.listOf(
             ActionExecutionState.DISPATCH_PENDING,
@@ -39,7 +43,7 @@ public class JpaActionExecutionStore implements ActionExecutionStore {
     private final ActionExecutionEventRepository eventRepository;
     private final JsonCodec jsonCodec;
     private final Clock clock;
-    private final TransactionTemplate requiresNew;
+    private final TransactionTemplate transaction;
 
     // 类中还保留了可注入 Clock 的测试构造器，因此必须显式声明生产环境的 Spring 注入入口。
     @Autowired
@@ -59,8 +63,9 @@ public class JpaActionExecutionStore implements ActionExecutionStore {
         this.eventRepository = eventRepository;
         this.jsonCodec = jsonCodec;
         this.clock = clock;
-        this.requiresNew = new TransactionTemplate(transactionManager);
-        this.requiresNew.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transaction = new TransactionTemplate(transactionManager);
+        // 执行准备阶段必须加入定义行锁所在事务，保证“加锁后创建执行记录”的原子性。
+        this.transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
     }
 
     @Override
@@ -95,13 +100,20 @@ public class JpaActionExecutionStore implements ActionExecutionStore {
         return inTransaction(() -> {
             ActionExecutionEntity entity = requiredForUpdate(event.actionInstanceId());
             if (eventRepository.existsById(event.messageId())) {
+                log.debug("忽略重复 ACTION_EVENT: messageId={}, actionInstanceId={}",
+                        event.messageId(), event.actionInstanceId());
                 return Optional.empty();
             }
             Instant receivedAt = clock.instant();
+            ActionEventApplyResult result = entity.applyEvent(event, jsonCodec, receivedAt);
+            if (!result.persistent()) {
+                log.debug("忽略重复或乱序 ACTION_EVENT: actionInstanceId={}, sequence={}",
+                        event.actionInstanceId(), event.sequence());
+                return Optional.empty();
+            }
             eventRepository.save(new ActionExecutionEventEntity(event, jsonCodec, receivedAt));
-            boolean reportable = entity.applyEvent(event, jsonCodec, receivedAt);
             ActionExecutionView view = executionRepository.save(entity).toView(jsonCodec);
-            return reportable ? Optional.of(view) : Optional.empty();
+            return result.reportable() ? Optional.of(view) : Optional.empty();
         });
     }
 
@@ -133,17 +145,10 @@ public class JpaActionExecutionStore implements ActionExecutionStore {
     }
 
     @Override
-    public Optional<String> findActiveExecutionIdByActionKey(String actionKey) {
-        if (actionKey == null) return Optional.empty();
-        return executionRepository.findFirstByActionKeyAndStateInOrderByCreatedAtDesc(actionKey, ACTIVE_STATES)
-                .map(ActionExecutionEntity::getActionInstanceId);
-    }
-
-    @Override
-    public Optional<String> findActiveExecutionIdByParameterSetId(String parameterSetId) {
-        if (parameterSetId == null) return Optional.empty();
-        return executionRepository.findFirstByParameterSetIdAndStateInOrderByCreatedAtDesc(
-                        parameterSetId, ACTIVE_STATES)
+    public Optional<String> findActiveExecutionIdByActionDefinitionId(String actionDefinitionId) {
+        if (actionDefinitionId == null) return Optional.empty();
+        return executionRepository.findFirstByActionDefinitionIdAndStateInOrderByCreatedAtDesc(
+                        actionDefinitionId, ACTIVE_STATES)
                 .map(ActionExecutionEntity::getActionInstanceId);
     }
 
@@ -159,14 +164,6 @@ public class JpaActionExecutionStore implements ActionExecutionStore {
                                                                   String message, Instant now) {
         return inTransaction(() -> executionRepository.findByRobotIdAndStateInForUpdate(robotId, ACTIVE_STATES)
                 .stream().map(entity -> holdAndView(entity, reasonCode, message, now))
-                .collect(ImmutableCollections.toImmutableList()));
-    }
-
-    @Override
-    public List<ActionExecutionView> findHeldExecutionsForRobot(String robotId) {
-        return inTransaction(() -> executionRepository
-                .findByRobotIdAndState(robotId, ActionExecutionState.UNKNOWN_HOLD).stream()
-                .map(entity -> entity.toView(jsonCodec))
                 .collect(ImmutableCollections.toImmutableList()));
     }
 
@@ -211,6 +208,6 @@ public class JpaActionExecutionStore implements ActionExecutionStore {
     }
 
     private <T> T inTransaction(Supplier<T> supplier) {
-        return Objects.requireNonNull(requiresNew.execute(status -> supplier.get()));
+        return Objects.requireNonNull(transaction.execute(status -> supplier.get()));
     }
 }

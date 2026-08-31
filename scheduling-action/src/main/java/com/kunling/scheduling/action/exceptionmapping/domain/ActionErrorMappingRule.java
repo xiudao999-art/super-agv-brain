@@ -16,21 +16,18 @@ public class ActionErrorMappingRule {
     int priority;
     ErrorMappingRuleMatch match;
     ErrorMappingRuleResult result;
-    PackageErrorPolicy policy;
 
-    @ConstructorProperties({"ruleId", "profileId", "priority", "match", "result", "policy"})
+    @ConstructorProperties({"ruleId", "profileId", "priority", "match", "result"})
     public ActionErrorMappingRule(String ruleId,
                                   String profileId,
                                   int priority,
                                   ErrorMappingRuleMatch match,
-                                  ErrorMappingRuleResult result,
-                                  PackageErrorPolicy policy) {
+                                  ErrorMappingRuleResult result) {
         this.ruleId = normalize(ruleId);
         this.profileId = normalize(profileId);
         this.priority = priority;
         this.match = match;
         this.result = result;
-        this.policy = policy;
     }
 
     private static String normalize(String value) {

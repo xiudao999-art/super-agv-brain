@@ -17,6 +17,7 @@ import org.flowable.engine.repository.ProcessDefinitionQuery;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.ExtensionAttribute;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.task.api.Task;
 import org.springframework.stereotype.Service;
@@ -135,13 +136,29 @@ public class WorkflowServiceImpl implements WorkflowService {
                 .filter(item -> StringUtils.isNotBlank(item.getActivityId()))
                 .map(item -> new WorkflowResponses.ActiveNode(item.getId(), item.getActivityId(),
                         getActivityName(bpmnModel, item.getActivityId()),
-                        item.getProcessInstanceId(), item.isSuspended()))
+                        item.getProcessInstanceId(),
+                        getNodeAttribute(bpmnModel, item.getActivityId(), "actionDefinitionId"),
+                        item.isSuspended()))
                 .collect(Collectors.toList());
     }
 
     private String getActivityName(BpmnModel bpmnModel, String activityId) {
         FlowElement flowElement = bpmnModel == null ? null : bpmnModel.getFlowElement(activityId);
         return flowElement == null ? null : flowElement.getName();
+    }
+
+    /** 读取模板发布时固化在 BPMN 节点上的业务属性。 */
+    private String getNodeAttribute(BpmnModel bpmnModel, String activityId, String attributeName) {
+        FlowElement flowElement = bpmnModel == null ? null : bpmnModel.getFlowElement(activityId);
+        if (flowElement == null) return null;
+        for (Map.Entry<String, List<ExtensionAttribute>> entry : flowElement.getAttributes().entrySet()) {
+            for (ExtensionAttribute attribute : entry.getValue()) {
+                if (attributeName.equals(entry.getKey()) || attributeName.equals(attribute.getName())) {
+                    return StringUtils.trimToNull(attribute.getValue());
+                }
+            }
+        }
+        return null;
     }
 
     @Override @Transactional

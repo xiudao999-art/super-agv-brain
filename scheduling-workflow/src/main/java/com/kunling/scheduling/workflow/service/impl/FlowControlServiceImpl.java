@@ -1,12 +1,10 @@
 package com.kunling.scheduling.workflow.service.impl;
 
-import com.kunling.scheduling.action.commissioning.application.ActionParameterSetService;
-import com.kunling.scheduling.action.commissioning.application.ActionParameterSetView;
-import com.kunling.scheduling.action.execution.application.ActionExecutionService;
 import com.kunling.scheduling.action.execution.application.ExecuteActionCommand;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionTransport;
 import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
 import com.kunling.scheduling.workflow.dto.*;
+import com.kunling.scheduling.workflow.action.WorkFlowExecutionsGateway;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.entity.WorkflowTemplateEntity;
@@ -47,11 +45,9 @@ public class FlowControlServiceImpl implements FlowControlService {
     @Resource
     private RobotActionTransport robotActionTransport;
     @Resource
-    private ActionParameterSetService parameterSetService;
-    @Resource
     private OrderTaskMapper orderTaskMapper;
     @Resource
-    private ActionExecutionService actionExecutionService;
+    private WorkFlowExecutionsGateway workFlowExecutionsGateway;
     @Resource
     private WorkflowStateService workflowStateService;
     @Resource
@@ -199,7 +195,7 @@ public class FlowControlServiceImpl implements FlowControlService {
 //    }
 
     /**
-     * 选择在线机器人和节点参数集，并将当前Flowable节点下发给Action系统。
+     * 选择在线机器人，并按流程节点绑定的 Action 定义发起一次执行。
      */
     public boolean dispatchDownstreamAction(String processInstanceId,
                                             Long taskId,
@@ -220,27 +216,30 @@ public class FlowControlServiceImpl implements FlowControlService {
         }
         String robotId = robotSessions.get(0).robotId();
 
-        String actionKey = activeNode.getActivityId();
-        List<ActionParameterSetView> parameterSets = parameterSetService.list(actionKey);
-        if (CollectionUtils.isEmpty(parameterSets)) {
+        String actionDefinitionId = StringUtils.trimToNull(activeNode.getActionDefinitionId());
+        if (actionDefinitionId == null) {
             if (startType == StartTypeEnum.START) {
-                return failAndClear(processInstanceId, "节点未配置动作参数: " + actionKey);
+                return failAndClear(processInstanceId,
+                        "流程节点未绑定 actionDefinitionId: " + activeNode.getActivityId());
             } else {
-                return suspendAndWait(processInstanceId, taskId, "节点未配置动作参数: " + actionKey);
+                return suspendAndWait(processInstanceId, taskId,
+                        "流程节点未绑定 actionDefinitionId: " + activeNode.getActivityId());
             }
         }
-        String parameterSetId = parameterSets.get(0).id();
-        //处理业务node表
-        List<WorkflowResponses.ActiveNode> activeNodes = workflowService.listActiveNodes(processInstanceId);
+        String actionInstanceId = UUID.randomUUID().toString();
+
+        // 先保存流程节点和 Action 执行身份，最终报告才能只凭 actionInstanceId 找回节点。
         int count = flowNodeService.lambdaQuery().eq(FlowNode::getTaskId, taskId).count().intValue();
         FlowNode flowNode = new FlowNode();
-        flowNode.setNodeName(activeNodes.get(0).getActivityName());
+        flowNode.setNodeName(activeNode.getActivityName());
         flowNode.setTaskId(taskId);
         flowNode.setProcessInstanceId(processInstanceId);
-        flowNode.setRobotId(robotSessions.get(0).robotId());
+        flowNode.setRobotId(robotId);
         flowNode.setSort(count + 1);
         flowNode.setStatus(NodeState.RUNNING);
-        flowNode.setNodeCode(activeNodes.get(0).getActivityId());
+        flowNode.setNodeCode(activeNode.getActivityId());
+        flowNode.setActionDefinitionId(actionDefinitionId);
+        flowNode.setActionInstanceId(actionInstanceId);
         flowNodeService.save(flowNode);
         OrderTask task = orderTaskMapper.selectById(taskId);
         if (task == null) {
@@ -251,16 +250,13 @@ public class FlowControlServiceImpl implements FlowControlService {
         task.setErrorCode(null);
         task.setErrorMessage(null);
         orderTaskMapper.updateById(task);
-        log.info("流程节点----{}--开始进行", activeNodes.get(0).getActivityId());
+        log.info("流程节点----{}--开始进行", activeNode.getActivityId());
         ExecuteActionCommand command = new ExecuteActionCommand(
-                taskId.toString(),
-                flowNode.getId().toString(),
-                UUID.randomUUID().toString(),
-                robotId,
-                actionKey,
-                parameterSetId);
+                actionInstanceId,
+                actionDefinitionId,
+                robotId);
         log.info("执行下发参数为{}",command.toString());
-        actionExecutionService.execute(command);
+        workFlowExecutionsGateway.execute(command);
         return true;
     }
 

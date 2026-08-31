@@ -24,7 +24,7 @@ public final class WorkflowResponses {
     @Data @AllArgsConstructor
     public static class ActiveNode {
         private String executionId; private String activityId; private String activityName;
-        private String processInstanceId;
+        private String processInstanceId; private String actionDefinitionId;
         private boolean suspended;
     }
 

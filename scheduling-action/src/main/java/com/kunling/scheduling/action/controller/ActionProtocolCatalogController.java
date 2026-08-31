@@ -1,11 +1,7 @@
 package com.kunling.scheduling.action.controller;
 
-import com.kunling.scheduling.action.definition.domain.DownstreamActionType;
-import com.kunling.scheduling.action.definition.domain.DownstreamSubAction;
-import com.kunling.scheduling.action.definition.domain.PhaseFailureAction;
-import com.kunling.scheduling.action.definition.domain.RetryExhaustedAction;
-import com.kunling.scheduling.common.web.ApiResult;
-import com.kunling.scheduling.common.web.BaseController;
+import com.kunling.scheduling.action.config.ImmutableCollections;
+import com.kunling.scheduling.action.definition.domain.ActionFailureDirectiveType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,34 +11,22 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 
-/** 页面和调用方使用的协议能力目录，避免在多处复制七种主动作与十种子动作。 */
-@Tag(name = "下游动作协议", description = "查询主动作、子动作和异常策略的协议边界")
+/** 提供页面编辑提示；实际可执行能力必须以下游当前会话注册结果为准。 */
+@Tag(name = "Action 协议目录")
 @RestController
-@RequestMapping("/api/action-protocol-catalog")
-public class ActionProtocolCatalogController extends BaseController {
-    @Operation(summary = "查询下游动作协议目录", description = "协议枚举值属于稳定线协议，因此保持英文")
-    @GetMapping
-    public ApiResult<Map<String, Object>> get() {
+@RequestMapping("/api/action-protocol")
+public class ActionProtocolCatalogController {
+    @Operation(summary = "查询 Action 2.0 编辑提示")
+    @GetMapping("/catalog")
+    public Map<String, Object> catalog() {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
-        result.put("actionTypes", Arrays.stream(DownstreamActionType.values()).map(type -> {
-            Map<String, Object> item = new LinkedHashMap<String, Object>();
-            item.put("name", type.wireName());
-            item.put("allowedSubActions", type.allowedSubActions().stream()
-                    .map(DownstreamSubAction::wireName).collect(Collectors.toList()));
-            return item;
-        }).collect(Collectors.toList()));
-        result.put("subActions", Arrays.stream(DownstreamSubAction.values())
-                .map(DownstreamSubAction::wireName).collect(Collectors.toList()));
-        result.put("subActionContracts", Arrays.stream(DownstreamSubAction.values()).map(subAction -> {
-            Map<String, Object> item = new LinkedHashMap<String, Object>();
-            item.put("name", subAction.wireName());
-            item.put("requiredParameters", subAction.requiredParameters());
-            return item;
-        }).collect(Collectors.toList()));
-        result.put("failureActions", Arrays.asList(PhaseFailureAction.values()));
-        result.put("retryExhaustedActions", Arrays.asList(RetryExhaustedAction.values()));
-        return success(result);
+        result.put("protocolVersion", "2.0");
+        result.put("operationSuggestions", ImmutableCollections.listOf(
+                "MOVE_TO_MAP_POINT", "MOVE_TO_POSE", "GRIP.OPEN", "GRIP.CLOSE",
+                "GRIP.VERIFY_LOAD", "VISION.VERIFY_MATERIAL", "VISION.VERIFY_PLACEMENT",
+                "VISION.CAPTURE", "CHASSIS_VERIFY_STOPPED", "ARM_VERIFY_HOME"));
+        result.put("failureDirectives", Arrays.asList(ActionFailureDirectiveType.values()));
+        return result;
     }
 }

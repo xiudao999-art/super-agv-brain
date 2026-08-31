@@ -6,14 +6,13 @@ public enum ActionExecutionState {
     DISPATCHED,
     ACCEPTED,
     RUNNING,
-    PHYSICAL_DONE,
+    FINISHED,
     REJECTED,
     FAILED,
-    UNKNOWN_HOLD,
-    CANCELLED;
+    UNKNOWN_HOLD;
 
     public boolean terminal() {
-        return this == PHYSICAL_DONE || this == REJECTED || this == FAILED
-                || this == UNKNOWN_HOLD || this == CANCELLED;
+        return this == FINISHED || this == REJECTED || this == FAILED
+                || this == UNKNOWN_HOLD;
     }
 }

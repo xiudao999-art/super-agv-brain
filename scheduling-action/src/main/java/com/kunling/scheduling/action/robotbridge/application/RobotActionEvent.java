@@ -1,15 +1,16 @@
 package com.kunling.scheduling.action.robotbridge.application;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.kunling.scheduling.action.exceptionmapping.domain.PhysicalOutcome;
 import lombok.Value;
 import lombok.experimental.Accessors;
+
 import java.beans.ConstructorProperties;
-
-import com.fasterxml.jackson.databind.JsonNode;
-
 import java.time.Instant;
 
-/** ACTION_EVENT 与 ACTION_STATUS 的协议无关表示。 */
+/** ACTION_EVENT 在线协议数据结构。 */
 @Value
 @Accessors(fluent = true)
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
@@ -22,32 +23,29 @@ public class RobotActionEvent {
     String deviceCommandId;
     long sequence;
     State state;
+    JsonNode stepEvent;
     JsonNode resolvedSteps;
-    JsonNode physicalResult;
+    PhysicalOutcome physicalOutcome;
     JsonNode error;
-    JsonNode phaseEvent;
-    JsonNode reportState;
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     Instant timestamp;
 
     @ConstructorProperties({"messageType", "messageId", "sessionId", "robotId", "actionInstanceId",
-            "deviceCommandId", "sequence", "state", "resolvedSteps", "physicalResult", "error",
-            "phaseEvent", "reportState", "timestamp"})
-    public RobotActionEvent(
-            String messageType,
-            String messageId,
-            String sessionId,
-            String robotId,
-            String actionInstanceId,
-            String deviceCommandId,
-            long sequence,
-            State state,
-            JsonNode resolvedSteps,
-            JsonNode physicalResult,
-            JsonNode error,
-            JsonNode phaseEvent,
-            JsonNode reportState,
-            Instant timestamp
-    ) {
+            "deviceCommandId", "sequence", "state", "stepEvent", "resolvedSteps",
+            "physicalOutcome", "error", "timestamp"})
+    public RobotActionEvent(String messageType,
+                            String messageId,
+                            String sessionId,
+                            String robotId,
+                            String actionInstanceId,
+                            String deviceCommandId,
+                            long sequence,
+                            State state,
+                            JsonNode stepEvent,
+                            JsonNode resolvedSteps,
+                            PhysicalOutcome physicalOutcome,
+                            JsonNode error,
+                            Instant timestamp) {
         this.messageType = messageType;
         this.messageId = messageId;
         this.sessionId = sessionId;
@@ -56,57 +54,27 @@ public class RobotActionEvent {
         this.deviceCommandId = deviceCommandId;
         this.sequence = sequence;
         this.state = state;
-        this.resolvedSteps = resolvedSteps;
-        this.physicalResult = physicalResult;
-        this.error = error;
-        this.phaseEvent = phaseEvent;
-        this.reportState = reportState;
+        this.stepEvent = stepEvent == null ? null : stepEvent.deepCopy();
+        this.resolvedSteps = resolvedSteps == null ? null : resolvedSteps.deepCopy();
+        this.physicalOutcome = physicalOutcome;
+        this.error = error == null ? null : error.deepCopy();
         this.timestamp = timestamp;
-    }
-
-    /** 兼容模块内既有测试和不携带结构化 phase 事件的旧客户端。 */
-    public RobotActionEvent(
-            String messageType,
-            String messageId,
-            String sessionId,
-            String robotId,
-            String actionInstanceId,
-            String deviceCommandId,
-            long sequence,
-            State state,
-            JsonNode resolvedSteps,
-            JsonNode physicalResult,
-            JsonNode error,
-            Instant timestamp
-    ) {
-        this(messageType, messageId, sessionId, robotId, actionInstanceId, deviceCommandId,
-                sequence, state, resolvedSteps, physicalResult, error, null, null, timestamp);
     }
 
     public enum State {
         ACCEPTED,
         RUNNING,
-        PHYSICAL_DONE,
+        FINISHED,
         REJECTED,
         FAILED,
-        UNKNOWN,
-        CANCELLED;
+        UNKNOWN;
 
-        /** 把 cnet8 MainActionState 明确收敛为上游执行证据状态。 */
         public static State fromWireState(String value) {
             if (value == null) throw new IllegalArgumentException("机器人动作状态不能为空。");
-            switch (value.trim().toUpperCase(java.util.Locale.ROOT)) {
-                case "ACCEPTED": return ACCEPTED;
-                case "RUNNING": return RUNNING;
-                case "FINISHED":
-                case "PHYSICAL_DONE": return PHYSICAL_DONE;
-                case "BUSY": return REJECTED;
-                case "ERROR":
-                case "FAILED": return FAILED;
-                case "HANG":
-                case "UNKNOWN": return UNKNOWN;
-                case "CANCELLED": return CANCELLED;
-                default: throw new IllegalArgumentException("不支持的机器人动作状态：" + value);
+            try {
+                return valueOf(value);
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalArgumentException("不支持的机器人动作状态：" + value, exception);
             }
         }
     }

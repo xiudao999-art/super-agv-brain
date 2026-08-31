@@ -6,7 +6,7 @@ import lombok.experimental.Accessors;
 
 import java.beans.ConstructorProperties;
 
-/** 厂家异常命中后生成的稳定业务语义。 */
+/** 厂家原始异常映射后的稳定业务事实，不包含运行时物理结果。 */
 @Value
 @Accessors(fluent = true)
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
@@ -14,39 +14,27 @@ public class ErrorMappingRuleResult {
     String businessCode;
     String businessMessage;
     String reasonCode;
-    BusinessDisposition businessDisposition;
-    PhysicalOutcome physicalOutcome;
+    HandlingConstraint handlingConstraint;
     String handlingAdvice;
 
-    @ConstructorProperties({"businessCode", "businessMessage", "reasonCode", "businessDisposition",
-            "physicalOutcome", "handlingAdvice"})
-    public ErrorMappingRuleResult(String businessCode,
-                                  String businessMessage,
-                                  String reasonCode,
-                                  BusinessDisposition businessDisposition,
-                                  PhysicalOutcome physicalOutcome,
+    @ConstructorProperties({"businessCode", "businessMessage", "reasonCode",
+            "handlingConstraint", "handlingAdvice"})
+    public ErrorMappingRuleResult(String businessCode, String businessMessage,
+                                  String reasonCode, HandlingConstraint handlingConstraint,
                                   String handlingAdvice) {
         this.businessCode = normalize(businessCode);
         this.businessMessage = normalize(businessMessage);
         this.reasonCode = normalize(reasonCode);
-        this.businessDisposition = businessDisposition;
-        this.physicalOutcome = physicalOutcome;
-        this.handlingAdvice = normalize(handlingAdvice);
-    }
-
-    /** 兼容尚未显式提供标准业务消息的旧调用方。 */
-    public ErrorMappingRuleResult(String businessCode,
-                                  String reasonCode,
-                                  BusinessDisposition businessDisposition,
-                                  PhysicalOutcome physicalOutcome,
-                                  String handlingAdvice) {
-        this(businessCode, reasonCode, reasonCode, businessDisposition, physicalOutcome,
-                handlingAdvice);
+        this.handlingConstraint = handlingConstraint;
+        this.handlingAdvice = normalizeToNull(handlingAdvice);
     }
 
     private static String normalize(String value) {
-        if (value == null) return null;
-        String normalized = value.trim();
-        return normalized.isEmpty() ? null : normalized;
+        return value == null ? null : value.trim();
+    }
+
+    private static String normalizeToNull(String value) {
+        String normalized = normalize(value);
+        return normalized == null || normalized.isEmpty() ? null : normalized;
     }
 }

@@ -26,6 +26,12 @@ public class FlowNode extends BaseEntity {
     @Schema(description = "节点编码")
     private String nodeCode;
 
+    @Schema(description = "Action 定义ID")
+    private String actionDefinitionId;
+
+    @Schema(description = "本次 Action 执行实例ID")
+    private String actionInstanceId;
+
 
     @Schema(description = "机器人")
     private String robotId;

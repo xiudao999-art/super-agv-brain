@@ -5,11 +5,9 @@ import java.util.Optional;
 /**
  * 配置写入与运行态之间的最小 seam。
  *
- * <p>定义和联调参数只需要知道是否正在被执行，不依赖执行状态机的内部结构。</p>
+ * <p>定义写入只需要知道是否正在被执行，不依赖执行状态机的内部结构。</p>
  */
 public interface ActionExecutionLock {
 
-    Optional<String> findActiveExecutionIdByActionKey(String actionKey);
-
-    Optional<String> findActiveExecutionIdByParameterSetId(String parameterSetId);
+    Optional<String> findActiveExecutionIdByActionDefinitionId(String actionDefinitionId);
 }

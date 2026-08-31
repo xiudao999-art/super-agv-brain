@@ -1,189 +1,110 @@
 package com.kunling.scheduling.action.execution.domain;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.kunling.scheduling.action.exceptionmapping.domain.BusinessDisposition;
+import com.kunling.scheduling.action.exceptionmapping.domain.HandlingConstraint;
 import com.kunling.scheduling.action.exceptionmapping.domain.PhysicalOutcome;
 import lombok.Value;
 import lombok.experimental.Accessors;
 
 import java.beans.ConstructorProperties;
-import java.time.Instant;
 
-/**
- * Action 模块向执行引擎交付的最终结果。
- *
- * <p>一个 actionInstanceId 只交付一次结果：成功或失败。子动作开始、重试、跳过等
- * 过程事实只在 Action 模块内持久化并输出日志，不扩大执行引擎的接口。</p>
- */
+/** Action 模块向执行引擎交付的最小最终事实。 */
 @Value
 @Accessors(fluent = true)
 @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
 public class ActionExecutionReport {
-    /** 状态机流程实例标识；设备联调场景允许为空。 */
-    String workflowInstanceId;
-    /** 状态机节点实例标识；设备联调场景允许为空。 */
-    String workflowNodeInstanceId;
-    /** 本次 Action 物理执行的幂等标识。 */
     String actionInstanceId;
-    String actionKey;
-    String robotId;
-    /** true 表示主 Action 已确认成功；false 表示进入失败处理。 */
-    boolean success;
-    /** false 表示无法证明物理动作成功还是失败，执行引擎不得自动重发。 */
-    boolean physicalResultKnown;
-    /** 比布尔值更精确的物理结果；状态机遇到 UNKNOWN 时不得自动重发。 */
+    ActionExecutionResult result;
     PhysicalOutcome physicalOutcome;
-    Instant completedAt;
-    /** 主 Action 成功时的下游输出；失败时为空。 */
-    JsonNode output;
-    /** 主 Action 失败时的处置信息；成功时为空。 */
     Failure failure;
 
-    @ConstructorProperties({"workflowInstanceId", "workflowNodeInstanceId", "actionInstanceId",
-            "actionKey", "robotId", "success", "physicalResultKnown", "physicalOutcome",
-            "completedAt", "output", "failure"})
-    public ActionExecutionReport(String workflowInstanceId,
-                                 String workflowNodeInstanceId,
-                                 String actionInstanceId,
-                                 String actionKey,
-                                 String robotId,
-                                 boolean success,
-                                 boolean physicalResultKnown,
-                                 PhysicalOutcome physicalOutcome,
-                                 Instant completedAt,
-                                 JsonNode output,
-                                 Failure failure) {
-        if (success && failure != null) {
-            throw new IllegalArgumentException("成功的 Action 执行报告不能包含 failure。");
+    @ConstructorProperties({"actionInstanceId", "result", "physicalOutcome", "failure"})
+    public ActionExecutionReport(String actionInstanceId, ActionExecutionResult result,
+                                 PhysicalOutcome physicalOutcome, Failure failure) {
+        requireText(actionInstanceId, "actionInstanceId");
+        if (result == null) throw new IllegalArgumentException("result 不能为空。");
+        if (physicalOutcome == null) throw new IllegalArgumentException("physicalOutcome 不能为空。");
+        if (result == ActionExecutionResult.SUCCEEDED && failure != null) {
+            throw new IllegalArgumentException("成功报告不能包含 failure。");
         }
-        if (!success && failure == null) {
-            throw new IllegalArgumentException("失败的 Action 执行报告必须包含 failure。");
+        if (result != ActionExecutionResult.SUCCEEDED && failure == null) {
+            throw new IllegalArgumentException("非成功报告必须包含 failure。");
         }
-        this.workflowInstanceId = workflowInstanceId;
-        this.workflowNodeInstanceId = workflowNodeInstanceId;
+        if (result == ActionExecutionResult.SUCCEEDED
+                && physicalOutcome != PhysicalOutcome.CONFIRMED_SUCCEEDED) {
+            throw new IllegalArgumentException("成功报告必须是 CONFIRMED_SUCCEEDED。");
+        }
         this.actionInstanceId = actionInstanceId;
-        this.actionKey = actionKey;
-        this.robotId = robotId;
-        this.success = success;
-        this.physicalResultKnown = success || physicalResultKnown;
-        this.physicalOutcome = normalizePhysicalOutcome(
-                success, this.physicalResultKnown, physicalOutcome);
-        this.completedAt = completedAt;
-        this.output = output == null ? null : output.deepCopy();
-        this.failure = success ? null : normalizeFailure(failure, this.physicalOutcome);
+        this.result = result;
+        this.physicalOutcome = physicalOutcome;
+        this.failure = failure == null ? null : constrain(failure, physicalOutcome);
     }
 
-    private static PhysicalOutcome normalizePhysicalOutcome(boolean success,
-                                                             boolean physicalResultKnown,
-                                                             PhysicalOutcome physicalOutcome) {
-        if (success) return PhysicalOutcome.CONFIRMED_SUCCEEDED;
-        if (!physicalResultKnown) return PhysicalOutcome.UNKNOWN;
-        if (physicalOutcome == null) return PhysicalOutcome.CONFIRMED_FAILED;
-        if (physicalOutcome == PhysicalOutcome.CONFIRMED_SUCCEEDED) {
-            throw new IllegalArgumentException("失败的 Action 执行报告不能标记为 CONFIRMED_SUCCEEDED。");
-        }
-        return physicalOutcome;
-    }
-
-    private static Failure normalizeFailure(Failure failure, PhysicalOutcome physicalOutcome) {
-        if (failure.businessDisposition() == BusinessDisposition.RETRYABLE
-                && (physicalOutcome == PhysicalOutcome.UNKNOWN
-                || physicalOutcome == PhysicalOutcome.PARTIALLY_COMPLETED)) {
-            return failure.withBusinessDisposition(BusinessDisposition.MANUAL_INTERVENTION);
+    private static Failure constrain(Failure failure, PhysicalOutcome outcome) {
+        if (failure.handlingConstraint() == HandlingConstraint.RETRYABLE
+                && (outcome == PhysicalOutcome.UNKNOWN || outcome == PhysicalOutcome.PARTIALLY_COMPLETED)) {
+            return failure.withHandlingConstraint(HandlingConstraint.MANUAL_INTERVENTION);
         }
         return failure;
     }
 
-    /** 执行引擎只需要理解的四种失败处置分类。 */
-    public enum FailureHandling {
-        RETRYABLE,
-        MANUAL_INTERVENTION,
-        NON_RETRYABLE,
-        CRITICAL
+    private static void requireText(String value, String field) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(field + " 不能为空。");
+        }
     }
 
     @Value
     @Accessors(fluent = true)
     @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
     public static class Failure {
-        String phaseId;
-        String subAction;
+        String stepId;
         String businessCode;
-        String reasonCode;
-        BusinessDisposition businessDisposition;
-        /** 兼容现有 Java 调用方；JSON 契约统一使用 businessDisposition。 */
-        @JsonIgnore
-        FailureHandling handling;
-        String matchedRuleId;
-        String mappingProfileId;
+        HandlingConstraint handlingConstraint;
         String message;
-        String handlingAdvice;
-        RobotClientFault robotClientFault;
-        @JsonProperty("deviceFault")
-        DeviceError deviceError;
+        DeviceFault deviceFault;
 
-        public Failure(String phaseId,
-                       String subAction,
-                       String businessCode,
-                       String reasonCode,
-                       BusinessDisposition businessDisposition,
-                       String matchedRuleId,
-                       String mappingProfileId,
-                       String message,
-                       String handlingAdvice,
-                       RobotClientFault robotClientFault,
-                       DeviceError deviceError) {
-            this.phaseId = phaseId;
-            this.subAction = subAction;
-            this.businessCode = businessCode;
-            this.reasonCode = reasonCode;
-            this.businessDisposition = businessDisposition;
-            this.handling = FailureHandling.valueOf(businessDisposition.name());
-            this.matchedRuleId = matchedRuleId;
-            this.mappingProfileId = mappingProfileId;
-            this.message = message;
-            this.handlingAdvice = handlingAdvice;
-            this.robotClientFault = robotClientFault;
-            this.deviceError = deviceError;
+        @ConstructorProperties({"stepId", "businessCode", "handlingConstraint", "message", "deviceFault"})
+        public Failure(String stepId, String businessCode, HandlingConstraint handlingConstraint,
+                       String message, DeviceFault deviceFault) {
+            requireText(businessCode, "businessCode");
+            if (handlingConstraint == null) {
+                throw new IllegalArgumentException("handlingConstraint 不能为空。");
+            }
+            requireText(message, "message");
+            this.stepId = normalize(stepId);
+            this.businessCode = businessCode.trim();
+            this.handlingConstraint = handlingConstraint;
+            this.message = message.trim();
+            this.deviceFault = deviceFault;
         }
 
-        private Failure withBusinessDisposition(BusinessDisposition disposition) {
-            return new Failure(phaseId, subAction, businessCode, reasonCode, disposition,
-                    matchedRuleId, mappingProfileId, message, handlingAdvice,
-                    robotClientFault, deviceError);
+        private Failure withHandlingConstraint(HandlingConstraint constraint) {
+            return new Failure(stepId, businessCode, constraint, message, deviceFault);
         }
     }
 
-    /** 下游执行器自身的统一技术异常，不与厂家原始码混用。 */
     @Value
     @Accessors(fluent = true)
     @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
-    public static class RobotClientFault {
-        String code;
-        String message;
-        String category;
-        String severity;
-        String recoveryStrategy;
-        boolean retryable;
-        JsonNode rawPayload;
-    }
-
-    /** 厂商设备的原始异常，只用于展示和诊断，不参与执行引擎流程判断。 */
-    @Value
-    @Accessors(fluent = true)
-    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
-    public static class DeviceError {
-        String deviceType;
+    public static class DeviceFault {
         String vendor;
-        String model;
-        String deviceId;
-        String adapterKey;
-        String adapterVersion;
+        String deviceType;
         String code;
         String message;
-        JsonNode rawPayload;
+
+        @ConstructorProperties({"vendor", "deviceType", "code", "message"})
+        public DeviceFault(String vendor, String deviceType, String code, String message) {
+            this.vendor = normalize(vendor);
+            this.deviceType = normalize(deviceType);
+            this.code = normalize(code);
+            this.message = normalize(message);
+        }
+    }
+
+    private static String normalize(String value) {
+        if (value == null) return null;
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 }

@@ -2,7 +2,9 @@ package com.kunling.scheduling.action.controller;
 
 import com.kunling.scheduling.action.execution.application.ActionExecutionService;
 import com.kunling.scheduling.action.execution.application.ActionPackagePreview;
-import com.kunling.scheduling.action.execution.application.StartActionExecutionRequest;
+import com.kunling.scheduling.action.execution.application.ActionPackagePreviewRequest;
+import com.kunling.scheduling.action.execution.application.ActionExecutionReceipt;
+import com.kunling.scheduling.action.execution.application.ExecuteActionCommand;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionEventView;
 import com.kunling.scheduling.common.audit.OperationLog;
@@ -24,7 +26,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 
 import java.util.List;
 
-@Tag(name = "完整动作包执行", description = "预览、冻结、下发并查询下游完整动作包")
+@Tag(name = "完整动作包执行", description = "预览、冻结、下发并读取本地执行事实")
 @RestController
 @RequestMapping("/api/action-executions")
 public class ExecutionController extends BaseController {
@@ -34,19 +36,19 @@ public class ExecutionController extends BaseController {
         this.executionService = executionService;
     }
 
-    @Operation(summary = "预览完整动作包", description = "解析本次全部参数并返回只读快照及 packageHash，不会下发设备")
+    @Operation(summary = "预览完整动作包", description = "校验当前在线机器人能力并返回组包结果，不会下发设备")
     @PostMapping("/preview")
-    public ApiResult<ActionPackagePreview> preview(@RequestBody StartActionExecutionRequest request) {
+    public ApiResult<ActionPackagePreview> preview(@RequestBody ActionPackagePreviewRequest request) {
         return success(executionService.preview(request));
     }
 
-    @Operation(summary = "开始执行完整动作包", description = "必须携带预览返回的 expectedPackageHash；开始后当前任务不可编辑")
+    @Operation(summary = "开始执行完整动作包", description = "同一 actionInstanceId 最多下发一次；开始后当前 Action 不可编辑")
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     @OperationLog(module = "动作执行", operation = "开始执行完整动作包", type = OperationType.EXECUTE,
             recordResponse = false)
-    public ApiResult<ActionExecutionView> start(@RequestBody StartActionExecutionRequest request) {
-        return accepted(executionService.start(request));
+    public ApiResult<ActionExecutionReceipt> start(@RequestBody ExecuteActionCommand command) {
+        return accepted(executionService.execute(command));
     }
 
     @Operation(summary = "查询动作执行详情")
@@ -56,7 +58,7 @@ public class ExecutionController extends BaseController {
         return success(executionService.get(actionInstanceId));
     }
 
-    @Operation(summary = "查询动作执行事件", description = "按服务端接收顺序返回下游推送的 phase 进度、设备证据和原始异常")
+    @Operation(summary = "查询动作执行事件", description = "按服务端接收顺序返回下游推送的 step 进度、设备证据和原始异常")
     @GetMapping("/{actionInstanceId}/events")
     public ApiResult<List<ActionExecutionEventView>> events(
             @Parameter(description = "动作执行实例标识") @PathVariable String actionInstanceId,
@@ -65,21 +67,12 @@ public class ExecutionController extends BaseController {
         return success(executionService.getEvents(actionInstanceId, limit));
     }
 
-    @Operation(summary = "查询 Action 的活动执行", description = "没有活动执行时返回成功 Result，data 为空")
+    @Operation(summary = "查询 Action 定义的活动执行", description = "没有活动执行时 data 为空")
     @GetMapping("/active")
     public ApiResult<ActionExecutionView> active(
-            @Parameter(description = "Action 唯一标识", example = "ARM.PICK")
-            @RequestParam String actionKey) {
-        return success(executionService.findActiveForAction(actionKey).orElse(null));
+            @Parameter(description = "Action 定义 ID")
+            @RequestParam String actionDefinitionId) {
+        return success(executionService.findActiveForAction(actionDefinitionId).orElse(null));
     }
 
-    @Operation(summary = "查询下游物理执行结果", description = "仅用于 UNKNOWN_HOLD 等结果不确定场景，不会重新下发动作")
-    @PostMapping("/{actionInstanceId}/query")
-    @ResponseStatus(HttpStatus.ACCEPTED)
-    @OperationLog(module = "动作执行", operation = "对账下游物理执行结果", type = OperationType.RECOVER,
-            recordResponse = false)
-    public ApiResult<ActionExecutionView> query(
-            @Parameter(description = "动作执行实例标识") @PathVariable String actionInstanceId) {
-        return accepted(executionService.query(actionInstanceId));
-    }
 }

@@ -3,15 +3,11 @@ package com.kunling.scheduling.action.robotbridge.config;
 import com.kunling.scheduling.action.config.ActionModuleDefaults;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-
 /**
  * 机器人长连接监听参数。
  *
  * <p>启停、监听网卡和端口属于部署环境差异，允许通过 application.yml 覆盖；
- * 租约、心跳、消息大小及动作白名单属于一期协议安全边界，继续由 Action 模块统一维护。</p>
+ * 租约、心跳和消息大小属于传输安全边界；原子能力由下游在每次会话中注册。</p>
  */
 @ConfigurationProperties(prefix = "kunling.action.robot-bridge")
 public class RobotBridgeProperties {
@@ -22,7 +18,6 @@ public class RobotBridgeProperties {
     private int leaseMs;
     private int heartbeatIntervalMs;
     private final int maximumMessageBytes;
-    private final List<String> acceptedActionTypes;
 
     /** Spring Boot 配置绑定入口，所有未显式配置的字段都使用一期安全默认值。 */
     public RobotBridgeProperties() {
@@ -32,14 +27,12 @@ public class RobotBridgeProperties {
                 ActionModuleDefaults.ROBOT_BRIDGE_PORT,
                 ActionModuleDefaults.ROBOT_BRIDGE_LEASE_MS,
                 ActionModuleDefaults.ROBOT_HEARTBEAT_INTERVAL_MS,
-                ActionModuleDefaults.ROBOT_MAXIMUM_MESSAGE_BYTES,
-                ActionModuleDefaults.SUPPORTED_DOWNSTREAM_ACTION_TYPES
+                ActionModuleDefaults.ROBOT_MAXIMUM_MESSAGE_BYTES
         );
     }
 
     public RobotBridgeProperties(boolean enabled, String bindAddress, int port, int leaseMs,
-                                 int heartbeatIntervalMs, int maximumMessageBytes,
-                                 List<String> acceptedActionTypes) {
+                                 int heartbeatIntervalMs, int maximumMessageBytes) {
         this.enabled = enabled;
         this.bindAddress = bindAddress == null || bindAddress.trim().isEmpty()
                 ? ActionModuleDefaults.ROBOT_BRIDGE_BIND_ADDRESS : bindAddress;
@@ -52,9 +45,6 @@ public class RobotBridgeProperties {
                 ? ActionModuleDefaults.ROBOT_HEARTBEAT_INTERVAL_MS : heartbeatIntervalMs;
         this.maximumMessageBytes = maximumMessageBytes <= 0
                 ? ActionModuleDefaults.ROBOT_MAXIMUM_MESSAGE_BYTES : maximumMessageBytes;
-        List<String> actionTypes = acceptedActionTypes == null
-                ? ActionModuleDefaults.SUPPORTED_DOWNSTREAM_ACTION_TYPES : acceptedActionTypes;
-        this.acceptedActionTypes = Collections.unmodifiableList(new ArrayList<String>(actionTypes));
     }
 
     public boolean enabled() {
@@ -110,10 +100,6 @@ public class RobotBridgeProperties {
 
     public int maximumMessageBytes() {
         return maximumMessageBytes;
-    }
-
-    public List<String> acceptedActionTypes() {
-        return acceptedActionTypes;
     }
 
     public boolean isEnabled() {

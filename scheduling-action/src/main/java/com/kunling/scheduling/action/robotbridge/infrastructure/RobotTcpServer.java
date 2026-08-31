@@ -11,11 +11,13 @@ import com.kunling.scheduling.action.robotbridge.application.DispatchReceipt;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionCommand;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEvent;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEventListener;
-import com.kunling.scheduling.action.robotbridge.application.RobotActionQuery;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionTransport;
 import com.kunling.scheduling.action.robotbridge.application.RobotSessionListener;
 import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
+import com.kunling.scheduling.action.robotbridge.application.RobotOperationCapability;
 import com.kunling.scheduling.action.robotbridge.application.RobotUnavailableException;
+import com.kunling.scheduling.action.definition.domain.ActionFailureDirectiveType;
+import com.kunling.scheduling.action.exceptionmapping.domain.PhysicalOutcome;
 import com.kunling.scheduling.action.robotbridge.config.RobotBridgeProperties;
 import com.kunling.scheduling.action.config.ActionModuleDefaults;
 import com.kunling.scheduling.action.config.NamedDaemonThreadFactory;
@@ -37,7 +39,8 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,7 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
 
     private static final Logger log = LoggerFactory.getLogger(RobotTcpServer.class);
-    private static final String PROTOCOL_VERSION = "1.0";
+    private static final String PROTOCOL_VERSION = "2.0";
 
     private final RobotBridgeProperties properties;
     private final ObjectMapper objectMapper;
@@ -135,19 +138,14 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         requireText(command.robotId(), "robotId");
         requireText(command.actionInstanceId(), "actionInstanceId");
         requireText(command.deviceCommandId(), "deviceCommandId");
+        if (!PROTOCOL_VERSION.equals(command.protocolVersion())) {
+            throw new IllegalArgumentException("COMMAND 线协议版本必须为 2.0");
+        }
         if (command.input() == null || !command.input().isObject()) {
             throw new IllegalArgumentException("完整动作包 input 必须是 JSON 对象");
         }
-        String actionType = command.input().at("/MainAction/actionType").asText();
-        if (actionType.trim().isEmpty()) {
-            throw new IllegalArgumentException("input.MainAction.actionType 不能为空");
-        }
-
         ClientSession session = requireSession(command.robotId());
-        if (!session.acceptedActionTypes.contains(actionType)) {
-            throw new RobotUnavailableException("机器人 " + command.robotId()
-                    + " 当前会话未声明可执行 " + actionType);
-        }
+        validateExecutionPlan(session, command.input());
 
         String messageId = newMessageId();
         ObjectNode message = baseMessage("COMMAND", messageId);
@@ -155,38 +153,12 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         message.put("robotId", command.robotId());
         message.put("actionInstanceId", command.actionInstanceId());
         message.put("deviceCommandId", command.deviceCommandId());
-        putNullable(message, "workflowInstanceId", command.workflowInstanceId());
-        putNullable(message, "nodeInstanceId", command.nodeInstanceId());
-        // actionVersion 是 cnet8 既有线协议字段，Java 领域中明确命名为协议兼容号。
-        message.put("actionVersion", command.protocolActionVersion());
-        message.put("executionMode", "PACKAGE");
-        ObjectNode snapshot = objectMapper.createObjectNode();
-        snapshot.put("actionKey", command.actionKey());
-        snapshot.put("actionRevision", command.actionRevision());
-        putNullable(snapshot, "parameterSetId", command.parameterSetId());
-        if (command.parameterSetRevision() == null) {
-            snapshot.putNull("parameterSetRevision");
-        } else {
-            snapshot.put("parameterSetRevision", command.parameterSetRevision());
-        }
-        snapshot.put("packageHash", command.packageHash());
-        message.set("configSnapshot", snapshot);
+        message.put("packageHash", command.packageHash());
         message.set("input", command.input());
         message.put("timeoutMs", command.timeoutMs());
         message.put("timestamp", command.timestamp().toString());
         session.send(message);
         return new DispatchReceipt(session.sessionId, messageId, command.timestamp());
-    }
-
-    @Override
-    public void query(RobotActionQuery query) {
-        ClientSession session = requireSession(query.robotId());
-        ObjectNode message = baseMessage("QUERY_ACTION", newMessageId());
-        message.put("sessionId", session.sessionId);
-        message.put("robotId", query.robotId());
-        message.put("actionInstanceId", query.actionInstanceId());
-        message.put("deviceCommandId", query.deviceCommandId());
-        session.send(message);
     }
 
     @Override
@@ -238,10 +210,12 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         try (Socket ignored = socket) {
             String line = readLine(socket.getInputStream());
             JsonNode registration = parse(line);
+            validateProtocolVersion(registration);
             requireMessageType(registration, "REGISTER");
             session = register(socket, registration);
             while (running.get() && !socket.isClosed()) {
                 JsonNode message = parse(readLine(socket.getInputStream()));
+                validateProtocolVersion(message);
                 session.lastSeenAt = Instant.now();
                 handleMessage(session, message);
             }
@@ -266,31 +240,11 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         String replyTo = requiredText(registration, "messageId");
         String sessionId = UUID.randomUUID().toString();
 
-        Set<String> configuredTypes = new HashSet<>(properties.acceptedActionTypes());
-        Set<String> acceptedTypes = new HashSet<>();
-        ArrayNode accepted = objectMapper.createArrayNode();
-        ArrayNode rejected = objectMapper.createArrayNode();
-        for (JsonNode capability : registration.path("capabilities")) {
-            String actionType = capability.path("actionType").asText();
-            String actionVersion = capability.path("actionVersion").asText();
-            boolean supported = configuredTypes.contains(actionType)
-                    && "1.0".equals(actionVersion)
-                    && "PACKAGE".equals(capability.path("executionMode").asText());
-            ObjectNode decision = objectMapper.createObjectNode();
-            decision.put("actionType", actionType);
-            decision.put("actionVersion", actionVersion);
-            if (supported) {
-                accepted.add(decision);
-                acceptedTypes.add(actionType);
-            } else {
-                decision.put("reasonCode", "UNSUPPORTED_IN_PHASE_1");
-                decision.put("reason", "一期下游未启用该动作或协议版本");
-                rejected.add(decision);
-            }
-        }
+        Map<String, RobotOperationCapability> capabilities = parseOperationCapabilities(registration);
+        Set<String> policyFeatures = parsePolicyFeatures(registration);
 
         ClientSession session = new ClientSession(socket, sessionId, robotId, robotType,
-                clientInstanceId, ImmutableCollections.copySet(acceptedTypes), Instant.now());
+                clientInstanceId, capabilities, policyFeatures, Instant.now());
         ObjectNode ack = baseMessage("REGISTER_ACK", newMessageId());
         ack.put("replyTo", replyTo);
         ack.put("robotId", robotId);
@@ -298,8 +252,8 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         ack.put("sessionId", sessionId);
         ack.put("leaseMs", properties.leaseMs());
         ack.put("heartbeatIntervalMs", properties.heartbeatIntervalMs());
-        ack.set("acceptedCapabilities", accepted);
-        ack.set("rejectedCapabilities", rejected);
+        ack.set("operationCapabilities", registration.path("operationCapabilities").deepCopy());
+        ack.set("policyFeatures", registration.path("policyFeatures").deepCopy());
         ack.put("serverTime", Instant.now().toString());
         session.send(ack);
 
@@ -309,8 +263,8 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         }
         RobotSessionView view = session.view();
         sessionListeners.forEach(listener -> safeNotifyConnected(listener, view));
-        log.info("机器人已注册: robotId={}, sessionId={}, acceptedActions={}",
-                robotId, sessionId, acceptedTypes);
+        log.info("机器人已注册: robotId={}, sessionId={}, operations={}, policyFeatures={}",
+                robotId, sessionId, capabilities.keySet(), policyFeatures);
         return session;
     }
 
@@ -322,11 +276,10 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
                 replyPong(session, message);
                 break;
             case "ACTION_EVENT":
-            case "ACTION_STATUS":
-                publishEvent(message);
+                publishActionEvent(message);
                 break;
             default:
-                log.debug("忽略机器人未知消息: {}", messageType);
+                throw new IllegalArgumentException("2.0 会话不支持消息类型：" + messageType);
         }
     }
 
@@ -339,32 +292,35 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         session.send(pong);
     }
 
-    private void publishEvent(JsonNode message) {
-        RobotActionEvent event = new RobotActionEvent(
-                requiredText(message, "messageType"),
-                requiredText(message, "messageId"),
-                requiredText(message, "sessionId"),
-                requiredText(message, "robotId"),
-                requiredText(message, "actionInstanceId"),
-                requiredText(message, "deviceCommandId"),
-                message.path("sequence").asLong(),
+    private void publishActionEvent(JsonNode message) {
+        RobotActionEvent event = parseActionMessage(message);
+        actionEventListeners.forEach(listener -> safeNotifyEvent(listener, event));
+    }
+
+    private RobotActionEvent parseActionMessage(JsonNode message) {
+        return new RobotActionEvent(
+                requiredText(message, "messageType", 32),
+                requiredText(message, "messageId", 64),
+                requiredText(message, "sessionId", 64),
+                requiredText(message, "robotId", 128),
+                requiredText(message, "actionInstanceId", 128),
+                requiredText(message, "deviceCommandId", 128),
+                requiredPositiveLong(message, "sequence"),
                 RobotActionEvent.State.fromWireState(requiredText(message, "state")),
+                nullableCopy(message.get("stepEvent")),
                 nullableCopy(message.get("resolvedSteps")),
-                nullableCopy(message.get("physicalResult")),
+                optionalPhysicalOutcome(message.get("physicalOutcome")),
                 nullableCopy(message.get("error")),
-                nullableCopy(message.get("phaseEvent")),
-                nullableCopy(message.get("reportState")),
                 parseProtocolTimestamp(requiredText(message, "timestamp"))
         );
-        actionEventListeners.forEach(listener -> safeNotifyEvent(listener, event));
     }
 
     /**
      * 解析机器人协议时间戳。
      *
      * <p>.NET DateTimeOffset 默认可能输出 7 位小数和 {@code +00:00}，而 Java 8 的
-     * {@link Instant#parse(CharSequence)} 对部分非 3 位分组的小数格式不兼容。
-     * ISO_OFFSET_DATE_TIME 同时兼容 {@code Z}、显式时区及 1～9 位小数。</p>
+     * {@link Instant#parse(CharSequence)} 不能完整解析部分非 3 位分组的小数格式。
+     * ISO_OFFSET_DATE_TIME 可解析 {@code Z}、显式时区及 1～9 位小数。</p>
      */
     private Instant parseProtocolTimestamp(String timestamp) {
         try {
@@ -396,6 +352,181 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         message.put("messageType", messageType);
         message.put("messageId", messageId);
         return message;
+    }
+
+    private void validateProtocolVersion(JsonNode message) {
+        if (!PROTOCOL_VERSION.equals(requiredText(message, "version"))) {
+            throw new IllegalArgumentException("仅支持线协议 2.0。");
+        }
+    }
+
+    private Map<String, RobotOperationCapability> parseOperationCapabilities(JsonNode registration) {
+        JsonNode source = registration.get("operationCapabilities");
+        if (source == null || !source.isArray() || source.size() == 0) {
+            throw new IllegalArgumentException("operationCapabilities 必须是非空数组");
+        }
+        Map<String, RobotOperationCapability> result = new LinkedHashMap<String, RobotOperationCapability>();
+        for (JsonNode item : source) {
+            String operation = requiredText(item, "operation");
+            if (!operation.matches("[A-Z0-9][A-Z0-9._-]{1,127}")) {
+                throw new IllegalArgumentException("operation 必须是稳定的大写标识：" + operation);
+            }
+            int minimum = requiredPositiveInt(item, "minTimeoutMs");
+            int maximum = requiredPositiveInt(item, "maxTimeoutMs");
+            if (minimum > maximum) {
+                throw new IllegalArgumentException(operation + " 的 minTimeoutMs 不能大于 maxTimeoutMs");
+            }
+            RobotOperationCapability previous = result.put(operation,
+                    new RobotOperationCapability(operation, minimum, maximum));
+            if (previous != null) throw new IllegalArgumentException("operationCapabilities 重复：" + operation);
+        }
+        return result;
+    }
+
+    private Set<String> parsePolicyFeatures(JsonNode registration) {
+        JsonNode source = registration.get("policyFeatures");
+        if (source == null || !source.isArray() || source.size() == 0) {
+            throw new IllegalArgumentException("policyFeatures 必须是非空数组");
+        }
+        Set<String> result = new LinkedHashSet<String>();
+        for (JsonNode item : source) {
+            if (!item.isTextual()) throw new IllegalArgumentException("policyFeatures 元素必须是字符串");
+            String feature = item.textValue();
+            try {
+                ActionFailureDirectiveType.valueOf(feature);
+            } catch (IllegalArgumentException exception) {
+                throw new IllegalArgumentException("不支持的失败策略特性：" + feature, exception);
+            }
+            if (!result.add(feature)) throw new IllegalArgumentException("policyFeatures 重复：" + feature);
+        }
+        return result;
+    }
+
+    private void validateExecutionPlan(ClientSession session, JsonNode input) {
+        JsonNode steps = input.at("/executionPlan/steps");
+        if (!steps.isArray() || steps.size() == 0) {
+            throw new IllegalArgumentException("input.executionPlan.steps 必须是非空数组");
+        }
+        Set<String> stepIds = new LinkedHashSet<String>();
+        for (JsonNode step : steps) {
+            String stepId = requiredText(step, "stepId");
+            if (!stepIds.add(stepId)) throw new IllegalArgumentException("stepId 重复：" + stepId);
+            String operation = requiredText(step, "operation");
+            if (!session.operationCapabilities.containsKey(operation)) {
+                throw new RobotUnavailableException("机器人当前会话未注册原子操作：" + operation);
+            }
+            if (!step.path("params").isObject()) throw new IllegalArgumentException(stepId + ".params 必须是对象");
+            if (!step.has("gate") || !step.path("gate").isBoolean()) {
+                throw new IllegalArgumentException(stepId + ".gate 必须是布尔值");
+            }
+            JsonNode onFailure = step.path("onFailure");
+            if (!onFailure.isObject() || !onFailure.path("default").isObject()) {
+                throw new IllegalArgumentException(stepId + ".onFailure.default 必须存在");
+            }
+            boolean gate = step.path("gate").booleanValue();
+            if (gate && validateWireDirective(session, onFailure.path("default"), stepId)) {
+                throw new IllegalArgumentException("门禁步骤 " + stepId + " 的 default 不能最终跳过");
+            }
+            JsonNode rules = onFailure.path("rules");
+            if (!rules.isArray()) throw new IllegalArgumentException(stepId + ".onFailure.rules 必须是数组");
+            for (JsonNode rule : rules) {
+                requiredText(rule, "policyId");
+                JsonNode when = rule.path("when");
+                if (!when.isObject()) {
+                    throw new IllegalArgumentException(stepId + ".onFailure.rules.when 必须是对象");
+                }
+                String source = requiredText(when, "source");
+                if ("CLIENT".equals(source)) {
+                    requiredPositiveInt(when, "code");
+                    if (when.has("vendor") || when.has("deviceType")) {
+                        throw new IllegalArgumentException(stepId + " 的 CLIENT 规则不能携带设备匹配字段");
+                    }
+                } else if ("DEVICE".equals(source)) {
+                    requiredText(when, "vendor");
+                    requiredText(when, "deviceType");
+                    requiredText(when, "code");
+                } else {
+                    throw new IllegalArgumentException(stepId
+                            + ".onFailure.rules.when.source 只能是 CLIENT 或 DEVICE");
+                }
+                if (gate && validateWireDirective(session, rule.path("then"), stepId)) {
+                    throw new IllegalArgumentException("门禁步骤 " + stepId + " 的规则不能最终跳过");
+                }
+            }
+        }
+    }
+
+    private boolean validateWireDirective(ClientSession session, JsonNode directive, String stepId) {
+        String action = requiredText(directive, "action");
+        if (!session.policyFeatures.contains(action)) {
+            throw new RobotUnavailableException("机器人当前会话不支持失败策略：" + action);
+        }
+        String onExhaust = directive.path("onExhaust").asText(null);
+        if (onExhaust != null && !session.policyFeatures.contains(onExhaust)) {
+            throw new RobotUnavailableException("机器人当前会话不支持耗尽策略：" + onExhaust);
+        }
+        JsonNode verify = directive.get("verify");
+        boolean verifyThenRetry = "VERIFY_THEN_RETRY".equals(action);
+        if (verifyThenRetry && (verify == null || !verify.isObject())) {
+            throw new IllegalArgumentException(stepId + " 的 VERIFY_THEN_RETRY 必须配置 verify");
+        }
+        if (!verifyThenRetry && verify != null && !verify.isNull()) {
+            throw new IllegalArgumentException(stepId + " 只有 VERIFY_THEN_RETRY 可以配置 verify");
+        }
+        if (verifyThenRetry) {
+            String operation = requiredText(verify, "operation");
+            if (!verify.path("params").isObject()) {
+                throw new IllegalArgumentException(stepId + ".verify.params 必须是对象");
+            }
+            if (!session.operationCapabilities.containsKey(operation)) {
+                throw new RobotUnavailableException(stepId + " 的复核操作未注册：" + operation);
+            }
+        }
+        boolean retry = "RETRY_STEP".equals(action) || "VERIFY_THEN_RETRY".equals(action);
+        if (retry) {
+            int retries = requiredPositiveInt(directive, "maxRetries");
+            if (retries > 10) throw new IllegalArgumentException(stepId + ".maxRetries 不能超过 10");
+            if (onExhaust == null) throw new IllegalArgumentException(stepId + " 的重试策略必须配置 onExhaust");
+            if (!"STOP_AND_REPORT".equals(onExhaust) && !"SKIP_STEP".equals(onExhaust)) {
+                throw new IllegalArgumentException(stepId + ".onExhaust 只能是 STOP_AND_REPORT 或 SKIP_STEP");
+            }
+        } else if (onExhaust != null) {
+            throw new IllegalArgumentException(stepId + " 的非重试策略不能配置 onExhaust");
+        } else if (directive.has("maxRetries") || directive.has("delayMs")) {
+            throw new IllegalArgumentException(stepId + " 的非重试策略不能配置重试参数");
+        }
+        int delayMs = directive.path("delayMs").asInt(0);
+        if (delayMs < 0 || delayMs > 3_600_000) {
+            throw new IllegalArgumentException(stepId + ".delayMs 必须在 0-3600000 之间");
+        }
+        return "SKIP_STEP".equals(action) || "SKIP_STEP".equals(onExhaust);
+    }
+
+    private int requiredPositiveInt(JsonNode parent, String field) {
+        JsonNode value = parent.get(field);
+        if (value == null || !value.canConvertToInt() || value.intValue() <= 0) {
+            throw new IllegalArgumentException(field + " 必须是正整数");
+        }
+        return value.intValue();
+    }
+
+    private long requiredPositiveLong(JsonNode parent, String field) {
+        JsonNode value = parent.get(field);
+        if (value == null || !value.isIntegralNumber() || !value.canConvertToLong()
+                || value.longValue() <= 0L) {
+            throw new IllegalArgumentException(field + " 必须是正整数");
+        }
+        return value.longValue();
+    }
+
+    private PhysicalOutcome optionalPhysicalOutcome(JsonNode value) {
+        if (value == null || value.isNull()) return null;
+        if (!value.isTextual()) throw new IllegalArgumentException("physicalOutcome 必须是字符串");
+        try {
+            return PhysicalOutcome.valueOf(value.textValue());
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("不支持的 physicalOutcome：" + value.textValue(), exception);
+        }
     }
 
     private String readLine(InputStream input) throws IOException {
@@ -442,6 +573,14 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
             throw new IllegalArgumentException(field + " 必须是非空字符串");
         }
         return value.textValue();
+    }
+
+    private String requiredText(JsonNode parent, String field, int maximumLength) {
+        String value = requiredText(parent, field);
+        if (value.length() > maximumLength) {
+            throw new IllegalArgumentException(field + " 长度不能超过 " + maximumLength);
+        }
+        return value;
     }
 
     private void requireText(String value, String field) {
@@ -505,12 +644,16 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         private final String robotId;
         private final String robotType;
         private final String clientInstanceId;
-        private final Set<String> acceptedActionTypes;
+        private final Map<String, RobotOperationCapability> operationCapabilities;
+        private final Set<String> policyFeatures;
         private final Instant connectedAt;
         private volatile Instant lastSeenAt;
 
         private ClientSession(Socket socket, String sessionId, String robotId, String robotType,
-                              String clientInstanceId, Set<String> acceptedActionTypes, Instant connectedAt) {
+                              String clientInstanceId,
+                              Map<String, RobotOperationCapability> operationCapabilities,
+                              Set<String> policyFeatures,
+                              Instant connectedAt) {
             try {
                 this.output = socket.getOutputStream();
             } catch (IOException exception) {
@@ -521,7 +664,10 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
             this.robotId = robotId;
             this.robotType = robotType;
             this.clientInstanceId = clientInstanceId;
-            this.acceptedActionTypes = acceptedActionTypes;
+            this.operationCapabilities = java.util.Collections.unmodifiableMap(
+                    new LinkedHashMap<String, RobotOperationCapability>(operationCapabilities));
+            this.policyFeatures = java.util.Collections.unmodifiableSet(
+                    new LinkedHashSet<String>(policyFeatures));
             this.connectedAt = connectedAt;
             this.lastSeenAt = connectedAt;
         }
@@ -546,7 +692,7 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
 
         private RobotSessionView view() {
             return new RobotSessionView(sessionId, robotId, robotType, clientInstanceId,
-                    acceptedActionTypes, connectedAt, lastSeenAt);
+                    operationCapabilities, policyFeatures, connectedAt, lastSeenAt);
         }
 
         private void close() {

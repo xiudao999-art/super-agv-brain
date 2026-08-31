@@ -16,7 +16,7 @@ public interface ActionExecutionStore extends ActionExecutionLock {
     CreateActionExecutionResult createIfAbsent(NewActionExecution execution);
     ActionExecutionView markDispatched(String actionInstanceId, String sessionId, String messageId, Instant sentAt);
     ActionExecutionView hold(String actionInstanceId, String code, String message, Instant now);
-    /** 仅当事件是新的、顺序有效且可对外报告时返回更新后的执行快照。 */
+    /** 仅当事件是新的、顺序有效且可对外报告时返回更新后的执行事实。 */
     Optional<ActionExecutionView> applyEvent(RobotActionEvent event);
     ActionExecutionView get(String actionInstanceId);
     List<ActionExecutionEventView> getEvents(String actionInstanceId, int limit);
@@ -24,6 +24,5 @@ public interface ActionExecutionStore extends ActionExecutionLock {
     List<ActionExecutionView> holdInterruptedExecutions(String reasonCode, String message, Instant now);
     List<ActionExecutionView> holdActiveExecutionsForRobot(String robotId, String reasonCode,
                                                            String message, Instant now);
-    List<ActionExecutionView> findHeldExecutionsForRobot(String robotId);
     List<ActionExecutionView> holdTimedOutExecutions(Instant now);
 }

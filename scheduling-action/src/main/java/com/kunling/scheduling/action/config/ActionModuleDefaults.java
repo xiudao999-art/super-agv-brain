@@ -1,9 +1,5 @@
 package com.kunling.scheduling.action.config;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 /**
  * Action 模块的一期业务默认值。
  *
@@ -21,11 +17,6 @@ public final class ActionModuleDefaults {
     public static final int ROBOT_HEARTBEAT_INTERVAL_MS = 10_000;
     public static final int ROBOT_MAXIMUM_MESSAGE_BYTES = 1_048_576;
     public static final int ROBOT_BRIDGE_WORKER_THREADS = 64;
-    public static final List<String> SUPPORTED_DOWNSTREAM_ACTION_TYPES = Collections.unmodifiableList(
-            Arrays.asList("MOVE", "ARM.PICK", "ARM.PLACE", "ARM.PICK_BATCH",
-                    "ARM.PLACE_BATCH", "ARM.HOME", "VISION.CAPTURE")
-    );
-
     private ActionModuleDefaults() {
     }
 }

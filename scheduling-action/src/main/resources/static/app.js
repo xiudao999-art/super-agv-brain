@@ -2,12 +2,11 @@
   "use strict";
 
   const $ = id => document.getElementById(id);
-  const TASK_KEY = "kunling.action.currentCommissioningTask";
+  const TASK_KEY = "kunling.action.currentExecution";
   const state = {
-    catalog: { actionTypes: [], subActions: [], failureActions: [], retryExhaustedActions: [] },
-    actions: [], current: null, phases: [], parameterSets: [], parameterSet: null,
-    preview: null, execution: null, executionEvents: [],
-    workbench: ActionWorkbenchState.create(readSessionTask()), pollTimer: null
+    actions: [], robots: [], current: null, steps: [], preview: null,
+    execution: null, executionEvents: [], workbench: ActionWorkbenchState.create(readSessionTask()),
+    pollTimer: null
   };
 
   document.addEventListener("DOMContentLoaded", initialise);
@@ -15,408 +14,297 @@
   async function initialise() {
     bindEvents();
     try {
-      state.catalog = await api("/api/action-protocol-catalog");
-      fillSelect($("downstreamActionType"), state.catalog.actionTypes.map(item => item.name));
+      await loadRobots();
       await loadActions();
-      $("connectionState").textContent = "服务已连接";
+      renderConnectionState();
     } catch (error) { report(error); }
   }
 
   function bindEvents() {
     $("actionSelect").addEventListener("change", () => selectAction($("actionSelect").value));
+    $("robotSelect").addEventListener("change", () => { invalidatePreview(); renderSteps(); applyLocks(); });
     $("newActionButton").addEventListener("click", newAction);
-    $("newTaskButton").addEventListener("click", newCommissioningTask);
     $("saveActionButton").addEventListener("click", saveAction);
-    $("activateButton").addEventListener("click", activateAction);
-    $("addPhaseButton").addEventListener("click", () => addPhase());
-    $("saveParameterSetButton").addEventListener("click", saveParameterSet);
-    $("parameterSetSelect").addEventListener("change", selectParameterSet);
+    $("enableButton").addEventListener("click", toggleEnabled);
+    $("addStepButton").addEventListener("click", () => addStep());
     $("previewButton").addEventListener("click", previewPackage);
     $("executeButton").addEventListener("click", startExecution);
-    $("releaseUnknownHoldButton").addEventListener("click", releaseUnknownHoldForCommissioning);
-    $("downstreamActionType").addEventListener("change", () => {
-      state.phases = readPhases();
-      renderPhases();
-    });
     document.body.addEventListener("input", invalidatePreview);
     document.body.addEventListener("change", invalidatePreview);
   }
 
-  async function loadActions(preferredKey) {
-    state.actions = await api("/api/actions");
-    const options = state.actions.map(item => ({ value: item.actionKey, label: `${item.definition.displayName} · ${item.actionKey}` }));
-    fillSelect($("actionSelect"), options, "请选择 Action");
-    const key = preferredKey || (state.current && state.current.actionKey) || (state.actions[0] && state.actions[0].actionKey);
-    if (key) await selectAction(key);
-    else newAction();
+  async function loadRobots() {
+    state.robots = await api("/api/robots");
+    fillSelect($("robotSelect"), state.robots.map(robot => ({
+      value: robot.robotId, label: `${robot.robotId} · ${robot.robotType || "ROBOT"}`
+    })), "没有在线机器人");
   }
 
-  async function selectAction(actionKey) {
-    if (!actionKey) return;
-    state.current = await api(`/api/actions/${encodeURIComponent(actionKey)}`);
+  async function loadActions(preferredId) {
+    state.actions = await api("/api/actions");
+    fillSelect($("actionSelect"), state.actions.map(item => ({
+      value: item.definition.id,
+      label: `${item.definition.name} · ${item.definition.enabled ? "已启用" : "未启用"}`
+    })), "请选择 Action");
+    const id = preferredId || state.current && state.current.definition.id
+      || state.actions[0] && state.actions[0].definition.id;
+    if (id) await selectAction(id); else newAction();
+  }
+
+  async function selectAction(id) {
+    if (!id) return;
+    state.current = await api(`/api/actions/${encodeURIComponent(id)}`);
     const definition = state.current.definition;
-    $("actionSelect").value = actionKey;
-    $("actionKey").value = definition.actionKey;
-    $("actionKey").disabled = true;
-    $("downstreamActionType").value = definition.downstreamActionType;
-    $("displayName").value = definition.displayName || "";
-    $("description").value = definition.description || "";
+    $("actionSelect").value = definition.id;
+    $("actionName").value = definition.name;
     $("timeoutMs").value = definition.timeoutMs;
-    $("parameterSchema").value = pretty(definition.parameterSchema || {});
-    state.phases = clone(definition.phases || []);
-    renderPhases();
-    $("actionStatus").textContent = state.current.status;
-    $("actionRevision").textContent = `revision ${state.current.revision}`;
-    $("activateButton").textContent = state.current.status === "ACTIVE" ? "停用" : "启用";
+    $("actionEnabled").textContent = definition.enabled ? "已启用" : "未启用";
+    $("actionId").textContent = `ID ${definition.id}`;
+    $("enableButton").textContent = definition.enabled ? "停用" : "启用";
+    state.steps = clone(definition.steps || []);
     state.workbench.serverLocked = Boolean(state.current.executionLocked);
     state.preview = null;
-    renderPreview();
-    await loadParameterSets(actionKey);
-    applyLocks();
-    restoreExecutionIfNeeded(actionKey);
+    renderSteps(); renderPreview(); applyLocks(); restoreExecutionIfNeeded();
   }
 
   function newAction() {
-    if (!ActionWorkbenchState.canEdit(state.workbench)) return toast("当前联调任务已锁定，请先新建联调任务。");
+    if (!canEdit()) return toast("机器人离线或当前 Action 正在执行。");
     state.current = null;
     $("actionSelect").value = "";
-    $("actionKey").disabled = false;
-    $("actionKey").value = "";
-    $("displayName").value = "";
-    $("description").value = "";
+    $("actionName").value = "";
     $("timeoutMs").value = "60000";
-    $("parameterSchema").value = "{}";
-    $("downstreamActionType").value = state.catalog.actionTypes[0] ? state.catalog.actionTypes[0].name : "MOVE";
-    state.phases = [];
-    state.parameterSets = [];
-    state.parameterSet = null;
-    renderPhases(); renderParameterSets(); invalidatePreview();
-    $("actionStatus").textContent = "NEW";
-    $("actionRevision").textContent = "revision -";
-    $("activateButton").textContent = "启用";
-    applyLocks();
+    $("actionEnabled").textContent = "未启用";
+    $("actionId").textContent = "ID -";
+    $("enableButton").textContent = "启用";
+    state.steps = [];
+    state.preview = null;
+    renderSteps(); renderPreview(); applyLocks();
   }
 
   async function saveAction() {
     try {
       const definition = readDefinition();
-      const body = { expectedRevision: state.current ? state.current.revision : null, definition };
       state.current = state.current
-        ? await api(`/api/actions/${encodeURIComponent(state.current.actionKey)}`, { method: "PUT", body })
-        : await api("/api/actions", { method: "POST", body });
-      toast("Action 已保存，状态为 DRAFT。");
-      await loadActions(state.current.actionKey);
+        ? await api(`/api/actions/${encodeURIComponent(state.current.definition.id)}`,
+          { method: "PUT", body: definition })
+        : await api("/api/actions", { method: "POST", body: definition });
+      toast("Action 定义已保存。");
+      await loadActions(state.current.definition.id);
     } catch (error) { report(error); }
   }
 
-  async function activateAction() {
+  async function toggleEnabled() {
     if (!state.current) return toast("请先保存 Action。");
     try {
-      const operation = state.current.status === "ACTIVE" ? "disable" : "activate";
-      state.current = await api(`/api/actions/${encodeURIComponent(state.current.actionKey)}/${operation}?expectedRevision=${state.current.revision}`, { method: "POST" });
-      toast(operation === "activate" ? "Action 已启用，可生成执行包。" : "Action 已停用。");
-      await selectAction(state.current.actionKey);
+      const definition = state.current.definition;
+      const suffix = definition.enabled ? "disable"
+        : `enable?robotId=${encodeURIComponent(selectedRobotId())}`;
+      state.current = await api(`/api/actions/${encodeURIComponent(definition.id)}/${suffix}`,
+        { method: "POST" });
+      await selectAction(state.current.definition.id);
     } catch (error) { report(error); }
   }
 
   function readDefinition() {
-    const actionKey = $("actionKey").value.trim();
-    if (!actionKey) throw new Error("Action Key 不能为空。");
+    const currentDefinition = state.current && state.current.definition;
+    const name = $("actionName").value.trim();
+    if (!name) throw new Error("Action 名称不能为空。");
     return {
-      schemaVersion: "1.0", actionKey,
-      downstreamActionType: $("downstreamActionType").value,
-      displayName: $("displayName").value.trim(), description: $("description").value.trim(),
-      parameterSchema: parseJson($("parameterSchema").value, "联调参数 Schema"),
-      phases: readPhases(), timeoutMs: Number($("timeoutMs").value)
+      id: currentDefinition ? currentDefinition.id : null,
+      name,
+      enabled: currentDefinition ? currentDefinition.enabled : false,
+      timeoutMs: Number($("timeoutMs").value),
+      steps: readSteps()
     };
   }
 
-  function addPhase(source) {
-    const index = state.phases.length + 1;
-    state.phases.push(source ? clone(source) : {
-      phaseId: `phase-${String(index).padStart(2, "0")}`, displayName: `步骤 ${index}`,
-      subAction: allowedSubActions()[0] || "MOVE_TO_MAP_POINT", enabled: true, params: {},
-      gate: false, onFail: "ABORT", maxRetries: 0, retryFromPhaseId: null, onExhaust: "HOLD"
+  function addStep(source) {
+    const index = state.steps.length + 1;
+    const operation = availableOperations()[0] || "MOVE_TO_MAP_POINT";
+    state.steps.push(source ? clone(source) : {
+      stepId: `step-${String(index).padStart(2, "0")}`,
+      operation, params: {}, gate: true,
+      onFailure: { rules: [], defaultDirective: { action: "STOP_AND_REPORT", maxRetries: 0, delayMs: 0 } }
     });
-    renderPhases(); invalidatePreview();
+    renderSteps(); invalidatePreview();
   }
 
-  function renderPhases() {
-    const list = $("phaseList"); list.innerHTML = "";
-    state.phases.forEach((phase, index) => {
-      const card = document.createElement("article"); card.className = "phase"; card.dataset.index = index;
-      card.innerHTML = `<div class="phase-head"><span class="phase-index">${String(index + 1).padStart(2, "0")}</span>
-        <input class="phase-name" value="${escapeHtml(phase.displayName || "")}" data-editable aria-label="步骤名称">
-        <div class="phase-tools"><button data-op="up">↑</button><button data-op="down">↓</button><button data-op="copy">复制</button><button data-op="delete">删除</button></div></div>
-        <div class="phase-grid">
-          <label>Phase ID<input class="phase-id" value="${escapeHtml(phase.phaseId || "")}" data-editable></label>
-          <label>子动作<select class="phase-subaction" data-editable>${optionsHtml(allowedSubActions(), phase.subAction)}</select></label>
-          <label>异常策略<select class="phase-onfail" data-editable>${optionsHtml(state.catalog.failureActions, phase.onFail || "ABORT")}</select></label>
-          <label>最大重试数<input class="phase-retries" type="number" min="0" max="10" value="${phase.maxRetries || 0}" data-editable></label>
-          <label>从步骤重试<input class="phase-retryfrom" value="${escapeHtml(phase.retryFromPhaseId || "")}" placeholder="仅 VERIFY_BEFORE_RETRY" data-editable></label>
-          <label>重试耗尽<select class="phase-exhaust" data-editable>${optionsHtml(state.catalog.retryExhaustedActions, phase.onExhaust || "HOLD")}</select></label>
+  function renderSteps() {
+    const list = $("stepList"); list.innerHTML = "";
+    const operations = availableOperations();
+    state.steps.forEach((step, index) => {
+      const options = Array.from(new Set([step.operation].concat(operations))).filter(Boolean)
+        .map(value => `<option value="${escapeHtml(value)}" ${value === step.operation ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
+      const card = document.createElement("article"); card.className = "step"; card.dataset.index = index;
+      card.innerHTML = `<div class="step-head"><span class="step-index">${String(index + 1).padStart(2, "0")}</span>
+        <strong>子动作 ${index + 1}</strong>
+        <div class="step-tools"><button data-op="up">↑</button><button data-op="down">↓</button><button data-op="copy">复制</button><button data-op="delete">删除</button></div></div>
+        <div class="step-grid">
+          <label>Step ID<input class="step-id" value="${escapeHtml(step.stepId || "")}" data-editable></label>
+          <label>Operation<select class="step-operation" data-editable>${options}</select></label>
         </div>
-        <label class="check"><input class="phase-enabled" type="checkbox" ${phase.enabled !== false ? "checked" : ""} data-editable> 启用</label>
-        <label class="check"><input class="phase-gate" type="checkbox" ${phase.gate ? "checked" : ""} data-editable> 验收门禁步骤</label>
-        <label>子动作参数（JSON，可用 $parameters.xxx）<textarea class="phase-params code params" data-editable>${escapeHtml(pretty(phase.params || {}))}</textarea></label>`;
-      card.addEventListener("click", event => handlePhaseOperation(event, index));
+        <label class="check"><input class="step-gate" type="checkbox" ${step.gate ? "checked" : ""} data-editable> gate（失败时禁止进入后续正常步骤）</label>
+        <label>固定参数 params（JSON）<textarea class="step-params code params" data-editable>${escapeHtml(pretty(step.params || {}))}</textarea></label>
+        <label>失败策略 onFailure（JSON）<textarea class="step-failure code params" data-editable>${escapeHtml(pretty(step.onFailure || { rules: [], defaultDirective: { action: "STOP_AND_REPORT" } }))}</textarea></label>`;
+      card.addEventListener("click", event => handleStepOperation(event, index));
       list.appendChild(card);
     });
     applyLocks();
   }
 
-  function handlePhaseOperation(event, index) {
+  function handleStepOperation(event, index) {
     const operation = event.target.dataset.op;
-    if (!operation || !ActionWorkbenchState.canEdit(state.workbench)) return;
-    state.phases = readPhases();
-    if (operation === "delete") state.phases.splice(index, 1);
+    if (!operation || !canEdit()) return;
+    state.steps = readSteps();
+    if (operation === "delete") state.steps.splice(index, 1);
     if (operation === "copy") {
-      const copy = clone(readPhase($("phaseList").children[index], index));
-      copy.phaseId = `${copy.phaseId}-copy`;
-      state.phases.splice(index + 1, 0, copy);
+      const copy = clone(state.steps[index]); copy.stepId = `${copy.stepId}-copy`;
+      state.steps.splice(index + 1, 0, copy);
     }
-    if (operation === "up" && index > 0) [state.phases[index - 1], state.phases[index]] = [state.phases[index], state.phases[index - 1]];
-    if (operation === "down" && index < state.phases.length - 1) [state.phases[index + 1], state.phases[index]] = [state.phases[index], state.phases[index + 1]];
-    renderPhases(); invalidatePreview();
+    if (operation === "up" && index > 0) [state.steps[index - 1], state.steps[index]] = [state.steps[index], state.steps[index - 1]];
+    if (operation === "down" && index < state.steps.length - 1) [state.steps[index + 1], state.steps[index]] = [state.steps[index], state.steps[index + 1]];
+    renderSteps(); invalidatePreview();
   }
 
-  function readPhases() {
-    return Array.from($("phaseList").children).map(readPhase);
-  }
-
-  function readPhase(card, index) {
+  function readSteps() { return Array.from($("stepList").children).map(readStep); }
+  function readStep(card, index) {
     return {
-      phaseId: card.querySelector(".phase-id").value.trim(),
-      displayName: card.querySelector(".phase-name").value.trim(),
-      subAction: card.querySelector(".phase-subaction").value,
-      enabled: card.querySelector(".phase-enabled").checked,
-      params: parseJson(card.querySelector(".phase-params").value, `步骤 ${index + 1} 参数`),
-      gate: card.querySelector(".phase-gate").checked,
-      onFail: card.querySelector(".phase-onfail").value,
-      maxRetries: Number(card.querySelector(".phase-retries").value),
-      retryFromPhaseId: card.querySelector(".phase-retryfrom").value.trim() || null,
-      onExhaust: card.querySelector(".phase-exhaust").value
+      stepId: card.querySelector(".step-id").value.trim(),
+      operation: card.querySelector(".step-operation").value,
+      params: parseJson(card.querySelector(".step-params").value, `步骤 ${index + 1} 参数`),
+      gate: card.querySelector(".step-gate").checked,
+      onFailure: parseJson(card.querySelector(".step-failure").value, `步骤 ${index + 1} 失败策略`)
     };
   }
 
-  function allowedSubActions() {
-    const type = state.catalog.actionTypes.find(item => item.name === $("downstreamActionType").value);
-    return type ? type.allowedSubActions : state.catalog.subActions;
-  }
-
-  async function loadParameterSets(actionKey) {
-    state.parameterSets = await api(`/api/action-parameter-sets?actionKey=${encodeURIComponent(actionKey)}`);
-    state.parameterSet = state.parameterSets[0] || null;
-    renderParameterSets();
-  }
-
-  function renderParameterSets() {
-    const items = state.parameterSets.map(item => ({ value: item.id, label: `${item.name} · r${item.revision}` }));
-    fillSelect($("parameterSetSelect"), items, "不使用参数集");
-    if (state.parameterSet) $("parameterSetSelect").value = state.parameterSet.id;
-    showParameterSet();
-  }
-
-  function selectParameterSet() {
-    state.parameterSet = state.parameterSets.find(item => item.id === $("parameterSetSelect").value) || null;
-    showParameterSet(); invalidatePreview(); applyLocks();
-  }
-
-  function showParameterSet() {
-    const value = state.parameterSet;
-    $("parameterSetName").value = value ? value.name : "";
-    $("fixtureMaterial").value = value ? [value.fixtureKey, value.materialKey].filter(Boolean).join(" / ") : "";
-    $("parameterValues").value = pretty(value ? value.values : {});
-  }
-
-  async function saveParameterSet() {
+  async function previewPackage() {
     if (!state.current) return toast("请先保存 Action。");
     try {
-      const pair = $("fixtureMaterial").value.split("/").map(value => value.trim());
-      const body = { expectedRevision: state.parameterSet ? state.parameterSet.revision : null,
-        actionKey: state.current.actionKey, name: $("parameterSetName").value.trim(),
-        robotId: $("robotId").value.trim() || null, fixtureKey: pair[0] || null,
-        materialKey: pair[1] || null, values: parseJson($("parameterValues").value, "联调参数"), enabled: true };
-      const saved = state.parameterSet
-        ? await api(`/api/action-parameter-sets/${state.parameterSet.id}`, { method: "PUT", body })
-        : await api("/api/action-parameter-sets", { method: "POST", body });
-      await loadParameterSets(state.current.actionKey);
-      state.parameterSet = state.parameterSets.find(item => item.id === saved.id) || saved;
-      renderParameterSets();
-      toast("联调参数集已保存。");
-    } catch (error) { report(error); }
-  }
-
-  function executionRequest(expectedPackageHash) {
-    if (!state.current) throw new Error("请先选择 Action。");
-    return { actionInstanceId: null, robotId: $("robotId").value.trim(), actionKey: state.current.actionKey,
-      parameterSetId: state.parameterSet ? state.parameterSet.id : null,
-      expectedPackageHash: expectedPackageHash || null, workflowInstanceId: null, workflowNodeInstanceId: null };
-  }
-
-  async function previewPackage() {
-    try {
-      state.preview = await api("/api/action-executions/preview", { method: "POST", body: executionRequest(null) });
-      renderPreview(); toast("最终动作包已生成，请核对后执行。");
+      state.preview = await api("/api/action-executions/preview", { method: "POST", body: {
+        actionDefinitionId: state.current.definition.id, robotId: selectedRobotId()
+      }});
+      renderPreview();
     } catch (error) { report(error); }
   }
 
   function renderPreview() {
     $("packagePreview").textContent = state.preview ? pretty(state.preview.commandInput) : "尚未生成预览";
     $("previewMeta").innerHTML = state.preview
-      ? `<span class="badge">Action r${state.preview.actionRevision}</span><span class="badge">${escapeHtml(state.preview.downstreamActionType)}</span><span class="badge">Hash ${escapeHtml(state.preview.packageHash.slice(0, 12))}…</span>` : "";
+      ? `<span class="badge">Hash ${escapeHtml(state.preview.packageHash.slice(0, 12))}…</span><span class="badge">超时 ${state.preview.timeoutMs}ms</span>` : "";
     $("executeButton").disabled = !state.preview || !state.current
-      || state.current.status !== "ACTIVE" || !ActionWorkbenchState.canEdit(state.workbench);
+      || !state.current.definition.enabled || !canEdit();
   }
 
   async function startExecution() {
-    if (!state.preview) return;
-    if (!window.confirm("执行期间 Action 和设备联调参数将冻结；成功或物理结果明确的失败后自动解冻，结果未知时继续冻结。确认下发？")) return;
+    if (!state.preview || !window.confirm("确认下发当前动作包？")) return;
     try {
-      const request = executionRequest(state.preview.packageHash);
-      request.actionInstanceId = window.crypto.randomUUID();
-      state.execution = await api("/api/action-executions", { method: "POST", body: request });
+      const command = { actionInstanceId: window.crypto.randomUUID(),
+        actionDefinitionId: state.current.definition.id, robotId: selectedRobotId() };
+      const receipt = await api("/api/action-executions", { method: "POST", body: command });
+      state.execution = await api(`/api/action-executions/${encodeURIComponent(receipt.actionInstanceId)}`);
       state.executionEvents = [];
-      ActionWorkbenchState.lockForExecution(state.workbench, state.current.actionKey, state.execution.actionInstanceId);
+      ActionWorkbenchState.lockForExecution(state.workbench,
+        state.current.definition.id, receipt.actionInstanceId);
       sessionStorage.setItem(TASK_KEY, JSON.stringify(state.workbench));
       applyLocks(); renderExecution(); schedulePoll();
     } catch (error) { report(error); }
   }
 
-  function newCommissioningTask() {
-    if (state.workbench.executionLocked) {
-      return toast("当前执行尚未得到确定结果；如已进入 UNKNOWN_HOLD，请使用执行记录中的“调试解冻”。");
+  function restoreExecutionIfNeeded() {
+    if (!state.workbench.executionId
+        || state.workbench.actionDefinitionId !== (state.current && state.current.definition.id)) {
+      renderExecution(); return;
     }
-    clearTimeout(state.pollTimer);
-    state.workbench = ActionWorkbenchState.newTask();
-    state.execution = null; state.executionEvents = []; state.preview = null;
-    sessionStorage.removeItem(TASK_KEY);
-    renderExecution(); renderPreview();
-    if (state.current) selectAction(state.current.actionKey).catch(report);
-    else applyLocks();
-  }
-
-  /**
-   * 只解除当前浏览器联调任务的编辑锁；服务端执行记录仍保持 UNKNOWN_HOLD，
-   * 后续再次执行会生成新的动作实例，便于调试同时保留完整追溯证据。
-   */
-  function releaseUnknownHoldForCommissioning() {
-    if (!state.execution) return;
-    const warning = "该操作只解除页面编辑锁，不会确认物理结果，也不会撤销设备端可能仍在进行的动作。\n\n"
-      + "请先确认机器人已停止且现场安全。继续调试解冻？";
-    if (!window.confirm(warning)) return;
-    const released = ActionWorkbenchState.releaseUnknownHoldForCommissioning(
-      state.workbench, state.execution);
-    if (!released) return toast("当前状态不允许调试解冻，仅 UNKNOWN_HOLD 可以人工解除页面锁。");
-    clearTimeout(state.pollTimer);
-    sessionStorage.setItem(TASK_KEY, JSON.stringify(state.workbench));
-    applyLocks();
-    renderExecution();
-    toast("页面已解冻；原执行仍保留 UNKNOWN_HOLD，再次执行将创建新的动作实例。");
-  }
-
-  function restoreExecutionIfNeeded(actionKey) {
-    if (!state.workbench.executionId) { renderExecution(); return; }
     refreshExecution(state.workbench.executionId).then(() => {
-      const released = releaseExecutionLockIfSettled();
-      renderExecution();
+      const released = releaseExecutionLockIfTerminal(); renderExecution();
       if (!released && state.workbench.executionLocked) schedulePoll();
     }).catch(report);
   }
 
   function schedulePoll() {
-    clearTimeout(state.pollTimer);
-    if (!state.execution) return;
+    clearTimeout(state.pollTimer); if (!state.execution) return;
     state.pollTimer = setTimeout(async () => {
       let released = false;
-      try {
-        await refreshExecution(state.execution.actionInstanceId);
-        released = releaseExecutionLockIfSettled();
-        renderExecution();
-      }
+      try { await refreshExecution(state.execution.actionInstanceId); released = releaseExecutionLockIfTerminal(); renderExecution(); }
       catch (error) { report(error); }
       if (!released && state.workbench.executionLocked) schedulePoll();
     }, 1200);
   }
 
-  async function refreshExecution(actionInstanceId) {
-    const encodedId = encodeURIComponent(actionInstanceId);
-    const [execution, events] = await Promise.all([
-      api("/api/action-executions/" + encodedId),
-      api("/api/action-executions/" + encodedId + "/events?limit=500")
+  async function refreshExecution(id) {
+    const encoded = encodeURIComponent(id);
+    [state.execution, state.executionEvents] = await Promise.all([
+      api(`/api/action-executions/${encoded}`),
+      api(`/api/action-executions/${encoded}/events?limit=500`)
     ]);
-    state.execution = execution;
-    state.executionEvents = Array.isArray(events) ? events : [];
   }
 
-  function releaseExecutionLockIfSettled() {
-    const released = ActionWorkbenchState.releaseAfterSettled(state.workbench, state.execution);
-    if (!released) return false;
-    sessionStorage.setItem(TASK_KEY, JSON.stringify(state.workbench));
-    applyLocks();
-    toast(state.execution.state === "PHYSICAL_DONE" || state.execution.state === "COMPLETED"
-      ? "联调执行成功，页面已自动解冻。"
-      : "联调执行已结束，页面已自动解冻，请根据失败原因调参。");
+  function releaseExecutionLockIfTerminal() {
+    if (!ActionWorkbenchState.releaseAfterTerminal(state.workbench, state.execution)) return false;
+    sessionStorage.setItem(TASK_KEY, JSON.stringify(state.workbench)); applyLocks();
+    toast(state.execution.state === "UNKNOWN_HOLD"
+      ? "Action 已终止并解除定义锁；现场处置仍需人工闭环。" : "Action 已结束，定义已解锁。");
     return true;
   }
 
   function renderExecution() {
-    const releaseButton = $("releaseUnknownHoldButton");
     if (!state.execution) {
-      $("executionSummary").textContent = "当前联调任务尚未执行";
-      $("stepTimeline").innerHTML = "";
-      releaseButton.hidden = true;
-      return;
+      $("executionSummary").textContent = "当前 Action 尚未执行";
+      $("stepTimeline").innerHTML = ""; return;
     }
     const error = state.execution.error || {};
-    const errorMessage = error.message || error.detail && error.detail.message;
-    $("executionSummary").innerHTML = `<strong>${escapeHtml(state.execution.state)}</strong> · ${escapeHtml(state.execution.actionInstanceId)} · 物理结果${state.execution.physicalResultKnown ? "已确认" : "未确认"}`
-      + (errorMessage ? `<div class="execution-error"><b>失败原因：</b>${escapeHtml(errorMessage)}</div>` : "")
-      + (state.execution.physicalResult
-        ? `<details class="execution-result"><summary>查看整包物理结果</summary><pre>${escapeHtml(pretty(state.execution.physicalResult))}</pre></details>` : "");
-    const steps = Array.isArray(state.execution.resolvedSteps) ? state.execution.resolvedSteps
-      : state.preview && Array.isArray(state.preview.resolvedSteps) ? state.preview.resolvedSteps : [];
+    $("executionSummary").innerHTML = `<strong>${escapeHtml(state.execution.state)}</strong> · ${escapeHtml(state.execution.actionInstanceId)} · 物理结果 ${escapeHtml(state.execution.physicalOutcome)}`
+      + (error.message ? `<div class="execution-error"><b>失败原因：</b>${escapeHtml(error.message)}</div>` : "");
+    const steps = Array.isArray(state.execution.resolvedSteps) ? state.execution.resolvedSteps : [];
     $("stepTimeline").innerHTML = ActionExecutionTimeline.render(
       state.executionEvents, steps, state.execution.commandInput);
-    releaseButton.hidden = !ActionWorkbenchState.canReleaseUnknownHoldForCommissioning(
-      state.workbench, state.execution);
   }
+
+  function selectedRobot() {
+    return state.robots.find(robot => robot.robotId === $("robotSelect").value) || null;
+  }
+  function selectedRobotId() {
+    const robot = selectedRobot();
+    if (!robot) throw new Error("必须选择在线机器人。");
+    return robot.robotId;
+  }
+  function availableOperations() {
+    const robot = selectedRobot();
+    return robot ? Object.keys(robot.operationCapabilities || {}) : [];
+  }
+  function canEdit() { return ActionWorkbenchState.canEdit(state.workbench, Boolean(selectedRobot())); }
 
   function applyLocks() {
-    const canEdit = ActionWorkbenchState.canEdit(state.workbench, state.current && state.current.actionKey);
-    document.querySelectorAll("[data-editable],[data-task-editable]").forEach(element => { element.disabled = !canEdit; });
+    const editable = canEdit();
+    document.querySelectorAll("[data-editable]").forEach(element => { element.disabled = !editable; });
     $("actionSelect").disabled = state.workbench.executionLocked;
-    $("newActionButton").disabled = !canEdit;
-    $("saveActionButton").disabled = !canEdit;
-    $("activateButton").disabled = !canEdit || !state.current;
-    $("newTaskButton").disabled = false;
-    $("lockBanner").hidden = canEdit;
-    if (state.current) $("actionKey").disabled = true;
-    renderPreview();
+    $("robotSelect").disabled = state.workbench.executionLocked;
+    $("newActionButton").disabled = !editable;
+    $("saveActionButton").disabled = !editable;
+    $("enableButton").disabled = !editable || !state.current;
+    $("lockBanner").hidden = !state.workbench.executionLocked;
+    renderPreview(); renderConnectionState();
   }
 
-  function invalidatePreview() {
-    if (!state.preview) return;
-    state.preview = null; renderPreview();
+  function renderConnectionState() {
+    $("connectionState").textContent = selectedRobot()
+      ? `机器人在线 · ${selectedRobot().robotId}` : "无在线机器人";
   }
-
+  function invalidatePreview() { if (state.preview) { state.preview = null; renderPreview(); } }
   async function api(url, options) {
     const request = Object.assign({ headers: { "Content-Type": "application/json" } }, options || {});
     if (request.body && typeof request.body !== "string") request.body = JSON.stringify(request.body);
     const response = await fetch(url, request);
     if (response.status === 204) return null;
-    const contentType = response.headers.get("content-type") || "";
-    const body = contentType.includes("json") ? await response.json() : await response.text();
+    const body = (response.headers.get("content-type") || "").includes("json") ? await response.json() : await response.text();
     if (!response.ok) throw new Error(typeof body === "string" ? body : body.message || body.error || `HTTP ${response.status}`);
     return body;
   }
-
   function fillSelect(select, values, emptyLabel) {
-    const items = values.map(value => typeof value === "string" ? { value, label: value } : value);
-    select.innerHTML = (emptyLabel ? `<option value="">${escapeHtml(emptyLabel)}</option>` : "")
-      + items.map(item => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("");
+    select.innerHTML = `<option value="">${escapeHtml(emptyLabel)}</option>`
+      + values.map(item => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("");
+    if (values.length) select.value = values[0].value;
   }
-  function optionsHtml(values, selected) { return values.map(value => `<option ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`).join(""); }
   function parseJson(value, label) { try { const result = JSON.parse(value || "{}"); if (!result || Array.isArray(result) || typeof result !== "object") throw new Error(); return result; } catch (_) { throw new Error(`${label} 必须是合法的 JSON 对象。`); } }
   function pretty(value) { return JSON.stringify(value == null ? {} : value, null, 2); }
   function clone(value) { return JSON.parse(JSON.stringify(value)); }

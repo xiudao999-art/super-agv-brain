@@ -213,6 +213,7 @@ public class WorkflowTemplateService {
                 if (nodeId == null) continue;
                 JsonNode nodeProperty = properties.get(nodeId);
                 if (nodeProperty == null || !nodeProperty.isObject()) continue;
+                writeFlowableAttribute(element, "actionDefinitionId", jsonText(nodeProperty, "actionDefinitionId"));
                 writeFlowableAttribute(element, "completionCriteria", jsonText(nodeProperty, "completionCriteria"));
                 writeFlowableAttribute(element, "failureStrategy", jsonText(nodeProperty, "failureStrategy"));
             }
