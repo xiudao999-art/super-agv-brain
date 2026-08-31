@@ -2,6 +2,7 @@ package com.kunling.scheduling.app.config;
 
 import com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration;
 import com.kunling.scheduling.app.mapper.OperationLogMapper;
+import com.kunling.scheduling.app.mapper.ActionParameterSchemaMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
@@ -25,10 +26,11 @@ class OperationLogMapperRegistrationTest {
                     "spring.datasource.driver-class-name=org.h2.Driver");
 
     @Test
-    void 应用层Mapper配置会注册OperationLogMapper() {
+    void 应用层Mapper配置会注册全部Mapper() {
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(OperationLogMapper.class);
+            assertThat(context).hasSingleBean(ActionParameterSchemaMapper.class);
         });
     }
 

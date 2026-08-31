@@ -71,6 +71,7 @@ class KunlingSchedulingApplicationTest {
                 .containsExactly("com.kunling.scheduling.app.controller");
         assertThat(resourceConfigGroup.getPathsToMatch()).containsExactly(
                 "/api/lab/**", "/api/lab-configs/**",
+                "/api/action-parameter-schemas/**",
                 "/api/files/**", "/locations/**", "/locationTypes/**",
                 "/carriers/**", "/carrierTypes/**");
     }

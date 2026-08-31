@@ -21,6 +21,7 @@ public class SchedulingAppOpenApiConfiguration {
                 .packagesToScan("com.kunling.scheduling.app.controller")
                 .pathsToMatch(
                         "/api/lab/**", "/api/lab-configs/**",
+                        "/api/action-parameter-schemas/**",
                         "/api/files/**",
                         "/locations/**", "/locationTypes/**",
                         "/carriers/**", "/carrierTypes/**")

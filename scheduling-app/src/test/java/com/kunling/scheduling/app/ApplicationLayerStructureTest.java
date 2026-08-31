@@ -24,14 +24,19 @@ class ApplicationLayerStructureTest {
         assertJavaFile("controller/OperationLogController.java");
         assertJavaFile("controller/HomeTestController.java");
         assertJavaFile("controller/ImageUploadController.java");
+        assertJavaFile("controller/ActionParameterSchemaController.java");
 
         assertJavaFile("domain/SystemOperationLog.java");
         assertJavaFile("domain/HomeOverviewResponse.java");
         assertJavaFile("domain/ImageUploadResult.java");
+        assertJavaFile("domain/ActionParameterSchema.java");
 
         assertJavaFile("service/OperationLogService.java");
         assertJavaFile("service/HomeOverviewTestService.java");
         assertJavaFile("service/ImageStorageService.java");
+        assertJavaFile("service/ActionParameterSchemaService.java");
+
+        assertJavaFile("mapper/ActionParameterSchemaMapper.java");
 
         assertJavaFile("mapper/OperationLogMapper.java");
         assertJavaFile("mapper/HomeTestDataMapper.java");
