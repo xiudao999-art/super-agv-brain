@@ -21,6 +21,7 @@
       <span id="connectionState" class="signal signal-offline">正在读取连接</span>
       <button id="refreshButton" class="button button-ghost" type="button">刷新</button>
       <button id="newActionButton" class="button button-ghost" type="button">新建</button>
+      <button id="openJsonDrawerButton" class="button button-json" type="button">完整 Action JSON</button>
       <button id="saveActionButton" class="button button-primary" type="button">保存 Action</button>
     </div>
   </header>
@@ -76,19 +77,8 @@
         <button id="addStepButton" class="button button-add" type="button" data-editable>＋ 添加步骤</button>
       </div>
 
+      <div id="commandIdWarnings" class="command-warnings" hidden></div>
       <div id="stepList" class="step-list"></div>
-
-      <details class="json-console">
-        <summary>
-          <span>完整 Action JSON</span>
-          <small>适合批量粘贴、复制和快速调试</small>
-        </summary>
-        <div class="json-toolbar">
-          <button id="syncJsonButton" class="button button-ghost" type="button">从界面同步</button>
-          <button id="applyJsonButton" class="button button-outline" type="button" data-editable>应用到界面</button>
-        </div>
-        <textarea id="definitionJson" class="code-editor" spellcheck="false" data-editable></textarea>
-      </details>
     </section>
 
     <aside class="panel commissioning-panel" aria-labelledby="commissioningTitle">
@@ -125,9 +115,35 @@
     </aside>
   </main>
 
+  <div id="jsonDrawerBackdrop" class="json-drawer-backdrop" hidden>
+    <aside id="jsonDrawer" class="json-drawer" role="dialog" aria-modal="true" aria-labelledby="jsonDrawerTitle">
+      <header class="json-drawer-heading">
+        <div>
+          <p class="eyebrow">SOURCE OF TRUTH</p>
+          <h2 id="jsonDrawerTitle">完整 Action JSON</h2>
+          <p>应用成功后将整体覆盖页面草稿，但不会自动保存到服务端。</p>
+        </div>
+        <button id="closeJsonDrawerButton" class="drawer-close" type="button" aria-label="关闭完整 JSON">×</button>
+      </header>
+      <div class="json-priority-note">
+        <b>JSON 优先</b>
+        <span>表单与 JSON 共享同一份草稿；解析或结构校验失败时，当前页面不会被修改。</span>
+      </div>
+      <textarea id="definitionJson" class="code-editor drawer-editor" spellcheck="false"></textarea>
+      <footer class="json-drawer-actions">
+        <button id="syncJsonButton" class="button drawer-secondary" type="button">重新生成</button>
+        <button id="applyJsonButton" class="button button-primary" type="button">应用 JSON 覆盖草稿</button>
+      </footer>
+    </aside>
+  </div>
+
   <div id="toast" role="status" aria-live="polite"></div>
   <script src="action-api.js"></script>
   <script src="action-workbench-state.js"></script>
+  <script src="action-relative-motion.js"></script>
+  <script src="action-parameter-editor.js"></script>
+  <script src="action-draft-model.js"></script>
+  <script src="action-parameter-presenters.js"></script>
   <script src="action-execution-timeline.js"></script>
   <script src="app.js"></script>
 </body>

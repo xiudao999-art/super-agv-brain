@@ -20,6 +20,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +49,13 @@ class JpaActionExecutionStoreTest {
 
         assertThat(store.findActiveExecutionIdByActionDefinitionId("definition-1"))
                 .contains("action-1");
+    }
+
+    @Test
+    void activeRobotLookupUsesReadOnlyExistsQuery() {
+        when(executionRepository.existsByRobotIdAndStateIn(eq("R01"), any())).thenReturn(true);
+
+        assertThat(store.hasActiveExecutionForRobot("R01")).isTrue();
     }
 
     @Test

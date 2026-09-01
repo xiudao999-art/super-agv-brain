@@ -2,7 +2,6 @@ package com.kunling.scheduling.action.controller;
 
 import com.kunling.scheduling.action.config.ImmutableCollections;
 import com.kunling.scheduling.action.definition.domain.ActionFailureDirectiveType;
-import com.kunling.scheduling.action.definition.domain.MoveToPoseParameters;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,19 +17,24 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/action-protocol")
 public class ActionProtocolCatalogController {
+    private final ActionProtocolParameterExamples parameterExamples;
+
+    public ActionProtocolCatalogController(ActionProtocolParameterExamples parameterExamples) {
+        this.parameterExamples = parameterExamples;
+    }
+
     @Operation(summary = "查询 Action 2.0 编辑提示")
     @GetMapping("/catalog")
     public Map<String, Object> catalog() {
         Map<String, Object> result = new LinkedHashMap<String, Object>();
         result.put("protocolVersion", "2.0");
         result.put("operationSuggestions", ImmutableCollections.listOf(
-                "MOVE_TO_MAP_POINT", "MOVE_TO_POSE", "GRIP.OPEN", "GRIP.CLOSE",
-                "GRIP.VERIFY_LOAD", "VISION.VERIFY_MATERIAL", "VISION.VERIFY_PLACEMENT",
+                "MOVE_TO_MAP_POINT", "MOVE_TO_POSE", "GRIP", "GRIP.OPEN", "GRIP.CLOSE",
+                "GRIP.VERIFY_LOAD", "GRIP_OPEN", "GRIP_CLOSE", "GRIP_VERIFY_LOAD",
+                "VISION.VERIFY_MATERIAL", "VISION.VERIFY_PLACEMENT",
                 "VISION.CAPTURE", "CHASSIS_VERIFY_STOPPED", "ARM_VERIFY_HOME"));
         result.put("failureDirectives", Arrays.asList(ActionFailureDirectiveType.values()));
-        Map<String, Object> parameterExamples = new LinkedHashMap<String, Object>();
-        parameterExamples.put("MOVE_TO_POSE", MoveToPoseParameters.editorTemplate());
-        result.put("parameterExamples", parameterExamples);
+        result.put("parameterExamples", parameterExamples.examples());
         return result;
     }
 }

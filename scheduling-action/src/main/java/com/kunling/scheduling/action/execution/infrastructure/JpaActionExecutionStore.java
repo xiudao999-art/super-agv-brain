@@ -145,6 +145,12 @@ public class JpaActionExecutionStore implements ActionExecutionStore {
     }
 
     @Override
+    public boolean hasActiveExecutionForRobot(String robotId) {
+        if (robotId == null || robotId.trim().isEmpty()) return false;
+        return executionRepository.existsByRobotIdAndStateIn(robotId, ACTIVE_STATES);
+    }
+
+    @Override
     public Optional<String> findActiveExecutionIdByActionDefinitionId(String actionDefinitionId) {
         if (actionDefinitionId == null) return Optional.empty();
         return executionRepository.findFirstByActionDefinitionIdAndStateInOrderByCreatedAtDesc(

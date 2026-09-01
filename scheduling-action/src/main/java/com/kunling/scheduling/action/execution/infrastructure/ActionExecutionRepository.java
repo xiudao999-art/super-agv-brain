@@ -30,6 +30,8 @@ public interface ActionExecutionRepository extends JpaRepository<ActionExecution
             @Param("robotId") String robotId,
             @Param("states") Collection<ActionExecutionState> states);
 
+    boolean existsByRobotIdAndStateIn(String robotId, Collection<ActionExecutionState> states);
+
     Optional<ActionExecutionEntity> findFirstByActionDefinitionIdAndStateInOrderByCreatedAtDesc(
             String actionDefinitionId, Collection<ActionExecutionState> states);
 }

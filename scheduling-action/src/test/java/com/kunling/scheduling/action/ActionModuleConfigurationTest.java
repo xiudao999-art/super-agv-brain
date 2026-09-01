@@ -2,7 +2,9 @@ package com.kunling.scheduling.action;
 
 import com.kunling.scheduling.action.config.ActionModuleConfiguration;
 import com.kunling.scheduling.action.config.JsonCodec;
+import com.kunling.scheduling.action.commissioning.application.ArmPositionProbeCoordinator;
 import com.kunling.scheduling.action.controller.ActionController;
+import com.kunling.scheduling.action.controller.ActionDebugController;
 import com.kunling.scheduling.action.controller.ActionErrorMappingController;
 import com.kunling.scheduling.action.controller.ActionProtocolCatalogController;
 import com.kunling.scheduling.action.controller.ExecutionController;
@@ -85,7 +87,7 @@ class ActionModuleConfigurationTest {
                 mock(ActionErrorMappingRuleService.class));
         context.register(BusinessErrorMappingEngine.class, ClientFaultCatalog.class,
                 ActionExecutionReportMapper.class, ActionExecutionReportPublisher.class,
-                ActionExecutionEventProcessor.class);
+                ArmPositionProbeCoordinator.class, ActionExecutionEventProcessor.class);
         try {
             assertThatCode(context::refresh).doesNotThrowAnyException();
         } finally {
@@ -97,7 +99,8 @@ class ActionModuleConfigurationTest {
     void everyActionControllerEndpointHasChineseDocumentation() {
         OpenAPIDefinition definition = Knife4jConfiguration.class.getAnnotation(OpenAPIDefinition.class);
         assertThat(definition).isNotNull();
-        Class<?>[] controllers = { ActionController.class, ActionErrorMappingController.class,
+        Class<?>[] controllers = { ActionController.class, ActionDebugController.class,
+                ActionErrorMappingController.class,
                 ExecutionController.class, ActionProtocolCatalogController.class,
                 RobotSessionController.class };
         for (Class<?> controller : controllers) {

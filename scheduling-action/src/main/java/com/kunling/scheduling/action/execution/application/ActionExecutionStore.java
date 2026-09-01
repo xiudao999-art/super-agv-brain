@@ -21,6 +21,8 @@ public interface ActionExecutionStore extends ActionExecutionLock {
     ActionExecutionView get(String actionInstanceId);
     List<ActionExecutionEventView> getEvents(String actionInstanceId, int limit);
     Optional<ActionExecutionView> find(String actionInstanceId);
+    /** 只读判断机器人是否正在执行物理 Action，不获取行锁。 */
+    boolean hasActiveExecutionForRobot(String robotId);
     List<ActionExecutionView> holdInterruptedExecutions(String reasonCode, String message, Instant now);
     List<ActionExecutionView> holdActiveExecutionsForRobot(String robotId, String reasonCode,
                                                            String message, Instant now);

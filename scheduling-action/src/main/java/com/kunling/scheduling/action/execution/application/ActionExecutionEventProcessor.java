@@ -1,6 +1,7 @@
 package com.kunling.scheduling.action.execution.application;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.kunling.scheduling.action.commissioning.application.ArmPositionProbeCoordinator;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionView;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEvent;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEventListener;
@@ -21,25 +22,31 @@ public class ActionExecutionEventProcessor implements RobotActionEventListener, 
     private static final Logger log = LoggerFactory.getLogger(ActionExecutionEventProcessor.class);
     private final ActionExecutionStore executionStore;
     private final ActionExecutionReportPublisher reportPublisher;
+    private final ArmPositionProbeCoordinator probeCoordinator;
     private final Clock clock;
 
     // 可注入 Clock 的构造器仅供测试使用，生产环境必须明确由 Spring 选择此入口。
     @Autowired
     public ActionExecutionEventProcessor(ActionExecutionStore executionStore,
-                                         ActionExecutionReportPublisher reportPublisher) {
-        this(executionStore, Clock.systemUTC(), reportPublisher);
+                                         ActionExecutionReportPublisher reportPublisher,
+                                         ArmPositionProbeCoordinator probeCoordinator) {
+        this(executionStore, Clock.systemUTC(), reportPublisher, probeCoordinator);
     }
 
     ActionExecutionEventProcessor(ActionExecutionStore executionStore,
                                   Clock clock,
-                                  ActionExecutionReportPublisher reportPublisher) {
+                                  ActionExecutionReportPublisher reportPublisher,
+                                  ArmPositionProbeCoordinator probeCoordinator) {
         this.executionStore = executionStore;
         this.clock = clock;
         this.reportPublisher = reportPublisher;
+        this.probeCoordinator = probeCoordinator;
     }
 
     @Override
     public void onEvent(RobotActionEvent event) {
+        // 探测使用独立标识且不建立执行记录，必须在业务状态机之前截止。
+        if (probeCoordinator.route(event)) return;
         executionStore.applyEvent(event).ifPresent(execution -> {
             logProgress(execution, event);
             reportPublisher.publish(execution, event);
@@ -70,6 +77,7 @@ public class ActionExecutionEventProcessor implements RobotActionEventListener, 
     @Override
     public void onDisconnected(RobotSessionView session) {
         Instant occurredAt = clock.instant();
+        probeCoordinator.failRobot(session.robotId(), "机器人连接中断，当前位置无法确认。");
         List<ActionExecutionView> held = executionStore.holdActiveExecutionsForRobot(
                 session.robotId(), "ROBOT_CONNECTION_LOST",
                 "动作执行期间机器人连接中断，物理结果无法确认", occurredAt);
