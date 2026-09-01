@@ -3,59 +3,130 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>坤灵 Action 子动作编排</title>
+  <meta name="color-scheme" content="light">
+  <title>坤灵 Action 编排调试台</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="action-execution-timeline.css">
 </head>
 <body>
   <header class="topbar">
-    <div><strong>坤灵 Action 工作台</strong><small>子动作编排 · 整包下发 · 执行证据</small></div>
-    <div class="actions">
-      <span id="connectionState" class="badge">正在连接</span>
-      <button id="newActionButton" class="secondary">新建 Action</button>
-      <button id="saveActionButton">保存</button>
-      <button id="enableButton" class="primary">启用</button>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">KL</span>
+      <div>
+        <strong>Action 编排调试台</strong>
+        <small>DEFINE / FREEZE / DISPATCH</small>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span id="connectionState" class="signal signal-offline">正在读取连接</span>
+      <button id="refreshButton" class="button button-ghost" type="button">刷新</button>
+      <button id="newActionButton" class="button button-ghost" type="button">新建</button>
+      <button id="saveActionButton" class="button button-primary" type="button">保存 Action</button>
     </div>
   </header>
 
   <div id="lockBanner" class="lock-banner" hidden>
-    当前 Action 正在执行，定义暂时不可编辑；终态到达后自动解锁。
+    <b>定义已锁定</b>
+    <span>当前 Action 正在执行。终态到达前禁止编辑，避免运行实例与模板内容不一致。</span>
   </div>
 
-  <main>
-    <section class="panel definition-panel">
-      <div class="section-title"><span>01</span><div><h2>Action 定义</h2><p>定义只保存名称、超时和有序步骤</p></div></div>
-      <label>选择 Action<select id="actionSelect"></select></label>
-      <div class="grid two">
-        <label>Action 名称<input id="actionName" data-editable></label>
-        <label>超时（ms）<input id="timeoutMs" type="number" min="1000" max="3600000" data-editable></label>
-        <label>在线机器人<select id="robotSelect"></select></label>
+  <main class="workspace">
+    <section class="context-panel" aria-labelledby="contextTitle">
+      <div class="panel-heading compact-heading">
+        <div class="heading-index">01</div>
+        <div>
+          <p class="eyebrow">工作上下文</p>
+          <h1 id="contextTitle">选择定义与目标机器人</h1>
+        </div>
       </div>
-      <div class="meta"><span id="actionEnabled" class="badge">未启用</span><span id="actionId">ID -</span></div>
+
+      <div class="context-grid">
+        <label class="field field-wide">
+          <span>已有 Action</span>
+          <select id="actionSelect"></select>
+        </label>
+        <label class="field field-wide">
+          <span>Action 名称</span>
+          <input id="actionName" maxlength="128" placeholder="例如：ARM.HOME" data-editable>
+        </label>
+        <label class="field">
+          <span>总超时 / ms</span>
+          <input id="timeoutMs" type="number" min="1000" max="3600000" step="1000" data-editable>
+        </label>
+        <label class="field field-wide">
+          <span>目标机器人</span>
+          <select id="robotSelect"></select>
+        </label>
+        <div class="definition-state">
+          <span id="actionEnabled" class="status-tag status-draft">未启用</span>
+          <code id="actionId">ID —</code>
+          <button id="enableButton" class="button button-outline" type="button">启用</button>
+        </div>
+      </div>
     </section>
 
-    <section class="panel step-panel">
-      <div class="section-title"><span>02</span><div><h2>执行步骤</h2><p>数组顺序即执行顺序，固定参数直接保存在 params</p></div></div>
+    <section class="panel composition-panel" aria-labelledby="compositionTitle">
+      <div class="panel-heading">
+        <div class="heading-index">02</div>
+        <div>
+          <p class="eyebrow">串行执行计划</p>
+          <h2 id="compositionTitle">子动作编排</h2>
+          <p>列表顺序就是执行顺序。固定参数保存在步骤中，运行时冻结为动作包。</p>
+        </div>
+        <button id="addStepButton" class="button button-add" type="button" data-editable>＋ 添加步骤</button>
+      </div>
+
       <div id="stepList" class="step-list"></div>
-      <button id="addStepButton" class="dashed" data-editable>＋ 添加执行步骤</button>
+
+      <details class="json-console">
+        <summary>
+          <span>完整 Action JSON</span>
+          <small>适合批量粘贴、复制和快速调试</small>
+        </summary>
+        <div class="json-toolbar">
+          <button id="syncJsonButton" class="button button-ghost" type="button">从界面同步</button>
+          <button id="applyJsonButton" class="button button-outline" type="button" data-editable>应用到界面</button>
+        </div>
+        <textarea id="definitionJson" class="code-editor" spellcheck="false" data-editable></textarea>
+      </details>
     </section>
 
-    <section class="panel commissioning-panel">
-      <div class="section-title"><span>03</span><div><h2>动作包联调</h2><p>按在线机器人能力校验，确认后一次下发</p></div></div>
-      <div class="execute-actions">
-        <button id="previewButton" data-editable>生成预览</button>
-        <button id="executeButton" class="danger" disabled>模拟执行</button>
+    <aside class="panel commissioning-panel" aria-labelledby="commissioningTitle">
+      <div class="panel-heading">
+        <div class="heading-index accent">03</div>
+        <div>
+          <p class="eyebrow">动作包联调</p>
+          <h2 id="commissioningTitle">预览与执行</h2>
+          <p id="robotCapability">选择在线机器人后校验执行能力。</p>
+        </div>
       </div>
+
+      <div class="safety-note">
+        <b>执行按钮可能触发真实设备</b>
+        <span>预览不会下发；HTTP 已受理也不代表物理动作完成，最终以执行事件和设备证据为准。</span>
+      </div>
+
+      <div class="execute-actions">
+        <button id="previewButton" class="button button-outline" type="button">生成动作包预览</button>
+        <button id="executeButton" class="button button-danger" type="button" disabled>下发执行</button>
+      </div>
+
       <div id="previewMeta" class="preview-meta"></div>
       <pre id="packagePreview" class="package-preview">尚未生成预览</pre>
-      <section class="execution-card">
-        <h3>执行记录</h3>
-        <div id="executionSummary" class="empty">当前 Action 尚未执行</div>
+
+      <section class="execution-card" aria-live="polite">
+        <div class="execution-title">
+          <h3>执行事实</h3>
+          <span>自动刷新</span>
+        </div>
+        <div id="executionSummary" class="execution-empty">当前没有执行记录</div>
         <div id="stepTimeline" class="timeline"></div>
       </section>
-    </section>
+    </aside>
   </main>
-  <div id="toast" role="status"></div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="action-api.js"></script>
   <script src="action-workbench-state.js"></script>
   <script src="action-execution-timeline.js"></script>
   <script src="app.js"></script>

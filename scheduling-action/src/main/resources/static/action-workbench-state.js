@@ -30,8 +30,9 @@
     return true;
   }
 
-  function canEdit(state, robotOnline) {
-    return Boolean(robotOnline) && !state.executionLocked && !state.serverLocked;
+  /** 编辑 Action 不依赖机器人在线；机器人只参与启用、预览和执行能力校验。 */
+  function canEdit(state) {
+    return Boolean(state) && !state.executionLocked && !state.serverLocked;
   }
 
   return { create, lockForExecution, releaseAfterTerminal, canEdit };

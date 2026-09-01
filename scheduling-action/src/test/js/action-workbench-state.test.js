@@ -9,7 +9,7 @@ test("执行期间 Action 定义保持只读", () => {
   assert.equal(stateApi.releaseAfterTerminal(state, {
     state: "RUNNING", physicalOutcome: "UNKNOWN", actionInstanceId: "execution-1"
   }), false);
-  assert.equal(stateApi.canEdit(state, true), false);
+  assert.equal(stateApi.canEdit(state), false);
 });
 
 test("所有 Action 终态都解除定义编辑锁", () => {
@@ -21,17 +21,23 @@ test("所有 Action 终态都解除定义编辑锁", () => {
   ]) {
     const state = stateApi.lockForExecution(stateApi.create(), "definition-1", "execution-2");
     assert.equal(stateApi.releaseAfterTerminal(state, execution), true);
-    assert.equal(stateApi.canEdit(state, true), true);
+    assert.equal(stateApi.canEdit(state), true);
   }
 });
 
-test("机器人离线时禁止编辑", () => {
-  assert.equal(stateApi.canEdit(stateApi.create(), false), false);
+test("机器人离线不影响定义编辑", () => {
+  assert.equal(stateApi.canEdit(stateApi.create()), true);
+});
+
+test("服务端存在活动执行时禁止编辑", () => {
+  const state = stateApi.create();
+  state.serverLocked = true;
+  assert.equal(stateApi.canEdit(state), false);
 });
 
 test("工作台不再引用 Schema 参数集 revision 和旧执行字段", () => {
   const staticRoot = path.resolve(__dirname, "../../main/resources/static");
-  const source = ["index.html", "app.js", "action-workbench-state.js"]
+  const source = ["index.html", "app.js", "action-api.js", "action-workbench-state.js"]
     .map(file => fs.readFileSync(path.join(staticRoot, file), "utf8")).join("\n");
   for (const removed of ["parameterSet", "schemaHash", "expectedRevision", "actionKey",
     "workflowInstanceId", "workflowNodeInstanceId", "configSnapshot"]) {
