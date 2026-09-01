@@ -80,6 +80,13 @@
     }
 
     function renderArmPanel() {
+      const transient = settings.relativeState || createRelativeState();
+      if (!transient.offsets) transient.offsets = {};
+      if (!transient.offsets.cartesian) transient.offsets.cartesian = RelativeMotion.emptyOffsets("cartesian");
+      if (!transient.offsets.joint) transient.offsets.joint = RelativeMotion.emptyOffsets("joint");
+      const requestTypePath = ["armMoveRequestParams", "armMoveRequestType"];
+      transient.mode = RelativeMotion.modeForRequestType(get(parameters, requestTypePath, 1));
+
       const section = document.createElement("section");
       section.className = "device-panel arm-panel";
       section.appendChild(panelHeading("ARM / MOVE TO POSE", "当前位置 + 相对偏移 = 绝对目标"));
@@ -92,24 +99,22 @@
         [1, "1 · 移动"], [2, "2 · 清除报警"], [3, "3 · 查询"]
       ], value => emit(setNested(parameters, ["armCommandModelType"], value))));
       core.appendChild(selectControl("位姿模式", get(parameters,
-        ["armMoveRequestParams", "armMoveRequestType"], 1), [
+        requestTypePath, 1), [
         [1, "1 · 笛卡尔"], [2, "2 · 六轴关节"]
-      ], value => emit(setNested(parameters, ["armMoveRequestParams", "armMoveRequestType"], value))));
+      ], value => {
+        transient.mode = RelativeMotion.modeForRequestType(value);
+        emit(setNested(parameters, requestTypePath, value));
+        settings.onTransientChange && settings.onTransientChange();
+      }));
       core.appendChild(numberControl("速度 %", get(parameters,
         ["armMoveRequestParams", "speedPercent"], 30), 1, 100,
       value => emit(setNested(parameters, ["armMoveRequestParams", "speedPercent"], value))));
       section.appendChild(core);
-      section.appendChild(renderRelativePanel());
+      section.appendChild(renderRelativePanel(transient, requestTypePath));
       return section;
     }
 
-    function renderRelativePanel() {
-      const transient = settings.relativeState || createRelativeState();
-      if (!transient.offsets) transient.offsets = {};
-      if (!transient.offsets.cartesian) transient.offsets.cartesian = RelativeMotion.emptyOffsets("cartesian");
-      if (!transient.offsets.joint) transient.offsets.joint = RelativeMotion.emptyOffsets("joint");
-      if (!transient.mode) transient.mode = "cartesian";
-
+    function renderRelativePanel(transient, requestTypePath) {
       const panel = document.createElement("div");
       panel.className = "relative-motion";
       const toolbar = document.createElement("div");
@@ -124,6 +129,7 @@
         button.disabled = !settings.editable;
         button.addEventListener("click", () => {
           transient.mode = item[0];
+          emit(setNested(parameters, requestTypePath, RelativeMotion.requestTypeForMode(item[0])));
           settings.onTransientChange && settings.onTransientChange();
         });
         modes.appendChild(button);
@@ -155,34 +161,20 @@
         : "尚未获取基准。当前值和偏移只存在于此页面，不会写入 Action。";
       panel.appendChild(meta);
 
+      const dragHint = document.createElement("p");
+      dragHint.className = "relative-drag-hint";
+      dragHint.innerHTML = "<b>RELATIVE JOG</b><span>中心为 0；拖动或键盘调节偏移。滑轨是快捷范围，精确输入不受此范围限制。</span>";
+      panel.appendChild(dragHint);
+
       const fields = RelativeMotion.FIELDS[transient.mode];
       const baseline = transient.probe && transient.probe[transient.mode];
       const table = document.createElement("div");
-      table.className = "coordinate-table";
-      table.innerHTML = "<span>轴</span><span>当前值</span><span>相对偏移</span><span>计算目标</span>";
+      table.className = "relative-axis-grid";
       const targets = {};
       fields.forEach(field => {
-        const axis = document.createElement("b");
-        axis.textContent = field.toUpperCase();
-        table.appendChild(axis);
-        const current = document.createElement("output");
-        current.textContent = baseline ? formatNumber(baseline[field]) : "—";
-        table.appendChild(current);
-        const offset = document.createElement("input");
-        offset.type = "number";
-        offset.step = "any";
-        offset.value = transient.offsets[transient.mode][field];
-        offset.disabled = !settings.editable;
-        offset.setAttribute("aria-label", `${field} 相对偏移`);
-        offset.addEventListener("input", () => {
-          const value = Number(offset.value);
-          transient.offsets[transient.mode][field] = Number.isFinite(value) ? value : 0;
-          updateTargets();
-        });
-        table.appendChild(offset);
-        const target = document.createElement("output");
-        targets[field] = target;
-        table.appendChild(target);
+        const axisControl = relativeAxisControl(field, transient.mode, baseline, transient, updateTargets);
+        targets[field] = axisControl.target;
+        table.appendChild(axisControl.element);
       });
       panel.appendChild(table);
 
@@ -210,6 +202,92 @@
           catch (error) { settings.onError(error); }
         }
         fields.forEach(field => { targets[field].textContent = result ? formatNumber(result[field]) : "—"; });
+      }
+
+      function relativeAxisControl(field, mode, currentPose, relativeState, onOffsetChange) {
+        const config = RelativeMotion.controlFor(mode, field);
+        const card = document.createElement("article");
+        card.className = "relative-axis-control";
+
+        const heading = document.createElement("div");
+        heading.className = "relative-axis-heading";
+        const axis = document.createElement("b");
+        axis.innerHTML = `${field.toUpperCase()} <small>${config.unit}</small>`;
+        const offsetOutput = document.createElement("output");
+        heading.append(axis, offsetOutput);
+
+        const equation = document.createElement("div");
+        equation.className = "relative-axis-equation";
+        const current = document.createElement("span");
+        current.innerHTML = `当前 <output>${currentPose ? formatNumber(currentPose[field]) : "—"}</output>`;
+        const arrow = document.createElement("i");
+        arrow.textContent = "→";
+        const target = document.createElement("output");
+        const targetCell = document.createElement("span");
+        targetCell.append("目标 ", target);
+        equation.append(current, arrow, targetCell);
+
+        const dragRow = document.createElement("div");
+        dragRow.className = "relative-drag-row";
+        const minLabel = document.createElement("small");
+        minLabel.textContent = formatSigned(config.min);
+        const rangeShell = document.createElement("div");
+        rangeShell.className = "relative-range-shell";
+        const range = document.createElement("input");
+        range.type = "range";
+        range.min = config.min;
+        range.max = config.max;
+        range.step = config.step;
+        range.disabled = !settings.editable;
+        range.setAttribute("aria-label", `${field} 相对偏移拖拽`);
+        rangeShell.appendChild(range);
+        const maxLabel = document.createElement("small");
+        maxLabel.textContent = formatSigned(config.max);
+        dragRow.append(minLabel, rangeShell, maxLabel);
+
+        const precisionRow = document.createElement("div");
+        precisionRow.className = "relative-precision-row";
+        const precision = document.createElement("label");
+        precision.append("精确偏移");
+        const number = document.createElement("input");
+        number.type = "number";
+        number.step = "any";
+        number.disabled = !settings.editable;
+        number.setAttribute("aria-label", `${field} 精确相对偏移`);
+        precision.appendChild(number);
+        const reset = document.createElement("button");
+        reset.type = "button";
+        reset.className = "relative-zero-button";
+        reset.textContent = "归零";
+        reset.disabled = !settings.editable;
+        reset.setAttribute("aria-label", `${field} 偏移归零`);
+        precisionRow.append(precision, reset);
+
+        const updateOffset = (value, notify = true) => {
+          relativeState.offsets[mode][field] = value;
+          number.value = value;
+          range.value = RelativeMotion.clampToControl(mode, field, value);
+          const outsideRange = value < config.min || value > config.max;
+          card.classList.toggle("is-outside-range", outsideRange);
+          offsetOutput.textContent = `${formatSigned(value)} ${config.unit}`;
+          offsetOutput.dataset.polarity = value < 0 ? "negative" : value > 0 ? "positive" : "zero";
+          paintCenteredRange(range, Number(range.value), config);
+          if (notify) onOffsetChange();
+        };
+        range.addEventListener("input", () => updateOffset(Number(range.value)));
+        number.addEventListener("input", () => {
+          if (number.value !== "" && Number.isFinite(Number(number.value))) updateOffset(Number(number.value));
+        });
+        number.addEventListener("change", () => {
+          if (number.value === "" || !Number.isFinite(Number(number.value))) {
+            updateOffset(relativeState.offsets[mode][field]);
+          }
+        });
+        reset.addEventListener("click", () => updateOffset(0));
+
+        card.append(heading, equation, dragRow, precisionRow);
+        updateOffset(Number(relativeState.offsets[mode][field]) || 0, false);
+        return { element: card, target };
       }
     }
 
@@ -344,6 +422,19 @@
 
   function formatNumber(value) {
     return Number.isInteger(value) ? String(value) : Number(value).toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+  }
+
+  function formatSigned(value) {
+    const number = Number(value);
+    return number > 0 ? `+${formatNumber(number)}` : formatNumber(number);
+  }
+
+  function paintCenteredRange(range, value, config) {
+    const position = ((value - config.min) / (config.max - config.min)) * 100;
+    const zero = ((0 - config.min) / (config.max - config.min)) * 100;
+    range.style.setProperty("--active-start", `${Math.min(position, zero)}%`);
+    range.style.setProperty("--active-end", `${Math.max(position, zero)}%`);
+    range.style.setProperty("--offset-color", value < 0 ? "#d07835" : "#087f72");
   }
 
   function formatTime(value) {

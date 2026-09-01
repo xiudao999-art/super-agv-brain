@@ -27,6 +27,25 @@ test("笛卡尔和关节相对偏移分别计算绝对目标", () => {
   assert.deepEqual(joint, { j1: 9, j2: 18, j3: 27, j4: 36, j5: 45, j6: 54 });
 });
 
+test("双向拖拽配置区分平移轴和旋转轴且只限制滑轨显示", () => {
+  assert.deepEqual(motion.controlFor("cartesian", "x"), { min: -200, max: 200, step: 1, unit: "mm" });
+  assert.deepEqual(motion.controlFor("cartesian", "rx"), { min: -30, max: 30, step: 0.5, unit: "°" });
+  assert.deepEqual(motion.controlFor("joint", "j6"), { min: -30, max: 30, step: 0.5, unit: "°" });
+  assert.equal(motion.clampToControl("cartesian", "x", 260), 200);
+  assert.equal(motion.clampToControl("cartesian", "x", -260), -200);
+  assert.equal(motion.calculate("cartesian", probe.armPoseXYZRxRyRz,
+    { x: 260, y: 0, z: 0, rx: 0, ry: 0, rz: 0 }).x, 360);
+  assert.throws(() => motion.controlFor("cartesian", "j1"), /不支持/);
+});
+
+test("拖拽页签与线协议位姿模式保持双向一致", () => {
+  assert.equal(motion.modeForRequestType(1), "cartesian");
+  assert.equal(motion.modeForRequestType(2), "joint");
+  assert.equal(motion.requestTypeForMode("cartesian"), 1);
+  assert.equal(motion.requestTypeForMode("joint"), 2);
+  assert.throws(() => motion.requestTypeForMode("tool"), /不支持/);
+});
+
 test("应用一套目标位姿时保留另一套原值", () => {
   const params = { armMoveRequestParams: {
     armPoseXYZRxRyRz: { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 },
