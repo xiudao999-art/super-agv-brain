@@ -1,5 +1,6 @@
 package com.kunling.scheduling.workflow.order.client;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -16,6 +17,7 @@ public class PulledOrder {
 
     @Schema(description = "客户系统中的订单编号；同一来源下必须唯一",
             example = "MES-20260825-0031")
+    @JsonAlias("upperId")
     private String upstreamOrderNo;
 
     @Schema(description = "订单优先级，通常数值越小优先级越高",
@@ -31,5 +33,6 @@ public class PulledOrder {
     private LocalDateTime issuedAt;
 
     @Schema(description = "订单包含的任务列表；任务按照taskSeq从小到大依次执行")
+    @JsonAlias("params")
     private List<PulledTask> tasks = new ArrayList<>();
 }

@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /** 临时假数据客户端，用于联调订单同步、优先级调度和任务串行执行。 */
 @Component
@@ -50,6 +52,11 @@ public class MockOrderPullClient implements OrderPullClient {
         task.setTaskName(name);
         task.setFlowNumber(flowNumber);
         task.setFlowTemplateId(flowTemplateId);
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("trayType", "TRAY_CONSUMABLE");
+        item.put("pickSlot", "RACK-01-B2");
+        item.put("placeSlot", "PRE-1-IN-1");
+        task.setItems(Collections.singletonList(item));
         return task;
     }
 }
