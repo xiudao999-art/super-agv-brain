@@ -1,4 +1,4 @@
-package com.kunling.scheduling.app.controller;//package com.kunling.scheduling.agvflow.controller;
+package com.kunling.scheduling.app.controller;//package com.kunling.scheduling.app.controller;
 
 
 import com.kunling.scheduling.workflow.entity.NodeStateTransitionRule;

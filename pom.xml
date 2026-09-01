@@ -21,7 +21,6 @@
     <modules>
         <module>scheduling-common</module>
         <module>scheduling-action</module>
-        <module>scheduling-agvFlow</module>
         <module>scheduling-workflow</module>
         <module>scheduling-app</module>
     </modules>

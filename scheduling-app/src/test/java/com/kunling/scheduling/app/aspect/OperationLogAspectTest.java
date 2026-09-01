@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kunling.scheduling.app.domain.OperationLogStatus;
 import com.kunling.scheduling.app.domain.SystemOperationLog;
 import com.kunling.scheduling.app.service.OperationLogWriter;
+import com.kunling.scheduling.app.service.aspect.OperationLogAspect;
+import com.kunling.scheduling.app.service.aspect.OperationLogPayloadSerializer;
 import com.kunling.scheduling.common.audit.OperationLog;
 import com.kunling.scheduling.common.audit.OperationType;
 import org.junit.jupiter.api.AfterEach;

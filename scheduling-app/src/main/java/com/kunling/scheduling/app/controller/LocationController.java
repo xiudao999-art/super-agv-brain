@@ -1,8 +1,8 @@
 package com.kunling.scheduling.app.controller;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.kunling.scheduling.agvflow.domain.entity.Location;
-import com.kunling.scheduling.agvflow.service.LocationService;
+import com.kunling.scheduling.app.domain.entity.Location;
+import com.kunling.scheduling.app.service.LocationService;
 import com.kunling.scheduling.common.exception.ResourceNotFoundException;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;

@@ -1,7 +1,6 @@
 package com.kunling.scheduling.app;
 
 import com.kunling.scheduling.action.config.ActionModuleConfiguration;
-import com.kunling.scheduling.agvflow.AgvFlowModuleConfiguration;
 import com.kunling.scheduling.workflow.WorkflowModuleConfiguration;
 import com.kunling.scheduling.app.config.SchedulingAppOpenApiConfiguration;
 import com.kunling.scheduling.app.controller.ImageUploadController;
@@ -61,7 +60,7 @@ class KunlingSchedulingApplicationTest {
                 new SchedulingAppOpenApiConfiguration().resourceConfigApiGroup();
 
         assertThat(group.getPackagesToScan())
-                .containsExactly("com.kunling.scheduling.agvflow");
+                .containsExactly("com.kunling.scheduling.app");
         assertThat(group.getPathsToMatch())
                 .containsExactly("/api/flow-templates/**", "/nodeRules/**");
         assertThat(workflowGroup.getPackagesToScan())

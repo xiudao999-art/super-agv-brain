@@ -1,13 +1,12 @@
 package com.kunling.scheduling.app.controller;
 
-import com.kunling.scheduling.agvflow.config.MybatisPlusConfig;
-import com.kunling.scheduling.agvflow.mapper.LabConfigMapper;
-import com.kunling.scheduling.agvflow.service.LabConfigApplicationService;
-import com.kunling.scheduling.agvflow.service.LabConfigDraftEditor;
-import com.kunling.scheduling.agvflow.service.LabConfigQueryService;
-import com.kunling.scheduling.agvflow.service.LabConfigurationValidator;
-import com.kunling.scheduling.agvflow.service.LabLocationReferenceChecker;
-import com.kunling.scheduling.agvflow.service.LabMapPointProjector;
+import com.kunling.scheduling.app.mapper.LabConfigMapper;
+import com.kunling.scheduling.app.service.LabConfigApplicationService;
+import com.kunling.scheduling.app.service.LabConfigDraftEditor;
+import com.kunling.scheduling.app.service.LabConfigQueryService;
+import com.kunling.scheduling.app.service.LabConfigurationValidator;
+import com.kunling.scheduling.app.service.LabLocationReferenceChecker;
+import com.kunling.scheduling.app.service.LabMapPointProjector;
 import com.kunling.scheduling.app.config.FileWebConfiguration;
 import com.kunling.scheduling.app.service.ImageStorageService;
 import com.kunling.scheduling.app.config.SchedulingAppOpenApiConfiguration;
