@@ -81,6 +81,29 @@ class ActionExecutionEntityTest {
                 .hasMessageContaining("不允许携带业务字段");
     }
 
+    @Test
+    void rejectsMalformedRawClientCodeEvidence() {
+        ActionExecutionEntity entity = entity();
+        JsonNode invalid = error().deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) invalid).put("rawClientCode", 50203);
+
+        assertThatThrownBy(() -> entity.applyEvent(event(1, RobotActionEvent.State.REJECTED,
+                PhysicalOutcome.NOT_STARTED, invalid), codec, Instant.EPOCH))
+                .hasMessageContaining("error.rawClientCode 必须是字符串");
+    }
+
+    @Test
+    void rejectsMalformedRawMessageInfoEvidence() {
+        ActionExecutionEntity entity = entity();
+        JsonNode invalid = error().deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) invalid)
+                .set("rawMessageInfo", ActionTestFixtures.MAPPER.createArrayNode());
+
+        assertThatThrownBy(() -> entity.applyEvent(event(1, RobotActionEvent.State.REJECTED,
+                PhysicalOutcome.NOT_STARTED, invalid), codec, Instant.EPOCH))
+                .hasMessageContaining("error.rawMessageInfo 必须是 JSON 对象");
+    }
+
     private ActionExecutionEntity entity() {
         return new ActionExecutionEntity(ActionTestFixtures.newExecution(), codec);
     }

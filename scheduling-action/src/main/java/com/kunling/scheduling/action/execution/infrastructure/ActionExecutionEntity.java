@@ -26,7 +26,7 @@ import java.util.Set;
 @Table(name = "action_execution")
 public class ActionExecutionEntity {
     private static final Set<String> ERROR_FIELDS = ImmutableCollections.setOf(
-            "clientCode", "message", "deviceFault");
+            "clientCode", "message", "deviceFault", "rawClientCode", "rawMessageInfo");
 
     @Id
     @Column(name = "action_instance_id", length = 128, nullable = false)
@@ -342,6 +342,13 @@ public class ActionExecutionEntity {
         }
         requireErrorText(error, "message");
 
+        // cnet8 的字符串技术码和原始 MessageInfo 仅作为审计证据保存，不能替代规范技术码。
+        validateOptionalText(error, "rawClientCode", "error.rawClientCode");
+        JsonNode rawMessageInfo = error.get("rawMessageInfo");
+        if (rawMessageInfo != null && !rawMessageInfo.isNull() && !rawMessageInfo.isObject()) {
+            throw new IllegalArgumentException("error.rawMessageInfo 必须是 JSON 对象。");
+        }
+
         JsonNode deviceFault = error.get("deviceFault");
         if (deviceFault == null || deviceFault.isNull()) return;
         if (!deviceFault.isObject()) {
@@ -355,8 +362,8 @@ public class ActionExecutionEntity {
         }
         requireErrorText(deviceFault, "code");
         requireErrorText(deviceFault, "message");
-        validateOptionalErrorText(deviceFault, "model");
-        validateOptionalErrorText(deviceFault, "deviceId");
+        validateOptionalText(deviceFault, "model", "error.deviceFault.model");
+        validateOptionalText(deviceFault, "deviceId", "error.deviceFault.deviceId");
     }
 
     private String requireErrorText(JsonNode parent, String field) {
@@ -367,10 +374,10 @@ public class ActionExecutionEntity {
         return value.textValue();
     }
 
-    private void validateOptionalErrorText(JsonNode parent, String field) {
+    private void validateOptionalText(JsonNode parent, String field, String path) {
         JsonNode value = parent.get(field);
         if (value != null && !value.isNull() && !value.isTextual()) {
-            throw new IllegalArgumentException("error.deviceFault." + field + " 必须是字符串。");
+            throw new IllegalArgumentException(path + " 必须是字符串。");
         }
     }
 
