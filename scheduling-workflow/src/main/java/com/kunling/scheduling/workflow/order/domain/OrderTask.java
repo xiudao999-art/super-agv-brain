@@ -14,6 +14,8 @@ public class OrderTask extends BaseEntity {
     private String taskName;
     private String flowNumber;
     private Long flowTemplateId;
+    /** 上游params中当前任务的items，按JSON原样保存。 */
+    private String taskParams;
     private Integer templateVersion;
     private String processDefinitionId;
     private String processInstanceId;
