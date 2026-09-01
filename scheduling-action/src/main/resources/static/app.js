@@ -11,7 +11,7 @@
   const state = {
     actions: [],
     robots: [],
-    catalog: { operationSuggestions: FALLBACK_OPERATIONS },
+    catalog: { operationSuggestions: FALLBACK_OPERATIONS, parameterExamples: {} },
     current: null,
     steps: [],
     dirty: false,
@@ -232,7 +232,7 @@
     state.steps.push(source ? clone(source) : {
       stepId: `step-${String(index).padStart(2, "0")}`,
       operation,
-      params: {},
+      params: parameterExample(operation),
       gate: true,
       onFailure: stopAndReportPolicy()
     });
@@ -284,6 +284,7 @@
       const operationSelect = card.querySelector(".step-operation");
       operationSelect.addEventListener("change", () => {
         card.querySelector(".step-title").textContent = operationSelect.value;
+        card.querySelector(".step-params").value = pretty(parameterExample(operationSelect.value));
       });
       list.appendChild(card);
     });
@@ -503,6 +504,11 @@
     const suggestions = Array.isArray(state.catalog.operationSuggestions)
       ? state.catalog.operationSuggestions : FALLBACK_OPERATIONS;
     return registered.length ? registered : suggestions;
+  }
+
+  function parameterExample(operation) {
+    const examples = state.catalog && state.catalog.parameterExamples;
+    return clone(examples && examples[operation] || {});
   }
 
   function canEdit() {

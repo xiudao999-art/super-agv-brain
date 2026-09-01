@@ -2,6 +2,7 @@ package com.kunling.scheduling.action.controller;
 
 import com.kunling.scheduling.action.config.ImmutableCollections;
 import com.kunling.scheduling.action.definition.domain.ActionFailureDirectiveType;
+import com.kunling.scheduling.action.definition.domain.MoveToPoseParameters;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +28,9 @@ public class ActionProtocolCatalogController {
                 "GRIP.VERIFY_LOAD", "VISION.VERIFY_MATERIAL", "VISION.VERIFY_PLACEMENT",
                 "VISION.CAPTURE", "CHASSIS_VERIFY_STOPPED", "ARM_VERIFY_HOME"));
         result.put("failureDirectives", Arrays.asList(ActionFailureDirectiveType.values()));
+        Map<String, Object> parameterExamples = new LinkedHashMap<String, Object>();
+        parameterExamples.put("MOVE_TO_POSE", MoveToPoseParameters.editorTemplate());
+        result.put("parameterExamples", parameterExamples);
         return result;
     }
 }
