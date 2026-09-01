@@ -1,0 +1,40 @@
+create table if not exists exception_handling_rule (
+    id bigint not null auto_increment comment '主键',
+    rule_code varchar(64) not null comment '规程编号，如ES-01',
+    rule_name varchar(256) not null comment '规程名称',
+    emergency_scope varchar(128) not null comment '急停范围',
+    responsibility varchar(256) not null comment '处置责任',
+    read_only_rule tinyint(1) not null default 0 comment '是否只读规程',
+    detection_signal varchar(1024) not null comment '检测信号',
+    related_work_order varchar(128) null comment '当前关联工单',
+    exception_code varchar(128) not null comment '异常编码',
+    manual_steps json not null comment '人工处置步骤JSON数组',
+    automatic_execution_note varchar(256) null comment '系统自动执行说明',
+    release_condition_note varchar(256) null comment '恢复放行条件说明',
+    release_warning varchar(1024) null comment '恢复放行警告',
+    release_permission varchar(256) null comment '放行权限',
+    status varchar(32) not null default 'ENABLED' comment 'ENABLED启用/DISABLED停用',
+    remark varchar(1024) null comment '备注',
+    is_deleted int not null default 0 comment '逻辑删除',
+    create_time datetime not null default current_timestamp,
+    update_time datetime not null default current_timestamp on update current_timestamp,
+    primary key (id),
+    unique key uk_exception_rule_code (rule_code),
+    unique key uk_exception_code (exception_code),
+    key ix_exception_rule_status (status),
+    key ix_exception_rule_work_order (related_work_order)
+) engine=InnoDB default charset=utf8mb4 comment='异常处置规程';
+
+create table if not exists exception_handling_rule_item (
+    id bigint not null auto_increment comment '主键',
+    rule_id bigint not null comment '异常处置规程ID',
+    item_type varchar(32) not null comment 'SYSTEM_ACTION/RELEASE_CONDITION',
+    item_seq int not null comment '类型内显示顺序',
+    content varchar(1024) not null comment '执行步骤或放行条件内容',
+    is_deleted int not null default 0 comment '逻辑删除',
+    create_time datetime not null default current_timestamp,
+    update_time datetime not null default current_timestamp on update current_timestamp,
+    primary key (id),
+    key ix_exception_rule_item_seq (rule_id, item_type, item_seq, is_deleted),
+    key ix_exception_rule_item_rule (rule_id, item_type)
+) engine=InnoDB default charset=utf8mb4 comment='异常处置规程子项';
