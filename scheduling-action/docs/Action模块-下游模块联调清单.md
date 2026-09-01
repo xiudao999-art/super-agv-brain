@@ -1,7 +1,7 @@
 # Action 模块—下游模块联调清单
 
 > 文档状态：当前联调基线  
-> 更新时间：2026-08-31  
+> 更新时间：2026-09-01
 > 线协议：2.0  
 > 适用模块：`scheduling-action` 与机器人下游执行客户端
 
@@ -304,3 +304,51 @@ Action：单个 Action 内步骤编排、校验、组包、记录和异常解释
 | 流程节点无法按 actionInstanceId 找回 | 执行引擎 |
 
 真实设备验收必须与“代码编译通过”和“模拟客户端通过”分别记录。
+
+## 11. cnet8 当前快照兼容边界
+
+Action 保留本清单定义的规范 2.0 模型，在 `RobotActionTransport` 的 TCP 边界增加
+`CNET8_V2` 方言适配。兼容只改变线上的信封和字段结构，不修改 Action 定义、执行记录、
+业务 `packageHash` 或本地状态机。
+
+### 11.1 会话与注册
+
+- 首条 REGISTER 按字段形状精确选择 `ACTION_V2` 或 `CNET8_V2`，一个连接内禁止切换和混用；
+- cnet8 使用 `REGISTER -> REGISTER_ACK -> RegisterRobot` 两阶段注册；
+- 收到 `RegisterRobot.Capabilities` 前，会话不进入在线能力列表，也不能下发 COMMAND；
+- cnet8 未提供超时范围和策略特性时，Action 使用明确的 cnet8 当前实现档案：
+  `timeoutMs=1..3600000`，指令集合为四种标准失败指令；
+- PING/PONG 的 `sessionId` 和 `sequence` 从 `MessageInfo` 中读取并严格校验。
+
+### 11.2 COMMAND 转换
+
+- Action `input.executionPlan.steps` 转成 cnet8 `MessageInfo.Steps`；
+- `params` 只重命名为 `Parameters`，内容保持不透明 JSON，Action 不复制设备 SDK 参数转换；
+- `onFailure.rules` 转成 cnet8 的平铺 `OnFailure`，Action 的 default 编译成全通配规则；
+- Action 原始 `packageHash` 保持不变；cnet8 信封中的 `PackageHash` 按其当前
+  `ExecutionPlanHash.Compute` 字段集合另行计算；
+- 同一 Action 的重复失败选择器和最坏退避预算在发送前按 cnet8 边界校验。
+
+当前不能等价表达的策略必须在 Action 下发前拒绝，禁止静默删除或改变含义：
+
+- CLIENT 失败规则；
+- `RETRY_STEP/VERIFY_THEN_RETRY` 耗尽后的 `SKIP_STEP`；
+- `maxRetries > 3` 或 `backoffMs > 300000`。
+
+### 11.3 ACTION_EVENT 转换
+
+- cnet8 PascalCase、`MessageInfo` 和字符串 `ClientCode` 转成 Action 规范事件；
+- cnet8 未提供事件 sequence，Action 按当前 TCP 会话接收顺序生成正整数序号；
+- `DeviceFault.RawCode/RawMessage` 转成规范 `code/message`，厂家原始内容不丢失；
+- 字符串技术码使用显式目录映射；未知字符串保存在 `rawClientCode`，并归入未映射人工处理；
+- 原始 `MessageInfo` 保存在规范 error 的 `rawMessageInfo` 中用于审计；
+- `UNKNOWN_HOLD + UNKNOWN` 转成规范 `UNKNOWN`；
+  `UNKNOWN_HOLD + PARTIALLY_COMPLETED` 转成 `FAILED + PARTIALLY_COMPLETED`，
+  由 Action 本地状态机安全收敛为 `UNKNOWN_HOLD`。
+
+### 11.4 仍由下游闭环的事项
+
+- 原子命令 `commandId` 在包内重试时的生成和复用语义；
+- `UNKNOWN_HOLD` 经操作员核实后的生产解除入口、确认响应和审计；
+- 厂家原始码是否区分大小写的精确匹配约束；
+- 如果业务必须使用 CLIENT 规则或重试耗尽跳过，下游需要先补充可等价执行的协议能力。

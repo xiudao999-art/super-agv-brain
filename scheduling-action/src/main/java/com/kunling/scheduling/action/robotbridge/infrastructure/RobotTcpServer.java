@@ -19,6 +19,8 @@ import com.kunling.scheduling.action.robotbridge.application.RobotUnavailableExc
 import com.kunling.scheduling.action.definition.domain.ActionFailureDirectiveType;
 import com.kunling.scheduling.action.exceptionmapping.domain.PhysicalOutcome;
 import com.kunling.scheduling.action.robotbridge.config.RobotBridgeProperties;
+import com.kunling.scheduling.action.robotbridge.infrastructure.compat.cnet8.Cnet8ProtocolAdapter;
+import com.kunling.scheduling.action.robotbridge.infrastructure.protocol.RobotWireDialect;
 import com.kunling.scheduling.action.config.ActionModuleDefaults;
 import com.kunling.scheduling.action.config.NamedDaemonThreadFactory;
 import org.slf4j.Logger;
@@ -50,6 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 机器人 TCP 服务端。
@@ -64,6 +67,7 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
 
     private final RobotBridgeProperties properties;
     private final ObjectMapper objectMapper;
+    private final Cnet8ProtocolAdapter cnet8ProtocolAdapter;
     private final List<RobotActionEventListener> actionEventListeners;
     private final List<RobotSessionListener> sessionListeners;
     private final Map<String, ClientSession> sessions = new ConcurrentHashMap<>();
@@ -72,11 +76,14 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
     private volatile ServerSocket serverSocket;
     private volatile ExecutorService executor;
 
-    public RobotTcpServer(RobotBridgeProperties properties, ObjectMapper objectMapper,
+    public RobotTcpServer(RobotBridgeProperties properties,
+                          ObjectMapper objectMapper,
+                          Cnet8ProtocolAdapter cnet8ProtocolAdapter,
                           List<RobotActionEventListener> actionEventListeners,
                           List<RobotSessionListener> sessionListeners) {
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.cnet8ProtocolAdapter = cnet8ProtocolAdapter;
         this.actionEventListeners = ImmutableCollections.copyList(actionEventListeners);
         this.sessionListeners = ImmutableCollections.copyList(sessionListeners);
     }
@@ -148,27 +155,34 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         validateExecutionPlan(session, command.input());
 
         String messageId = newMessageId();
-        ObjectNode message = baseMessage("COMMAND", messageId);
-        message.put("sessionId", session.sessionId);
-        message.put("robotId", command.robotId());
-        message.put("actionInstanceId", command.actionInstanceId());
-        message.put("deviceCommandId", command.deviceCommandId());
-        message.put("packageHash", command.packageHash());
-        message.set("input", command.input());
-        message.put("timeoutMs", command.timeoutMs());
-        message.put("timestamp", command.timestamp().toString());
+        ObjectNode message;
+        if (session.dialect == RobotWireDialect.CNET8_V2) {
+            message = cnet8ProtocolAdapter.createCommand(command, messageId);
+        } else {
+            message = baseMessage("COMMAND", messageId);
+            message.put("sessionId", session.sessionId);
+            message.put("robotId", command.robotId());
+            message.put("actionInstanceId", command.actionInstanceId());
+            message.put("deviceCommandId", command.deviceCommandId());
+            message.put("packageHash", command.packageHash());
+            message.set("input", command.input());
+            message.put("timeoutMs", command.timeoutMs());
+            message.put("timestamp", command.timestamp().toString());
+        }
         session.send(message);
         return new DispatchReceipt(session.sessionId, messageId, command.timestamp());
     }
 
     @Override
     public Optional<RobotSessionView> findSession(String robotId) {
-        return Optional.ofNullable(sessions.get(robotId)).filter(ClientSession::active).map(ClientSession::view);
+        return Optional.ofNullable(sessions.get(robotId))
+                .filter(ClientSession::dispatchReady).map(ClientSession::view);
     }
 
     @Override
     public List<RobotSessionView> listSessions() {
-        return sessions.values().stream().filter(ClientSession::active).map(ClientSession::view).collect(ImmutableCollections.toImmutableList());
+        return sessions.values().stream().filter(ClientSession::dispatchReady)
+                .map(ClientSession::view).collect(ImmutableCollections.toImmutableList());
     }
 
     private void acceptLoop() {
@@ -210,12 +224,19 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         try (Socket ignored = socket) {
             String line = readLine(socket.getInputStream());
             JsonNode registration = parse(line);
-            validateProtocolVersion(registration);
-            requireMessageType(registration, "REGISTER");
-            session = register(socket, registration);
+            RobotWireDialect dialect = RobotWireDialect.detectRegistration(registration);
+            if (dialect == RobotWireDialect.ACTION_V2) {
+                validateProtocolVersion(registration);
+                requireMessageType(registration, "REGISTER");
+                session = registerActionV2(socket, registration);
+            } else {
+                session = registerCnet8(socket, registration);
+            }
             while (running.get() && !socket.isClosed()) {
                 JsonNode message = parse(readLine(socket.getInputStream()));
-                validateProtocolVersion(message);
+                if (session.dialect == RobotWireDialect.ACTION_V2) {
+                    validateProtocolVersion(message);
+                }
                 session.lastSeenAt = Instant.now();
                 handleMessage(session, message);
             }
@@ -227,13 +248,15 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
             if (session != null) {
                 sessions.remove(session.robotId, session);
                 session.close();
-                RobotSessionView view = session.view();
-                sessionListeners.forEach(listener -> safeNotifyDisconnected(listener, view));
+                if (session.connectedNotified()) {
+                    RobotSessionView view = session.view();
+                    sessionListeners.forEach(listener -> safeNotifyDisconnected(listener, view));
+                }
             }
         }
     }
 
-    private ClientSession register(Socket socket, JsonNode registration) {
+    private ClientSession registerActionV2(Socket socket, JsonNode registration) {
         String robotId = requiredText(registration, "robotId");
         String clientInstanceId = requiredText(registration, "clientInstanceId");
         String robotType = requiredText(registration, "robotType");
@@ -243,8 +266,9 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         Map<String, RobotOperationCapability> capabilities = parseOperationCapabilities(registration);
         Set<String> policyFeatures = parsePolicyFeatures(registration);
 
-        ClientSession session = new ClientSession(socket, sessionId, robotId, robotType,
-                clientInstanceId, capabilities, policyFeatures, Instant.now());
+        ClientSession session = new ClientSession(socket, RobotWireDialect.ACTION_V2,
+                sessionId, robotId, robotType, clientInstanceId,
+                capabilities, policyFeatures, true, Instant.now());
         ObjectNode ack = baseMessage("REGISTER_ACK", newMessageId());
         ack.put("replyTo", replyTo);
         ack.put("robotId", robotId);
@@ -257,18 +281,45 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         ack.put("serverTime", Instant.now().toString());
         session.send(ack);
 
-        ClientSession previous = sessions.put(robotId, session);
-        if (previous != null) {
-            previous.close();
-        }
-        RobotSessionView view = session.view();
-        sessionListeners.forEach(listener -> safeNotifyConnected(listener, view));
+        replaceSession(session);
+        notifyConnected(session);
         log.info("机器人已注册: robotId={}, sessionId={}, operations={}, policyFeatures={}",
                 robotId, sessionId, capabilities.keySet(), policyFeatures);
         return session;
     }
 
+    private ClientSession registerCnet8(Socket socket, JsonNode registration) {
+        Cnet8ProtocolAdapter.InitialRegistration initial =
+                cnet8ProtocolAdapter.parseInitialRegistration(registration);
+        String sessionId = UUID.randomUUID().toString();
+        ClientSession session = new ClientSession(socket, RobotWireDialect.CNET8_V2,
+                sessionId, initial.robotId(), initial.robotType(), initial.clientInstanceId(),
+                java.util.Collections.<String, RobotOperationCapability>emptyMap(),
+                java.util.Collections.<String>emptySet(), false, Instant.now());
+        replaceSession(session);
+        session.send(cnet8ProtocolAdapter.createRegisterAck(initial.robotId(), sessionId,
+                properties.heartbeatIntervalMs(), newMessageId()));
+        log.info("cnet8 已完成初始注册，等待设备能力: robotId={}, sessionId={}",
+                initial.robotId(), sessionId);
+        return session;
+    }
+
+    private void replaceSession(ClientSession session) {
+        ClientSession previous = sessions.put(session.robotId, session);
+        if (previous != null) previous.close();
+    }
+
+    private void notifyConnected(ClientSession session) {
+        if (!session.markConnectedNotified()) return;
+        RobotSessionView view = session.view();
+        sessionListeners.forEach(listener -> safeNotifyConnected(listener, view));
+    }
+
     private void handleMessage(ClientSession session, JsonNode message) {
+        if (session.dialect == RobotWireDialect.CNET8_V2) {
+            handleCnet8Message(session, message);
+            return;
+        }
         validateSession(session, message);
         String messageType = requiredText(message, "messageType");
         switch (messageType) {
@@ -283,6 +334,35 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         }
     }
 
+    private void handleCnet8Message(ClientSession session, JsonNode message) {
+        cnet8ProtocolAdapter.validateRobotMessage(message, session.robotId);
+        String messageType = cnet8ProtocolAdapter.messageType(message);
+        switch (messageType) {
+            case "PING":
+                session.send(cnet8ProtocolAdapter.createPong(message, session.robotId,
+                        session.sessionId, newMessageId()));
+                break;
+            case "RegisterRobot":
+                Cnet8ProtocolAdapter.RegistrationCapabilities registration =
+                        cnet8ProtocolAdapter.parseRobotRegistration(message, session.robotId);
+                session.completeRegistration(registration.operationCapabilities(),
+                        registration.policyFeatures());
+                notifyConnected(session);
+                log.info("cnet8 设备能力已注册: robotId={}, operations={}, policyFeatures={}",
+                        session.robotId, session.operationCapabilities.keySet(), session.policyFeatures);
+                break;
+            case "ACTION_EVENT":
+                if (!session.dispatchReady()) {
+                    throw new IllegalArgumentException("cnet8 尚未完成 RegisterRobot，不能上报 ACTION_EVENT");
+                }
+                publishActionEvent(cnet8ProtocolAdapter.parseActionEvent(message,
+                        session.robotId, session.sessionId, session.nextActionEventSequence()));
+                break;
+            default:
+                throw new IllegalArgumentException("cnet8 会话不支持消息类型：" + messageType);
+        }
+    }
+
     private void replyPong(ClientSession session, JsonNode ping) {
         ObjectNode pong = baseMessage("PONG", newMessageId());
         pong.put("replyTo", requiredText(ping, "messageId"));
@@ -293,7 +373,10 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
     }
 
     private void publishActionEvent(JsonNode message) {
-        RobotActionEvent event = parseActionMessage(message);
+        publishActionEvent(parseActionMessage(message));
+    }
+
+    private void publishActionEvent(RobotActionEvent event) {
         actionEventListeners.forEach(listener -> safeNotifyEvent(listener, event));
     }
 
@@ -340,7 +423,7 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
 
     private ClientSession requireSession(String robotId) {
         ClientSession session = sessions.get(robotId);
-        if (session == null || !session.active()) {
+        if (session == null || !session.dispatchReady()) {
             throw new RobotUnavailableException("机器人当前未连接: " + robotId);
         }
         return session;
@@ -640,19 +723,28 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
     private final class ClientSession {
         private final Socket socket;
         private final OutputStream output;
+        private final RobotWireDialect dialect;
         private final String sessionId;
         private final String robotId;
         private final String robotType;
         private final String clientInstanceId;
-        private final Map<String, RobotOperationCapability> operationCapabilities;
-        private final Set<String> policyFeatures;
+        private volatile Map<String, RobotOperationCapability> operationCapabilities;
+        private volatile Set<String> policyFeatures;
         private final Instant connectedAt;
+        private final AtomicBoolean connectedNotification = new AtomicBoolean();
+        private final AtomicLong actionEventSequence = new AtomicLong();
+        private volatile boolean ready;
         private volatile Instant lastSeenAt;
 
-        private ClientSession(Socket socket, String sessionId, String robotId, String robotType,
+        private ClientSession(Socket socket,
+                              RobotWireDialect dialect,
+                              String sessionId,
+                              String robotId,
+                              String robotType,
                               String clientInstanceId,
                               Map<String, RobotOperationCapability> operationCapabilities,
                               Set<String> policyFeatures,
+                              boolean ready,
                               Instant connectedAt) {
             try {
                 this.output = socket.getOutputStream();
@@ -660,6 +752,7 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
                 throw new RobotUnavailableException("无法创建机器人输出流", exception);
             }
             this.socket = socket;
+            this.dialect = dialect;
             this.sessionId = sessionId;
             this.robotId = robotId;
             this.robotType = robotType;
@@ -668,6 +761,7 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
                     new LinkedHashMap<String, RobotOperationCapability>(operationCapabilities));
             this.policyFeatures = java.util.Collections.unmodifiableSet(
                     new LinkedHashSet<String>(policyFeatures));
+            this.ready = ready;
             this.connectedAt = connectedAt;
             this.lastSeenAt = connectedAt;
         }
@@ -688,6 +782,33 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
 
         private boolean active() {
             return !socket.isClosed() && socket.isConnected();
+        }
+
+        private boolean dispatchReady() {
+            return ready && active();
+        }
+
+        private synchronized void completeRegistration(
+                Map<String, RobotOperationCapability> capabilities,
+                Set<String> features) {
+            if (ready) throw new IllegalArgumentException("cnet8 当前会话已经完成 RegisterRobot");
+            this.operationCapabilities = java.util.Collections.unmodifiableMap(
+                    new LinkedHashMap<String, RobotOperationCapability>(capabilities));
+            this.policyFeatures = java.util.Collections.unmodifiableSet(
+                    new LinkedHashSet<String>(features));
+            this.ready = true;
+        }
+
+        private boolean markConnectedNotified() {
+            return connectedNotification.compareAndSet(false, true);
+        }
+
+        private boolean connectedNotified() {
+            return connectedNotification.get();
+        }
+
+        private long nextActionEventSequence() {
+            return actionEventSequence.incrementAndGet();
         }
 
         private RobotSessionView view() {

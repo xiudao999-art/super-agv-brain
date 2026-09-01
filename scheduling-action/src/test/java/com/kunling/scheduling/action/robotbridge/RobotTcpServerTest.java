@@ -4,10 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.kunling.scheduling.action.config.ImmutableCollections;
+import com.kunling.scheduling.action.config.JsonCodec;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionCommand;
 import com.kunling.scheduling.action.robotbridge.application.RobotActionEvent;
 import com.kunling.scheduling.action.robotbridge.config.RobotBridgeProperties;
+import com.kunling.scheduling.action.robotbridge.infrastructure.compat.cnet8.Cnet8ActionEventNormalizer;
+import com.kunling.scheduling.action.robotbridge.infrastructure.compat.cnet8.Cnet8ClientCodeMapper;
+import com.kunling.scheduling.action.robotbridge.infrastructure.compat.cnet8.Cnet8ExecutionPlanRenderer;
+import com.kunling.scheduling.action.robotbridge.infrastructure.compat.cnet8.Cnet8ProtocolAdapter;
 import com.kunling.scheduling.action.robotbridge.infrastructure.RobotTcpServer;
+import com.kunling.scheduling.action.robotbridge.infrastructure.protocol.RobotWireDialect;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -18,6 +24,7 @@ import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -34,9 +41,7 @@ class RobotTcpServerTest {
     @Test
     void registerDispatchAndEventUseOnlyTheV2Contract() throws Exception {
         LinkedBlockingQueue<RobotActionEvent> events = new LinkedBlockingQueue<RobotActionEvent>();
-        server = new RobotTcpServer(new RobotBridgeProperties(true, "127.0.0.1", 0,
-                30_000, 10_000, 1_048_576), objectMapper,
-                ImmutableCollections.listOf(events::add), ImmutableCollections.listOf());
+        server = newServer(events);
         server.start();
 
         try (Socket socket = new Socket("127.0.0.1", server.boundPort())) {
@@ -97,6 +102,106 @@ class RobotTcpServerTest {
     }
 
     @Test
+    void cnet8DialectCompletesTwoStageRegistrationAndNormalizesCommandAndEvent() throws Exception {
+        LinkedBlockingQueue<RobotActionEvent> events = new LinkedBlockingQueue<RobotActionEvent>();
+        server = newServer(events);
+        server.start();
+
+        try (Socket socket = new Socket("127.0.0.1", server.boundPort())) {
+            socket.setSoTimeout(3_000);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    socket.getInputStream(), StandardCharsets.UTF_8));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
+                    socket.getOutputStream(), StandardCharsets.UTF_8));
+
+            send(writer, "{\"MessageId\":\"reg-cnet-1\",\"MessageName\":\"REGISTER\"," +
+                    "\"MessageType\":\"REGISTER\",\"RobotId\":\"R01\"," +
+                    "\"ActionInstanceId\":\"\",\"DeviceCommandId\":\"\"," +
+                    "\"Timestamp\":\"2026-09-01T01:00:00+00:00\"," +
+                    "\"MessageInfo\":{\"RobotId\":\"R01\"}}");
+            JsonNode ack = objectMapper.readTree(reader.readLine());
+            assertThat(ack.path("MessageType").asText()).isEqualTo("REGISTER_ACK");
+            assertThat(ack.at("/MessageInfo/SessionId").asText()).isNotBlank();
+            assertThat(server.findSession("R01")).as("未上报能力时不能成为可下发会话").isEmpty();
+
+            send(writer, "{\"MessageId\":\"device-reg-1\",\"MessageName\":\"RegisterRobot\"," +
+                    "\"MessageType\":\"RegisterRobot\",\"RobotId\":\"R01\"," +
+                    "\"Timestamp\":\"2026-09-01T01:00:01+00:00\",\"MessageInfo\":{" +
+                    "\"RobotId\":\"R01\",\"Vendor\":\"KUNLING\",\"ProtocolVersion\":\"2.0\"," +
+                    "\"Capabilities\":[{\"Operation\":\"MOVE_TO_MAP_POINT\"," +
+                    "\"DeviceType\":\"CHASSIS\",\"SchemaVersion\":\"2.0\"}]}}");
+            assertThat(awaitSession("R01").get().operationCapabilities())
+                    .containsKey("MOVE_TO_MAP_POINT");
+
+            String sessionId = ack.at("/MessageInfo/SessionId").asText();
+            send(writer, "{\"MessageId\":\"ping-1\",\"MessageName\":\"PING\"," +
+                    "\"MessageType\":\"PING\",\"RobotId\":\"R01\"," +
+                    "\"Timestamp\":\"2026-09-01T01:00:02+00:00\",\"MessageInfo\":{" +
+                    "\"SessionId\":\"" + sessionId + "\",\"Sequence\":1}}");
+            JsonNode pong = objectMapper.readTree(reader.readLine());
+            assertThat(pong.path("MessageType").asText()).isEqualTo("PONG");
+            assertThat(pong.at("/MessageInfo/SessionId").asText()).isEqualTo(sessionId);
+
+            JsonNode input = objectMapper.readTree("{\"executionPlan\":{\"steps\":[{" +
+                    "\"stepId\":\"move\",\"operation\":\"MOVE_TO_MAP_POINT\"," +
+                    "\"params\":{\"commandId\":\"0123456789abcdef0123456789abcdef\"," +
+                    "\"chassisCommandModelType\":1,\"chassisMoveRequestParams\":{" +
+                    "\"chassisMoveRequestType\":1,\"speedPercent\":20," +
+                    "\"mapName\":\"LAB\",\"mapPointName\":\"P01\"}}," +
+                    "\"gate\":true,\"onFailure\":{\"rules\":[{" +
+                    "\"policyId\":\"move.rule.1\",\"when\":{\"source\":\"DEVICE\"," +
+                    "\"vendor\":\"HIKROBOT\",\"deviceType\":\"CHASSIS\",\"code\":\"NAV_TIMEOUT\"}," +
+                    "\"then\":{\"action\":\"RETRY_STEP\",\"maxRetries\":2," +
+                    "\"delayMs\":1000,\"onExhaust\":\"STOP_AND_REPORT\"}}]," +
+                    "\"default\":{\"action\":\"STOP_AND_REPORT\"}}}]}}");
+            server.dispatch(new RobotActionCommand("R01", "action-1", "dc-1",
+                    "2.0", "action-package-hash", input, 60_000, Instant.EPOCH));
+            JsonNode command = objectMapper.readTree(reader.readLine());
+            assertThat(command.path("MessageType").asText()).isEqualTo("COMMAND");
+            assertThat(command.path("ActionInstanceId").asText()).isEqualTo("action-1");
+            assertThat(command.at("/MessageInfo/Steps/0/Parameters/commandId").asText())
+                    .isEqualTo("0123456789abcdef0123456789abcdef");
+            assertThat(command.at("/MessageInfo/Steps/0/OnFailure")).hasSize(2);
+            assertThat(command.at("/MessageInfo/PackageHash").asText())
+                    .isEqualTo("2df62770ea37202b6e12719bc24c5a0cc62f08037844335ba72af136044846e7")
+                    .isNotEqualTo("action-package-hash");
+
+            String downstreamHash = command.at("/MessageInfo/PackageHash").asText();
+            String originalMessageId = command.path("MessageId").asText();
+            send(writer, "{\"MessageId\":\"event-1\",\"MessageName\":\"ACTION_EVENT\"," +
+                    "\"MessageType\":\"ACTION_EVENT\",\"RobotId\":\"R01\"," +
+                    "\"ActionInstanceId\":\"action-1\",\"DeviceCommandId\":\"dc-1\"," +
+                    "\"Timestamp\":\"2026-09-01T01:00:03+00:00\",\"MessageInfo\":{" +
+                    "\"OriginalMessageId\":\"" + originalMessageId + "\"," +
+                    "\"ActionInstanceId\":\"action-1\",\"DeviceCommandId\":\"dc-1\"," +
+                    "\"WorkflowInstanceId\":\"\",\"WorkflowNodeInstanceId\":\"\"," +
+                    "\"PackageHash\":\"" + downstreamHash + "\",\"EventKind\":\"FINAL\"," +
+                    "\"State\":\"FAILED\",\"PhysicalOutcome\":\"CONFIRMED_FAILED\"," +
+                    "\"ClientCode\":\"STEP_FAILED\",\"Message\":\"前方障碍持续存在\"," +
+                    "\"DeviceFault\":{\"Vendor\":\"HIKROBOT\",\"DeviceType\":\"CHASSIS\"," +
+                    "\"RawCode\":\"NAV_TIMEOUT\",\"RawMessage\":\"前方障碍持续存在\"," +
+                    "\"Operation\":\"MOVE_TO_MAP_POINT\"}," +
+                    "\"LastStepEvent\":{\"StepId\":\"move\",\"Operation\":\"MOVE_TO_MAP_POINT\"," +
+                    "\"Success\":false,\"Skipped\":false,\"Attempts\":3," +
+                    "\"PhysicalOutcome\":\"CONFIRMED_FAILED\",\"Message\":\"前方障碍持续存在\"," +
+                    "\"CompletedAt\":\"2026-09-01T01:00:03+00:00\"}," +
+                    "\"ResolvedSteps\":[{\"StepId\":\"move\",\"Operation\":\"MOVE_TO_MAP_POINT\"," +
+                    "\"Success\":false,\"Skipped\":false,\"Attempts\":3," +
+                    "\"PhysicalOutcome\":\"CONFIRMED_FAILED\",\"Message\":\"前方障碍持续存在\"}]," +
+                    "\"OccurredAt\":\"2026-09-01T01:00:03+00:00\"}}");
+
+            RobotActionEvent event = events.poll(3, TimeUnit.SECONDS);
+            assertThat(event).isNotNull();
+            assertThat(event.sequence()).isEqualTo(1L);
+            assertThat(event.state()).isEqualTo(RobotActionEvent.State.FAILED);
+            assertThat(event.stepEvent().path("stepId").asText()).isEqualTo("move");
+            assertThat(event.error().path("clientCode").asInt()).isEqualTo(50203);
+            assertThat(event.error().path("rawClientCode").asText()).isEqualTo("STEP_FAILED");
+            assertThat(event.error().at("/deviceFault/code").asText()).isEqualTo("NAV_TIMEOUT");
+        }
+    }
+
+    @Test
     void wireStatesAreExactV2States() {
         assertThat(RobotActionEvent.State.fromWireState("FINISHED")).isEqualTo(RobotActionEvent.State.FINISHED);
         assertThatThrownBy(() -> RobotActionEvent.State.fromWireState("Busy"))
@@ -105,6 +210,44 @@ class RobotTcpServerTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> RobotActionEvent.State.fromWireState("CANCELLED"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void registrationDialectIsChosenOnceAndMixedShapesAreRejected() throws Exception {
+        assertThat(RobotWireDialect.detectRegistration(
+                objectMapper.readTree("{\"version\":\"2.0\",\"messageType\":\"REGISTER\"}")))
+                .isEqualTo(RobotWireDialect.ACTION_V2);
+        assertThat(RobotWireDialect.detectRegistration(
+                objectMapper.readTree("{\"MessageType\":\"REGISTER\",\"MessageInfo\":{}}")))
+                .isEqualTo(RobotWireDialect.CNET8_V2);
+        assertThatThrownBy(() -> RobotWireDialect.detectRegistration(objectMapper.readTree(
+                "{\"version\":\"2.0\",\"messageType\":\"REGISTER\"," +
+                        "\"MessageType\":\"REGISTER\",\"MessageInfo\":{}}")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("只能符合一种");
+    }
+
+    private RobotTcpServer newServer(LinkedBlockingQueue<RobotActionEvent> events) {
+        JsonCodec jsonCodec = new JsonCodec(objectMapper);
+        Cnet8ExecutionPlanRenderer renderer = new Cnet8ExecutionPlanRenderer(objectMapper, jsonCodec);
+        Cnet8ClientCodeMapper clientCodeMapper = new Cnet8ClientCodeMapper();
+        Cnet8ProtocolAdapter adapter = new Cnet8ProtocolAdapter(objectMapper, renderer,
+                new Cnet8ActionEventNormalizer(objectMapper, clientCodeMapper));
+        return new RobotTcpServer(new RobotBridgeProperties(true, "127.0.0.1", 0,
+                30_000, 10_000, 1_048_576), objectMapper, adapter,
+                ImmutableCollections.listOf(events::add), ImmutableCollections.listOf());
+    }
+
+    private Optional<com.kunling.scheduling.action.robotbridge.application.RobotSessionView>
+    awaitSession(String robotId) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        Optional<com.kunling.scheduling.action.robotbridge.application.RobotSessionView> session;
+        do {
+            session = server.findSession(robotId);
+            if (session.isPresent()) return session;
+            Thread.sleep(10L);
+        } while (System.nanoTime() < deadline);
+        return Optional.empty();
     }
 
     private void send(BufferedWriter writer, String json) throws Exception {
