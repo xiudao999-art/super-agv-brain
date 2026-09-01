@@ -1,4 +1,4 @@
-package com.kunling.scheduling.app.catalog;
+package com.kunling.scheduling.app.mapper;
 
 import org.apache.ibatis.annotations.Select;
 import org.junit.jupiter.api.Test;

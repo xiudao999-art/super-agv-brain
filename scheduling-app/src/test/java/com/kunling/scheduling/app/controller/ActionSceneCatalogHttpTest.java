@@ -1,5 +1,8 @@
-package com.kunling.scheduling.app.catalog;
+package com.kunling.scheduling.app.controller;
 
+import com.kunling.scheduling.app.domain.ActionSceneCatalogItem;
+import com.kunling.scheduling.app.mapper.ActionSceneCatalogRepository;
+import com.kunling.scheduling.app.service.ActionSceneCatalogService;
 import com.kunling.scheduling.common.web.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

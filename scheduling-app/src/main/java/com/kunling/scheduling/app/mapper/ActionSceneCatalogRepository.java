@@ -1,5 +1,6 @@
-package com.kunling.scheduling.app.catalog;
+package com.kunling.scheduling.app.mapper;
 
+import com.kunling.scheduling.app.domain.ActionSceneCatalogItem;
 import org.apache.ibatis.annotations.Arg;
 import org.apache.ibatis.annotations.ConstructorArgs;
 import org.apache.ibatis.annotations.Mapper;

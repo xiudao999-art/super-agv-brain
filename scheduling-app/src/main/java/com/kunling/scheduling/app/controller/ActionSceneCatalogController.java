@@ -1,5 +1,7 @@
-package com.kunling.scheduling.app.catalog;
+package com.kunling.scheduling.app.controller;
 
+import com.kunling.scheduling.app.domain.ActionSceneCatalogOption;
+import com.kunling.scheduling.app.service.ActionSceneCatalogService;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import io.swagger.v3.oas.annotations.Operation;

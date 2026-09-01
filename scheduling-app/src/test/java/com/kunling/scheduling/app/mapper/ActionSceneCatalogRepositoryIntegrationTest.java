@@ -1,5 +1,6 @@
-package com.kunling.scheduling.app.catalog;
+package com.kunling.scheduling.app.mapper;
 
+import com.kunling.scheduling.app.domain.ActionSceneCatalogItem;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -1,5 +1,6 @@
-package com.kunling.scheduling.app.catalog;
+package com.kunling.scheduling.app.service;
 
+import com.kunling.scheduling.app.mapper.ActionSceneCatalogRepository;
 import com.kunling.scheduling.common.exception.InvalidRequestException;
 import org.junit.jupiter.api.Test;
 
