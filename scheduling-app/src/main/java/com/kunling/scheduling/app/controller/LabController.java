@@ -1,10 +1,10 @@
 package com.kunling.scheduling.app.controller;
 
-import com.kunling.scheduling.agvflow.domain.dto.InitializeLabRequest;
-import com.kunling.scheduling.agvflow.domain.dto.LabConfigVersionResult;
-import com.kunling.scheduling.agvflow.domain.dto.LabSummary;
-import com.kunling.scheduling.agvflow.domain.dto.UpdateLabRequest;
-import com.kunling.scheduling.agvflow.service.LabConfigApplicationService;
+import com.kunling.scheduling.app.domain.dto.InitializeLabRequest;
+import com.kunling.scheduling.app.domain.dto.LabConfigVersionResult;
+import com.kunling.scheduling.app.domain.dto.LabSummary;
+import com.kunling.scheduling.app.domain.dto.UpdateLabRequest;
+import com.kunling.scheduling.app.service.LabConfigApplicationService;
 import com.kunling.scheduling.common.audit.OperationLog;
 import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;

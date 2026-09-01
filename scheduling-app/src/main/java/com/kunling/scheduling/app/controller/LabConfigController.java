@@ -1,16 +1,16 @@
 package com.kunling.scheduling.app.controller;
 
-import com.kunling.scheduling.agvflow.service.LabConfigApplicationService;
-import com.kunling.scheduling.agvflow.domain.dto.CreatedResource;
-import com.kunling.scheduling.agvflow.domain.dto.LabConfigDetail;
-import com.kunling.scheduling.agvflow.domain.dto.LabLinkRequest;
-import com.kunling.scheduling.agvflow.domain.dto.LabMachineRequest;
-import com.kunling.scheduling.agvflow.domain.dto.LabNodeRequest;
-import com.kunling.scheduling.agvflow.domain.dto.LabPointRequest;
-import com.kunling.scheduling.agvflow.domain.dto.LabConfigSummary;
-import com.kunling.scheduling.agvflow.domain.dto.LabMapRequest;
-import com.kunling.scheduling.agvflow.domain.dto.LabMapPointView;
-import com.kunling.scheduling.agvflow.domain.dto.ValidationResult;
+import com.kunling.scheduling.app.service.LabConfigApplicationService;
+import com.kunling.scheduling.app.domain.dto.CreatedResource;
+import com.kunling.scheduling.app.domain.dto.LabConfigDetail;
+import com.kunling.scheduling.app.domain.dto.LabLinkRequest;
+import com.kunling.scheduling.app.domain.dto.LabMachineRequest;
+import com.kunling.scheduling.app.domain.dto.LabNodeRequest;
+import com.kunling.scheduling.app.domain.dto.LabPointRequest;
+import com.kunling.scheduling.app.domain.dto.LabConfigSummary;
+import com.kunling.scheduling.app.domain.dto.LabMapRequest;
+import com.kunling.scheduling.app.domain.dto.LabMapPointView;
+import com.kunling.scheduling.app.domain.dto.ValidationResult;
 import com.kunling.scheduling.common.audit.OperationLog;
 import com.kunling.scheduling.common.audit.OperationType;
 import com.kunling.scheduling.common.web.ApiResult;

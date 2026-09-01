@@ -45,11 +45,6 @@
         </dependency>
         <dependency>
             <groupId>com.kunling</groupId>
-            <artifactId>scheduling-agvFlow</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.kunling</groupId>
             <artifactId>scheduling-workflow</artifactId>
             <version>${project.version}</version>
         </dependency>

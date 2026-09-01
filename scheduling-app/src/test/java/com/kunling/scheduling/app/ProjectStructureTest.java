@@ -74,7 +74,7 @@ class ProjectStructureTest {
     }
 
     @Test
-    void managementControllersBelongToApplicationAndDomainLayersStayInAgvFlow() {
+    void managementControllersAndDomainLayersBelongToApplication() {
         assertThat(Paths.get(
                 "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/labconfig"
         )).doesNotExist();
@@ -88,10 +88,10 @@ class ProjectStructureTest {
                     + controller + ".java")).doesNotExist();
         }
         assertThat(Paths.get(
-                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/service/LabConfigApplicationService.java"
+                "src/main/java/com/kunling/scheduling/app/service/LabConfigApplicationService.java"
         )).isRegularFile();
         assertThat(Paths.get(
-                "../scheduling-agvFlow/src/main/java/com/kunling/scheduling/agvflow/mapper/LabConfigMapper.java"
+                "src/main/java/com/kunling/scheduling/app/mapper/LabConfigMapper.java"
         )).isRegularFile();
     }
 
@@ -121,7 +121,7 @@ class ProjectStructureTest {
         for (String basePackage : new String[]{
                 "com.kunling.scheduling.app.controller",
                 "com.kunling.scheduling.action.controller",
-                "com.kunling.scheduling.agvflow.controller",
+                "com.kunling.scheduling.app.controller",
                 "com.kunling.scheduling.workflow.controller"
         }) {
             scanner.findCandidateComponents(basePackage).forEach(candidate -> {
