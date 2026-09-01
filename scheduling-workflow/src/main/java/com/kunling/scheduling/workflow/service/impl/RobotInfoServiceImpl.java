@@ -57,6 +57,10 @@ public class RobotInfoServiceImpl extends ServiceImpl<RobotInfoMapper, RobotInfo
         RobotInfoResp response = new RobotInfoResp();
         BeanUtils.copyProperties(robot, response);
         response.setModules(modules);
+        long normalCount = modules.stream()
+                .filter(module -> Integer.valueOf(1).equals(module.getStatus()))
+                .count();
+        response.setModuleStatus(normalCount + "/" + (modules.size() - normalCount));
         return response;
     }
 }
