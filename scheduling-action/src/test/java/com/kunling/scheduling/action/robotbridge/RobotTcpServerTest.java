@@ -161,9 +161,13 @@ class RobotTcpServerTest {
             assertThat(command.path("ActionInstanceId").asText()).isEqualTo("action-1");
             assertThat(command.at("/MessageInfo/Steps/0/Parameters/commandId").asText())
                     .isEqualTo("0123456789abcdef0123456789abcdef");
+            assertThat(command.at("/MessageInfo/Steps/0/ForceDebugAfterOperatorConfirmation")
+                    .isBoolean()).isTrue();
+            assertThat(command.at("/MessageInfo/Steps/0/ForceDebugAfterOperatorConfirmation")
+                    .asBoolean()).isFalse();
             assertThat(command.at("/MessageInfo/Steps/0/OnFailure")).hasSize(2);
             assertThat(command.at("/MessageInfo/PackageHash").asText())
-                    .isEqualTo("2df62770ea37202b6e12719bc24c5a0cc62f08037844335ba72af136044846e7")
+                    .isEqualTo("6d32ede98bf6d9085b9b76c3973cd5dfc0b7f8add8897f4d964cfe4c618eae9d")
                     .isNotEqualTo("action-package-hash");
 
             String downstreamHash = command.at("/MessageInfo/PackageHash").asText();

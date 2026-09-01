@@ -324,6 +324,8 @@ Action 保留本清单定义的规范 2.0 模型，在 `RobotActionTransport` �
 
 - Action `input.executionPlan.steps` 转成 cnet8 `MessageInfo.Steps`；
 - `params` 只重命名为 `Parameters`，内容保持不透明 JSON，Action 不复制设备 SDK 参数转换；
+- cnet8 当前步骤模型中的 `ForceDebugAfterOperatorConfirmation` 属于下游现场调试开关，
+  Action 仅在线协议边界固定发送 `false` 并纳入传输哈希，不开放动态配置；
 - `onFailure.rules` 转成 cnet8 的平铺 `OnFailure`，Action 的 default 编译成全通配规则；
 - Action 原始 `packageHash` 保持不变；cnet8 信封中的 `PackageHash` 按其当前
   `ExecutionPlanHash.Compute` 字段集合另行计算；

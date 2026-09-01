@@ -33,11 +33,13 @@ class Cnet8ExecutionPlanRendererTest {
         assertThat(first.at("/Steps/0/Parameters/commandId").asText())
                 .isEqualTo("0123456789abcdef0123456789abcdef");
         assertThat(first.at("/Steps/0/Parameters/nested/speedPercent").asInt()).isEqualTo(20);
+        assertThat(first.at("/Steps/0/ForceDebugAfterOperatorConfirmation").isBoolean()).isTrue();
+        assertThat(first.at("/Steps/0/ForceDebugAfterOperatorConfirmation").asBoolean()).isFalse();
         assertThat(first.at("/Steps/0/OnFailure/0/RawCode").asText()).isEqualTo("NAV_TIMEOUT");
         assertThat(first.at("/Steps/0/OnFailure/1/Vendor").asText()).isEqualTo("*");
         // 期望值由下游最新快照的 ExecutionPlanHash.Compute 对同一计划实测生成。
         assertThat(first.path("PackageHash").asText())
-                .isEqualTo("051197342fd074769e3a6489d83847701516b0a86fddcd9b1f6d2f310f6009f7")
+                .isEqualTo("d456ce75d78a84a2abd6881649f734c6989ea1954e467789cf76340c9302ccf7")
                 .isNotEqualTo("action-hash");
         assertThat(second.path("PackageHash").asText()).isEqualTo(first.path("PackageHash").asText());
         assertThat(input.at("/executionPlan/steps/0").has("parameters")).isFalse();

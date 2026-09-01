@@ -23,6 +23,7 @@ import java.util.Set;
 public class Cnet8ExecutionPlanRenderer {
     private static final int MAX_RETRIES = 3;
     private static final int MAX_BACKOFF_MS = 300_000;
+    private static final boolean CNET8_FORCE_DEBUG_AFTER_OPERATOR_CONFIRMATION = false;
 
     private final ObjectMapper objectMapper;
     private final JsonCodec jsonCodec;
@@ -82,6 +83,9 @@ public class Cnet8ExecutionPlanRenderer {
         rendered.put("Operation", operation);
         rendered.set("Parameters", params.deepCopy());
         rendered.put("Gate", requiredBoolean(sourceStep, "gate"));
+        // cnet8 当前会把该本地调试属性参与 ExecutionPlanHash；生产 Action 永远不得开启它。
+        rendered.put("ForceDebugAfterOperatorConfirmation",
+                CNET8_FORCE_DEBUG_AFTER_OPERATOR_CONFIRMATION);
         rendered.set("OnFailure", failureRules);
         return rendered;
     }
@@ -202,6 +206,8 @@ public class Cnet8ExecutionPlanRenderer {
             step.set("operation", renderedStep.path("Operation").deepCopy());
             step.set("parameters", renderedStep.path("Parameters").deepCopy());
             step.set("gate", renderedStep.path("Gate").deepCopy());
+            step.set("forceDebugAfterOperatorConfirmation",
+                    renderedStep.path("ForceDebugAfterOperatorConfirmation").deepCopy());
             ArrayNode rules = objectMapper.createArrayNode();
             for (JsonNode renderedRule : renderedStep.path("OnFailure")) {
                 rules.add(toHashRule(renderedRule));
