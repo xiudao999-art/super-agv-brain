@@ -2,6 +2,10 @@ package com.kunling.scheduling.app.service;
 
 import com.kunling.scheduling.app.domain.HomeOverviewResponse;
 import com.kunling.scheduling.app.domain.HomeOverviewTestData;
+import com.kunling.scheduling.app.domain.HomeAgvStatisticsRow;
+import com.kunling.scheduling.app.domain.HomeOrderStatisticsRow;
+import com.kunling.scheduling.app.mapper.HomeAgvStatisticsMapper;
+import com.kunling.scheduling.app.mapper.HomeOrderStatisticsMapper;
 import com.kunling.scheduling.app.mapper.HomeTestDataMapper;
 import com.kunling.scheduling.common.exception.ServiceUnavailableException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,15 +27,27 @@ public class HomeOverviewTestService {
 
     private final HomeOverviewTestData testData;
     private final Clock clock;
+    private final HomeOrderStatisticsMapper orderStatisticsMapper;
+    private final HomeAgvStatisticsMapper agvStatisticsMapper;
     private final Instant batteryRuleStartedAt;
 
     @Autowired
-    public HomeOverviewTestService(HomeTestDataMapper dataMapper) {
-        this(dataMapper, Clock.systemUTC());
+    public HomeOverviewTestService(HomeTestDataMapper dataMapper,
+                                   HomeOrderStatisticsMapper orderStatisticsMapper,
+                                   HomeAgvStatisticsMapper agvStatisticsMapper) {
+        this(dataMapper, orderStatisticsMapper, agvStatisticsMapper, Clock.systemUTC());
     }
 
     public HomeOverviewTestService(HomeTestDataMapper dataMapper, Clock clock) {
+        this(dataMapper, null, null, clock);
+    }
+
+    private HomeOverviewTestService(HomeTestDataMapper dataMapper,
+                                    HomeOrderStatisticsMapper orderStatisticsMapper,
+                                    HomeAgvStatisticsMapper agvStatisticsMapper, Clock clock) {
         this.clock = Objects.requireNonNull(clock, "系统时钟不能为空");
+        this.orderStatisticsMapper = orderStatisticsMapper;
+        this.agvStatisticsMapper = agvStatisticsMapper;
         this.testData = validate(Objects.requireNonNull(
                 dataMapper, "测试数据 Mapper 不能为空").load());
         // 临时测试数据不写数据库：每次服务启动后从 JSON 初始电量重新开始衰减。
@@ -48,7 +64,9 @@ public class HomeOverviewTestService {
                         agv.getExecutionStatus(),
                         calculateBatteryPercent(testData.getBatteryRule())
                 ),
+                agvStatistics(),
                 testData.getCurrentOrder(),
+                orderStatistics(),
                 testData.getLocationConsistency(),
                 new HomeOverviewResponse.TodayTaskCompletion(
                         completion.getCompletedCount(),
@@ -57,6 +75,28 @@ public class HomeOverviewTestService {
                 ),
                 testData.getHardwareModules()
         );
+    }
+
+    private HomeOverviewResponse.AgvStatistics agvStatistics() {
+        if (agvStatisticsMapper == null) {
+            return new HomeOverviewResponse.AgvStatistics(1, 1, 0, 0, 0);
+        }
+        HomeAgvStatisticsRow row = agvStatisticsMapper.selectStatistics();
+        if (row == null) return new HomeOverviewResponse.AgvStatistics(0, 0, 0, 0, 0);
+        return new HomeOverviewResponse.AgvStatistics(row.getTotalCount(), row.getRunningCount(),
+                row.getIdleWaitingCount(), row.getChargingCount(), row.getAbnormalCount());
+    }
+
+    private HomeOverviewResponse.OrderStatistics orderStatistics() {
+        if (orderStatisticsMapper == null) {
+            HomeOverviewResponse.CurrentOrder current = testData.getCurrentOrder();
+            return new HomeOverviewResponse.OrderStatistics(0, current.getExecutingCount(),
+                    current.getQueuedCount(), 0, 0, current.getSource());
+        }
+        HomeOrderStatisticsRow row = orderStatisticsMapper.selectStatistics();
+        if (row == null) return new HomeOverviewResponse.OrderStatistics(0, 0, 0, 0, 0, null);
+        return new HomeOverviewResponse.OrderStatistics(row.getTodayReceivedCount(), row.getRunningCount(),
+                row.getQueuedCount(), row.getCompletedCount(), row.getAbnormalCount(), row.getSources());
     }
 
     private int calculateBatteryPercent(HomeOverviewTestData.BatteryRule batteryRule) {

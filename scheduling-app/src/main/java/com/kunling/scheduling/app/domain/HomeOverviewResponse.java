@@ -15,18 +15,24 @@ import java.util.Objects;
 public final class HomeOverviewResponse {
 
     private final AgvStatus agvStatus;
+    private final AgvStatistics agvStatistics;
     private final CurrentOrder currentOrder;
+    private final OrderStatistics orderStatistics;
     private final LocationConsistency locationConsistency;
     private final TodayTaskCompletion todayTaskCompletion;
     private final List<HardwareModuleStatus> hardwareModules;
 
     public HomeOverviewResponse(AgvStatus agvStatus,
+                                AgvStatistics agvStatistics,
                                 CurrentOrder currentOrder,
+                                OrderStatistics orderStatistics,
                                 LocationConsistency locationConsistency,
                                 TodayTaskCompletion todayTaskCompletion,
                                 List<HardwareModuleStatus> hardwareModules) {
         this.agvStatus = Objects.requireNonNull(agvStatus, "AGV 状态不能为空");
+        this.agvStatistics = Objects.requireNonNull(agvStatistics, "AGV 统计数据不能为空");
         this.currentOrder = Objects.requireNonNull(currentOrder, "当前订单数据不能为空");
+        this.orderStatistics = Objects.requireNonNull(orderStatistics, "订单统计数据不能为空");
         this.locationConsistency = Objects.requireNonNull(
                 locationConsistency, "库位一致性数据不能为空");
         this.todayTaskCompletion = Objects.requireNonNull(
@@ -39,8 +45,67 @@ public final class HomeOverviewResponse {
         return agvStatus;
     }
 
+    public AgvStatistics getAgvStatistics() {
+        return agvStatistics;
+    }
+
+    /** 首页 AGV 总数及各运行状态数量。 */
+    public static final class AgvStatistics {
+        private final long totalCount;
+        private final long runningCount;
+        private final long idleWaitingCount;
+        private final long chargingCount;
+        private final long abnormalCount;
+
+        public AgvStatistics(long totalCount, long runningCount, long idleWaitingCount,
+                             long chargingCount, long abnormalCount) {
+            this.totalCount = totalCount;
+            this.runningCount = runningCount;
+            this.idleWaitingCount = idleWaitingCount;
+            this.chargingCount = chargingCount;
+            this.abnormalCount = abnormalCount;
+        }
+
+        public long getTotalCount() { return totalCount; }
+        public long getRunningCount() { return runningCount; }
+        public long getIdleWaitingCount() { return idleWaitingCount; }
+        public long getChargingCount() { return chargingCount; }
+        public long getAbnormalCount() { return abnormalCount; }
+    }
+
     public CurrentOrder getCurrentOrder() {
         return currentOrder;
+    }
+
+    public OrderStatistics getOrderStatistics() {
+        return orderStatistics;
+    }
+
+    /** 今日接收及当前各状态订单数量。 */
+    public static final class OrderStatistics {
+        private final long todayReceivedCount;
+        private final long runningCount;
+        private final long queuedCount;
+        private final long completedCount;
+        private final long abnormalCount;
+        private final String sources;
+
+        public OrderStatistics(long todayReceivedCount, long runningCount, long queuedCount,
+                               long completedCount, long abnormalCount, String sources) {
+            this.todayReceivedCount = todayReceivedCount;
+            this.runningCount = runningCount;
+            this.queuedCount = queuedCount;
+            this.completedCount = completedCount;
+            this.abnormalCount = abnormalCount;
+            this.sources = sources;
+        }
+
+        public long getTodayReceivedCount() { return todayReceivedCount; }
+        public long getRunningCount() { return runningCount; }
+        public long getQueuedCount() { return queuedCount; }
+        public long getCompletedCount() { return completedCount; }
+        public long getAbnormalCount() { return abnormalCount; }
+        public String getSources() { return sources; }
     }
 
     public LocationConsistency getLocationConsistency() {
