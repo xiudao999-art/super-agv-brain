@@ -20,7 +20,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/flow-templates")
-@Tag(name = "流程模板管理", description = "创建流程模板并查询模板、节点及动作明细")
+@Tag(name = "流程列表管理", description = "创建列表模板并查询模板、节点及动作明细")
 public class FlowTemplateController extends BaseController {
     @Resource
     private FlowTemplateService templateService;
