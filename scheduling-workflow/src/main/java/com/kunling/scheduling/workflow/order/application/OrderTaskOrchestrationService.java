@@ -165,7 +165,11 @@ public class OrderTaskOrchestrationService {
             }
             // FlowControlService.start已在同一张order_task表中保存流程实例和运行状态。
             // 这里不再用启动前的旧version重复update，避免乐观锁冲突。
-            updateOrderRunning(task.getOrderId());
+            //
+            OrderTask startedTask = taskMapper.selectById(request.getTaskId());
+            if (startedTask != null && startedTask.getStatus() == OrderTaskStatus.RUNNING){
+                updateOrderRunning(task.getOrderId());
+            }
             return true;
         } catch (RuntimeException exception) {
             markFailed(task.getId(), exception.getMessage());
@@ -216,7 +220,7 @@ public class OrderTaskOrchestrationService {
             order.setErrorCode(task.getErrorCode());
             order.setErrorMessage(task.getErrorMessage());
             orderMapper.updateById(order);
-            publisher.publishEvent(new OrderExecutionReleasedEvent(task.getOrderId()));
+//            publisher.publishEvent(new OrderExecutionReleasedEvent(task.getOrderId()));
         }
     }
 

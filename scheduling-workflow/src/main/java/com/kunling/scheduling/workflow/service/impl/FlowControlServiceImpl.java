@@ -63,7 +63,9 @@ public class FlowControlServiceImpl implements FlowControlService {
         //机器人不存在
         List<RobotSessionView> robotSessions = robotActionTransport.listSessions();
         if (CollectionUtils.isEmpty(robotSessions)) {
-            throw new NoSuchElementException("当前没有可用的机器人");
+            task.setStatus(OrderTaskStatus.QUEUED);
+            orderTaskMapper.updateById(task);
+            return true;
         }
 
         String processDefinitionId = request.getProcessDefinitionId();
