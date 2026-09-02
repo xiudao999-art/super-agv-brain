@@ -3,6 +3,7 @@ package com.kunling.scheduling.workflow.controller;
 import com.kunling.scheduling.common.web.ApiResult;
 import com.kunling.scheduling.common.web.BaseController;
 import com.kunling.scheduling.workflow.dto.FlowTemplateCreateRequest;
+import com.kunling.scheduling.workflow.dto.FlowTemplateUpdateRequest;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.service.FlowTemplateService;
 import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
@@ -19,7 +20,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/flow-templates")
-@Tag(name = "流程模板管理", description = "创建流程模板并查询模板、节点及动作明细")
+@Tag(name = "流程列表管理", description = "创建列表模板并查询模板、节点及动作明细")
 public class FlowTemplateController extends BaseController {
     @Resource
     private FlowTemplateService templateService;
@@ -43,6 +44,19 @@ public class FlowTemplateController extends BaseController {
             @RequestParam(defaultValue = "10") long pageSize,
             @RequestParam(required = false) String keyword) {
         return ApiResult.success(service.flowPage(pageNum, pageSize, keyword));
+    }
+
+    @GetMapping("/flows/{id}")
+    @Operation(summary = "查询流程编辑回显数据")
+    public ApiResult<WorkflowTemplateResponses.FlowDetail> flowDetail(@PathVariable Long id) {
+        return success(templateService.getFlow(id));
+    }
+
+    @PutMapping("/flows/{id}")
+    @Operation(summary = "编辑流程列表中的流程")
+    public ApiResult<WorkflowTemplateResponses.FlowDetail> updateFlow(
+            @PathVariable Long id, @Valid @RequestBody FlowTemplateUpdateRequest request) {
+        return success(templateService.updateFlow(id, request));
     }
 
 

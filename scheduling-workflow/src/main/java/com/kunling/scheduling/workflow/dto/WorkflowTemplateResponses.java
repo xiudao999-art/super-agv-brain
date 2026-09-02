@@ -85,7 +85,26 @@ public final class WorkflowTemplateResponses {
         private Long templateId;
         private String templateName;
         private Integer templateNodeCount;
+        private Integer status;
+        private String statusDescription;
 //        private String processDefinitionId;
+        private Date updatedAt;
+    }
+
+    /** 流程列表编辑页面的完整回显数据。 */
+    @Data @AllArgsConstructor
+    public static class FlowDetail {
+        private Long id;
+        private String flowNumber;
+        private String flowName;
+        private Long sourceTemplateId;
+        private String templateName;
+        private Integer status;
+        private String statusDescription;
+        private String applicableScope;
+        private String description;
+        private Integer version;
+        private Date createdAt;
         private Date updatedAt;
     }
 }

@@ -1,12 +1,16 @@
 package com.kunling.scheduling.workflow.service.impl;
 
 
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import com.kunling.scheduling.workflow.dto.FlowTemplateCreateRequest;
+import com.kunling.scheduling.workflow.dto.FlowTemplateUpdateRequest;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
+import com.kunling.scheduling.workflow.order.domain.OrderTask;
+import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import com.kunling.scheduling.workflow.service.FlowTemplateService;
 import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +25,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
 
 
@@ -30,6 +35,8 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
         implements FlowTemplateService {
     @Resource
     private WorkflowTemplateService workflowTemplateService;
+    @Resource
+    private OrderTaskMapper orderTaskMapper;
 
     /**
      * 创建流程模板
@@ -78,10 +85,67 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
                 flowPageItem.setId(item.getId());
                 flowPageItem.setFlowName(item.getTemplateName());
                 flowPageItem.setFlowNumber(item.getTemplateNumber());
+                flowPageItem.setTemplateId(item.getSourceTemplateId());
+                flowPageItem.setStatus(item.getStatus());
+                flowPageItem.setStatusDescription(statusDescription(item.getStatus()));
                 return flowPageItem;
             }).collect(Collectors.toList());
         }
         return Collections.emptyList();
+    }
+
+    @Override
+    public WorkflowTemplateResponses.FlowDetail getFlow(Long id) {
+        return toDetail(required(id));
+    }
+
+    @Override
+    @Transactional
+    public WorkflowTemplateResponses.FlowDetail updateFlow(Long id, FlowTemplateUpdateRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("流程编辑参数不能为空");
+        }
+        FlowTemplate flow = required(id);
+        Long referencedTaskCount = orderTaskMapper.selectCount(Wrappers.<OrderTask>lambdaQuery()
+                .eq(OrderTask::getFlowTemplateId, id));
+        if (referencedTaskCount != null && referencedTaskCount > 0) {
+            throw new IllegalStateException("流程已被订单任务引用，不能修改: " + flow.getTemplateNumber());
+        }
+//        WorkflowTemplateResponses.Detail template = workflowTemplateService.get(request.getSourceTemplateId());
+        validateStatus(request.getStatus());
+        flow.setTemplateName(request.getFlowName().trim());
+        flow.setSourceTemplateId(request.getSourceTemplateId());
+        flow.setStatus(request.getStatus());
+        flow.setApplicableScope(trimToNull(request.getApplicableScope()));
+        flow.setDescription(trimToNull(request.getDescription()));
+        if (!updateById(flow)){
+            throw new IllegalStateException("流程编辑保存失败: " + id);
+        }
+        return toDetail(flow);
+    }
+
+    private WorkflowTemplateResponses.FlowDetail toDetail(FlowTemplate flow) {
+        WorkflowTemplateResponses.Detail template = workflowTemplateService.get(flow.getSourceTemplateId());
+        return new WorkflowTemplateResponses.FlowDetail(flow.getId(), flow.getTemplateNumber(),
+                flow.getTemplateName(), flow.getSourceTemplateId(), template.getTemplateName(),
+                flow.getStatus(), statusDescription(flow.getStatus()), flow.getApplicableScope(),
+                flow.getDescription(), flow.getVersion(), flow.getCreateTime(), flow.getUpdateTime());
+    }
+
+    private FlowTemplate required(Long id) {
+        FlowTemplate flow = id == null ? null : getById(id);
+        if (flow == null) throw new NoSuchElementException("流程不存在: " + id);
+        return flow;
+    }
+
+    private void validateStatus(Integer status) {
+        if (status == null || (status != 0 && status != 1)) {
+            throw new IllegalArgumentException("启用状态只能是0或1");
+        }
+    }
+
+    private String statusDescription(Integer status) {
+        return Integer.valueOf(1).equals(status) ? "启用" : "停用";
     }
 
     private String generateFlowNumber() {

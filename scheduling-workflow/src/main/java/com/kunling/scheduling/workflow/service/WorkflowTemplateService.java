@@ -94,6 +94,10 @@ public class WorkflowTemplateService {
     public List<WorkflowTemplateResponses.Summary> list(String keyword) {
         String value = keyword == null ? "" : keyword.trim();
         return mapper.selectList(Wrappers.<WorkflowTemplateEntity>lambdaQuery()
+                .and(q -> q.eq(WorkflowTemplateEntity::getPublishStatus, "PUBLISHED")
+                        // 兼容早期没有publish_status、但已经部署到Flowable的数据。
+                        .or(legacy -> legacy.isNull(WorkflowTemplateEntity::getPublishStatus)
+                                .isNotNull(WorkflowTemplateEntity::getProcessDefinitionId)))
                 .and(!value.isEmpty(), q -> q.like(WorkflowTemplateEntity::getTemplateName, value)
                         .or().like(WorkflowTemplateEntity::getTemplateNumber, value))
                 .orderByDesc(WorkflowTemplateEntity::getId)).stream().map(this::summary).collect(Collectors.toList());
@@ -338,7 +342,9 @@ public class WorkflowTemplateService {
 //                template == null ? null : template.getProcessDefinitionId());
         return new WorkflowTemplateResponses.FlowPageItem(
                 flowTemplate.getId(), displayNumber, flowName, flowTemplate.getSourceTemplateId(), templateName,
-                nodeCount, flowTemplate.getUpdateTime());
+                nodeCount, flowTemplate.getStatus(),
+                Integer.valueOf(1).equals(flowTemplate.getStatus()) ? "启用" : "停用",
+                flowTemplate.getUpdateTime());
     }
 
     /**
