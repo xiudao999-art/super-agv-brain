@@ -1,7 +1,6 @@
 package com.kunling.scheduling.workflow.service.impl;
 
 
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 
 import com.kunling.scheduling.workflow.dto.FlowTemplateCreateRequest;
@@ -9,7 +8,6 @@ import com.kunling.scheduling.workflow.dto.FlowTemplateUpdateRequest;
 import com.kunling.scheduling.workflow.dto.WorkflowTemplateResponses;
 import com.kunling.scheduling.workflow.entity.FlowTemplate;
 import com.kunling.scheduling.workflow.mapper.FlowTemplateMapper;
-import com.kunling.scheduling.workflow.order.domain.OrderTask;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import com.kunling.scheduling.workflow.service.FlowTemplateService;
 import com.kunling.scheduling.workflow.service.WorkflowTemplateService;
@@ -106,10 +104,10 @@ public class FlowTemplateServiceImpl extends ServiceImpl<FlowTemplateMapper, Flo
             throw new IllegalArgumentException("流程编辑参数不能为空");
         }
         FlowTemplate flow = required(id);
-        Long referencedTaskCount = orderTaskMapper.selectCount(Wrappers.<OrderTask>lambdaQuery()
-                .eq(OrderTask::getFlowTemplateId, id));
-        if (referencedTaskCount != null && referencedTaskCount > 0) {
-            throw new IllegalStateException("流程已被订单任务引用，不能修改: " + flow.getTemplateNumber());
+        long blockedOrderCount = orderTaskMapper.countEditingBlockedOrders(id);
+        if (blockedOrderCount > 0) {
+            throw new IllegalStateException("流程已被进行中或失败的订单引用，不能修改: "
+                    + flow.getTemplateNumber());
         }
 //        WorkflowTemplateResponses.Detail template = workflowTemplateService.get(request.getSourceTemplateId());
         validateStatus(request.getStatus());

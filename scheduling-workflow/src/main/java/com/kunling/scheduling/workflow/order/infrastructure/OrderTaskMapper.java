@@ -11,6 +11,12 @@ import java.util.List;
 @Mapper
 public interface OrderTaskMapper extends BaseMapper<OrderTask> {
 
+    @Select("select count(1) from order_task t " +
+            "inner join customer_order o on o.id = t.order_id and o.is_deleted = 0 " +
+            "where t.flow_template_id = #{flowTemplateId} and t.is_deleted = 0 " +
+            "and o.status in ('RUNNING', 'FAILED')")
+    long countEditingBlockedOrders(@Param("flowTemplateId") Long flowTemplateId);
+
     @Select({"<script>",
             "select order_id as orderId, count(*) as taskCount,",
             "sum(case when status = 'SUCCEEDED' then 1 else 0 end) as completedTaskCount",

@@ -166,6 +166,11 @@ public class WorkflowTemplateService {
     @Transactional
     public WorkflowResponses.Definition deploy(Long id) {
         WorkflowTemplateEntity entity = require(id);
+        long blockedFlowCount = flowTemplateMapper.countPublishBlockedFlows(id);
+        if (blockedFlowCount > 0) {
+            throw new IllegalStateException("流程模板已被进行中或失败订单所引用的流程使用，不能发布: "
+                    + entity.getTemplateNumber());
+        }
         validateBpmnXml(entity.getBpmnXml());
         WorkflowRequests.DeployDefinition request = new WorkflowRequests.DeployDefinition();
         request.setName(entity.getTemplateName());
