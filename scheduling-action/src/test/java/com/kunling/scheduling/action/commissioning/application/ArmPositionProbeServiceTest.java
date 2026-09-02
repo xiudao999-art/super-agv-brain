@@ -1,5 +1,6 @@
 package com.kunling.scheduling.action.commissioning.application;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -74,6 +75,16 @@ class ArmPositionProbeServiceTest {
                 .isFloatingPointNumber()).isTrue();
         assertThat(command.input().at("/executionPlan/steps/0/onFailure/default/action").asText())
                 .isEqualTo("STOP_AND_REPORT");
+    }
+
+    @Test
+    void nonRetryProbeDirectiveDoesNotCarryRetryParameters() {
+        RobotActionCommand command = service.createProbeCommand("R01", 8_000);
+        JsonNode directive = command.input().at("/executionPlan/steps/0/onFailure/default");
+
+        assertThat(directive.has("maxRetries") || directive.has("delayMs"))
+                .as("query-arm-position 的非重试策略不能配置重试参数")
+                .isFalse();
     }
 
     @Test

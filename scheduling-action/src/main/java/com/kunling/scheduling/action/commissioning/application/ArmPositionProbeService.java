@@ -104,8 +104,6 @@ public class ArmPositionProbeService {
         failure.putArray("rules");
         ObjectNode defaultDirective = failure.putObject("default");
         defaultDirective.put("action", "STOP_AND_REPORT");
-        defaultDirective.put("maxRetries", 0);
-        defaultDirective.put("delayMs", 0);
 
         ArrayNode steps = objectMapper.createArrayNode().add(step);
         ObjectNode input = objectMapper.createObjectNode();
