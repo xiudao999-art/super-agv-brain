@@ -16,6 +16,7 @@ public abstract class AppBaseEntity implements Serializable {
     @TableId(type = IdType.AUTO)
     private Long id;
     @TableLogic
+    @TableField(fill = FieldFill.INSERT)
     private Integer isDeleted = 0;
     @TableField(fill = FieldFill.INSERT)
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
