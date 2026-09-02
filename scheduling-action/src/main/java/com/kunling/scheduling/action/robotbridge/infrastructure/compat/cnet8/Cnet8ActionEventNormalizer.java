@@ -16,6 +16,10 @@ import java.time.format.DateTimeParseException;
 /** 将 cnet8 ACTION_EVENT 转为 Action 内部唯一的规范事件。 */
 @Component
 public class Cnet8ActionEventNormalizer {
+    private static final String MOVE_TO_POSE = "MOVE_TO_POSE";
+    private static final String[] CARTESIAN_FIELDS = {"x", "y", "z", "rx", "ry", "rz"};
+    private static final String[] JOINT_FIELDS = {"j1", "j2", "j3", "j4", "j5", "j6"};
+
     private final ObjectMapper objectMapper;
     private final Cnet8ClientCodeMapper clientCodeMapper;
 
@@ -69,7 +73,8 @@ public class Cnet8ActionEventNormalizer {
         if (source == null || source.isNull()) return target;
         if (!source.isObject()) throw new IllegalArgumentException("cnet8 LastStepEvent 必须是对象");
         putRequiredText(target, "stepId", source, "StepId");
-        putRequiredText(target, "operation", source, "Operation");
+        String operation = requiredText(source, "Operation");
+        target.put("operation", operation);
         int attempts = source.path("Attempts").asInt(0);
         if (attempts > 0) target.put("attempt", attempts);
         boolean success = source.path("Success").asBoolean(false);
@@ -79,7 +84,7 @@ public class Cnet8ActionEventNormalizer {
         putText(target, "message", source.path("Message").asText(eventMessage));
         putText(target, "completedAt", source.path("CompletedAt").asText(null));
         if (source.has("ResultData") && !source.path("ResultData").isNull()) {
-            target.set("resultData", source.path("ResultData").deepCopy());
+            target.set("resultData", normalizeResultData(operation, source.path("ResultData")));
         }
         return target;
     }
@@ -96,7 +101,8 @@ public class Cnet8ActionEventNormalizer {
         if (!source.isObject()) throw new IllegalArgumentException("cnet8 ResolvedSteps 元素必须是对象");
         ObjectNode target = objectMapper.createObjectNode();
         putRequiredText(target, "stepId", source, "StepId");
-        putRequiredText(target, "operation", source, "Operation");
+        String operation = requiredText(source, "Operation");
+        target.put("operation", operation);
         target.put("success", source.path("Success").asBoolean(false));
         target.put("skipped", source.path("Skipped").asBoolean(false));
         target.put("attempts", source.path("Attempts").asInt(0));
@@ -106,9 +112,54 @@ public class Cnet8ActionEventNormalizer {
         JsonNode fault = normalizeDeviceFault(source.get("DeviceFault"), null);
         if (fault != null) target.set("deviceFault", fault);
         if (source.has("ResultData") && !source.path("ResultData").isNull()) {
-            target.set("resultData", source.path("ResultData").deepCopy());
+            target.set("resultData", normalizeResultData(operation, source.path("ResultData")));
         }
         return target;
+    }
+
+    /**
+     * CNET8 信封使用 PascalCase，而 Action 内部规范使用 camelCase。
+     * 这里只规范已知的机械臂查询结果字段，未知扩展字段保持原样，避免破坏厂家附加数据。
+     */
+    private JsonNode normalizeResultData(String operation, JsonNode source) {
+        if (!MOVE_TO_POSE.equals(operation) || !source.isObject()) return source.deepCopy();
+        ObjectNode target = (ObjectNode) source.deepCopy();
+        normalizeField(target, source, "armMoveRequestType");
+        normalizeField(target, source, "speedPercent");
+        normalizePose(target, source, "armPoseXYZRxRyRz", CARTESIAN_FIELDS);
+        normalizePose(target, source, "armPoseJ1J2J3J4J5J6", JOINT_FIELDS);
+        return target;
+    }
+
+    private void normalizePose(ObjectNode target,
+                               JsonNode source,
+                               String canonicalField,
+                               String[] poseFields) {
+        JsonNode poseSource = compatibleField(source, canonicalField);
+        if (poseSource == null) return;
+        if (!poseSource.isObject()) {
+            target.set(canonicalField, poseSource.deepCopy());
+        } else {
+            ObjectNode normalizedPose = (ObjectNode) poseSource.deepCopy();
+            for (String field : poseFields) normalizeField(normalizedPose, poseSource, field);
+            target.set(canonicalField, normalizedPose);
+        }
+        target.remove(pascalCase(canonicalField));
+    }
+
+    private void normalizeField(ObjectNode target, JsonNode source, String canonicalField) {
+        JsonNode value = compatibleField(source, canonicalField);
+        if (value != null) target.set(canonicalField, value.deepCopy());
+        target.remove(pascalCase(canonicalField));
+    }
+
+    private JsonNode compatibleField(JsonNode source, String canonicalField) {
+        JsonNode canonical = source.get(canonicalField);
+        return canonical == null ? source.get(pascalCase(canonicalField)) : canonical;
+    }
+
+    private String pascalCase(String value) {
+        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
     private JsonNode normalizeError(RobotActionEvent.State state, JsonNode info) {

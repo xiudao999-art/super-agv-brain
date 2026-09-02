@@ -68,6 +68,19 @@ class Cnet8ProtocolAdapterTest {
         assertThat(execution.toView(jsonCodec).error().path("rawMessageInfo").isObject()).isTrue();
     }
 
+    @Test
+    void moveToPoseResultDataIsNormalizedToCanonicalCamelCase() throws Exception {
+        RobotActionEvent event = adapter.parseActionEvent(
+                moveToPoseQueryEvent(), "R01", "session-1", 10L);
+
+        JsonNode resultData = event.resolvedSteps().at("/0/resultData");
+        assertThat(resultData.path("armMoveRequestType").asInt()).isEqualTo(1);
+        assertThat(resultData.path("speedPercent").asInt()).isEqualTo(35);
+        assertThat(resultData.at("/armPoseXYZRxRyRz/x").asDouble()).isEqualTo(101.5D);
+        assertThat(resultData.at("/armPoseJ1J2J3J4J5J6/j6").asDouble()).isEqualTo(60.0D);
+        assertThat(resultData.has("ArmPoseXYZRxRyRz")).isFalse();
+    }
+
     private JsonNode event(String state, String outcome, String clientCode) throws Exception {
         return objectMapper.readTree("{\"MessageId\":\"event-1\"," +
                 "\"MessageName\":\"ACTION_EVENT\",\"MessageType\":\"ACTION_EVENT\"," +
@@ -82,5 +95,25 @@ class Cnet8ProtocolAdapterTest {
                 "\"Success\":true,\"Skipped\":false,\"Attempts\":1," +
                 "\"PhysicalOutcome\":\"CONFIRMED_SUCCEEDED\",\"Message\":\"已移动\"}]," +
                 "\"OccurredAt\":\"2026-09-01T01:00:03+00:00\"}}");
+    }
+
+    private JsonNode moveToPoseQueryEvent() throws Exception {
+        return objectMapper.readTree("{\"MessageId\":\"event-pose\"," +
+                "\"MessageName\":\"ACTION_EVENT\",\"MessageType\":\"ACTION_EVENT\"," +
+                "\"RobotId\":\"R01\",\"ActionInstanceId\":\"probe-1\"," +
+                "\"DeviceCommandId\":\"dc-probe\",\"Timestamp\":\"2026-09-02T01:00:03+00:00\"," +
+                "\"MessageInfo\":{\"OriginalMessageId\":\"command-probe\"," +
+                "\"ActionInstanceId\":\"probe-1\",\"DeviceCommandId\":\"dc-probe\"," +
+                "\"PackageHash\":\"hash\",\"EventKind\":\"FINAL\",\"State\":\"FINISHED\"," +
+                "\"PhysicalOutcome\":\"CONFIRMED_SUCCEEDED\",\"ClientCode\":\"\"," +
+                "\"Message\":\"位置查询完成\",\"ResolvedSteps\":[{\"StepId\":\"query-arm-position\"," +
+                "\"Operation\":\"MOVE_TO_POSE\",\"Success\":true,\"Skipped\":false,\"Attempts\":1," +
+                "\"PhysicalOutcome\":\"CONFIRMED_SUCCEEDED\",\"ResultData\":{" +
+                "\"ArmMoveRequestType\":1,\"SpeedPercent\":35," +
+                "\"ArmPoseXYZRxRyRz\":{\"X\":101.5,\"Y\":202.0,\"Z\":303.0," +
+                "\"Rx\":1.0,\"Ry\":2.0,\"Rz\":3.0}," +
+                "\"ArmPoseJ1J2J3J4J5J6\":{\"J1\":10.0,\"J2\":20.0,\"J3\":30.0," +
+                "\"J4\":40.0,\"J5\":50.0,\"J6\":60.0}}}]," +
+                "\"OccurredAt\":\"2026-09-02T01:00:03+00:00\"}}");
     }
 }
