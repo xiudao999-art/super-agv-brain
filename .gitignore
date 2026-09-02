@@ -30,3 +30,4 @@
 !/scheduling-app/src/test/resources/db/test/lab_config_test_schema.sql
 /scheduling-app/src/test/java/com/kunling/scheduling/app/systemlog/
 /scheduling-app/src/test/resources/db/test/reset-operation-log.sql
+.gstack/

@@ -174,7 +174,7 @@
 
   async function saveAction() {
     try {
-      const definition = readDefinition();
+      const definition = ActionDraftModel.snapshotForSave(state.draft);
       const existingId = state.current && state.current.definition.id;
       state.current = existingId
         ? await api(`/api/actions/${encodeURIComponent(existingId)}`, { method: "PUT", body: definition })
@@ -195,15 +195,6 @@
       toast(definition.enabled ? "Action 已停用。" : "Action 已启用。");
       await loadActions(state.current.definition.id);
     } catch (error) { report(error); }
-  }
-
-  function readDefinition() {
-    if (state.stepJsonErrors.size) throw new Error(Array.from(state.stepJsonErrors.values())[0]);
-    const definition = clone(state.draft);
-    validateDefinition(definition, false);
-    const issues = ActionParameterEditor.commandIdIssues(definition);
-    if (issues.length) throw new Error(issues[0].message);
-    return definition;
   }
 
   function addStep(source) {
@@ -428,10 +419,6 @@
       state.drawerSyncedText = $("definitionJson").value;
       toast("完整 JSON 已覆盖页面草稿，保存后才会写入服务端。");
     } catch (error) { report(error); }
-  }
-
-  function validateDefinition(definition, fromJson) {
-    return ActionDraftModel.validate(definition, state.current && state.current.definition, fromJson);
   }
 
   async function previewPackage() {

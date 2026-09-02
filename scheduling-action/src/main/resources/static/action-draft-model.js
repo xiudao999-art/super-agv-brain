@@ -51,7 +51,12 @@
     }
   }
 
+  /** 保存只截取当前草稿，不执行内容校验；完整校验统一延后到启用和执行阶段。 */
+  function snapshotForSave(definition) {
+    return clone(definition);
+  }
+
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
 
-  return { applyJson, validate };
+  return { applyJson, validate, snapshotForSave };
 });

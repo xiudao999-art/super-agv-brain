@@ -243,7 +243,7 @@ public class RobotTcpServer implements SmartLifecycle, RobotActionTransport {
         } catch (EOFException exception) {
             log.info("机器人连接已关闭: {}", session == null ? socket.getRemoteSocketAddress() : session.robotId);
         } catch (Exception exception) {
-            log.warn("机器人会话异常关闭: {}", exception.getMessage());
+//            log.warn("机器人会话异常关闭: {}", exception.getMessage());
         } finally {
             if (session != null) {
                 sessions.remove(session.robotId, session);

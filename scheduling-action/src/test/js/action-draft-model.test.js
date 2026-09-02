@@ -29,3 +29,24 @@ test("JSON 解析或结构失败时不修改原草稿", () => {
   assert.throws(() => model.applyJson(JSON.stringify({ ...oldDraft, steps: {} }), null), /steps/);
   assert.equal(JSON.stringify(oldDraft), snapshot);
 });
+
+test("保存快照不执行 Action 内容和 commandId 校验", () => {
+  const incompleteDraft = {
+    id: null,
+    name: "",
+    enabled: false,
+    timeoutMs: -1,
+    steps: [{
+      stepId: "",
+      operation: "custom-operation",
+      params: { commandId: "invalid" },
+      gate: true,
+      onFailure: null
+    }]
+  };
+
+  const snapshot = model.snapshotForSave(incompleteDraft);
+
+  assert.deepEqual(snapshot, incompleteDraft);
+  assert.notEqual(snapshot, incompleteDraft);
+});

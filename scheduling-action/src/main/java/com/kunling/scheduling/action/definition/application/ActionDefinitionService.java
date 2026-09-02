@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Action 定义的唯一写入口，统一维护行锁、运行锁和启用校验。 */
+/** Action 定义的唯一写入口；保存接收未完成草稿，启用和执行阶段再完成业务校验。 */
 @Service
 public class ActionDefinitionService {
 
@@ -88,10 +88,6 @@ public class ActionDefinitionService {
 
     @Transactional
     public ActionDefinitionView create(ActionDefinition definition) {
-        validator.validateDraft(definition);
-        if (definition.id() != null) {
-            throw new IllegalArgumentException("新建 Action 时不能指定 id。");
-        }
         Instant now = clock.instant();
         String id = UUID.randomUUID().toString();
         ActionDefinition persisted = new ActionDefinition(id, definition.name(), false,
@@ -103,14 +99,9 @@ public class ActionDefinitionService {
     public ActionDefinitionView update(String id, ActionDefinition definition) {
         ActionDefinitionEntity entity = requiredForUpdate(id);
         assertNotExecuting(id);
-        validateRequestIdentity(id, definition, entity.isEnabled());
+        // id 与 enabled 归服务端所有：保存时直接规范化，不因客户端草稿值不同而拒绝请求。
         ActionDefinition persisted = new ActionDefinition(id, definition.name(), entity.isEnabled(),
                 definition.timeoutMs(), definition.steps());
-        if (entity.isEnabled()) {
-            validator.validateExecutable(persisted);
-        } else {
-            validator.validateDraft(persisted);
-        }
         entity.update(persisted, jsonCodec, clock.instant());
         return toView(repository.save(entity));
     }
@@ -149,16 +140,6 @@ public class ActionDefinitionService {
                 .findActiveExecutionIdByActionDefinitionId(entity.getId());
         return new ActionDefinitionView(entity.definition(jsonCodec), activeExecution.isPresent(),
                 activeExecution.orElse(null), entity.getCreatedAt(), entity.getUpdatedAt());
-    }
-
-    private void validateRequestIdentity(String id, ActionDefinition definition, boolean currentEnabled) {
-        if (definition == null) throw new IllegalArgumentException("Action definition 不能为空。");
-        if (definition.id() != null && !id.equals(definition.id())) {
-            throw new IllegalArgumentException("路径 id 与 definition.id 不一致。");
-        }
-        if (definition.enabled() != currentEnabled) {
-            throw new IllegalArgumentException("enabled 只能通过启用或停用接口修改。");
-        }
     }
 
     private void assertNotExecuting(String id) {

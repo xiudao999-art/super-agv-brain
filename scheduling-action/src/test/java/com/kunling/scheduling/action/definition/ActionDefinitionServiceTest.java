@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.persistence.LockModeType;
 import java.lang.reflect.Method;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,10 +54,63 @@ class ActionDefinitionServiceTest {
     }
 
     @Test
-    void newDefinitionAlwaysStartsDisabled() {
-        ActionDefinition input = new ActionDefinition(null, "测试 Action", true,
+    void createUsesServerOwnedIdentityAndStartsDisabled() {
+        ActionDefinition input = new ActionDefinition("client-supplied-id", "测试 Action", true,
                 60_000, ActionTestFixtures.definition("x", false).steps());
-        assertThat(service.create(input).definition().enabled()).isFalse();
+        ActionDefinition persisted = service.create(input).definition();
+
+        assertThat(persisted.id()).isNotEqualTo("client-supplied-id");
+        assertThat(persisted.enabled()).isFalse();
+    }
+
+    @Test
+    void createPersistsIncompleteDraftWithoutContentValidation() {
+        ActionDefinition incompleteDraft = new ActionDefinition(null, "", true,
+                -1, Collections.emptyList());
+
+        ActionDefinition persisted = service.create(incompleteDraft).definition();
+
+        assertThat(persisted.name()).isEmpty();
+        assertThat(persisted.timeoutMs()).isEqualTo(-1);
+        assertThat(persisted.steps()).isEmpty();
+        assertThat(persisted.enabled()).isFalse();
+    }
+
+    @Test
+    void updatePersistsIncompleteEnabledDraftWithoutContentValidation() {
+        entity.changeEnabled(true, Instant.EPOCH);
+        ActionDefinition incompleteDraft = new ActionDefinition("definition-1", "", true,
+                -1, Collections.emptyList());
+
+        ActionDefinition persisted = service.update("definition-1", incompleteDraft).definition();
+
+        assertThat(persisted.name()).isEmpty();
+        assertThat(persisted.timeoutMs()).isEqualTo(-1);
+        assertThat(persisted.steps()).isEmpty();
+        assertThat(persisted.enabled()).isTrue();
+    }
+
+    @Test
+    void updateUsesPathIdentityAndPersistedEnabledStateWithoutRejectingTheDraft() {
+        ActionDefinition draft = new ActionDefinition("client-supplied-id", "草稿", true,
+                60_000, Collections.emptyList());
+
+        ActionDefinition persisted = service.update("definition-1", draft).definition();
+
+        assertThat(persisted.id()).isEqualTo("definition-1");
+        assertThat(persisted.enabled()).isFalse();
+    }
+
+    @Test
+    void enableStillRejectsAnIncompleteSavedDraft() {
+        ActionDefinition incompleteDraft = new ActionDefinition("definition-1", "", false,
+                -1, Collections.emptyList());
+        service.update("definition-1", incompleteDraft);
+        when(transport.findSession("R01")).thenReturn(Optional.of(ActionTestFixtures.session()));
+
+        assertThatThrownBy(() -> service.enable("definition-1", "R01"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("name");
     }
 
     @Test
