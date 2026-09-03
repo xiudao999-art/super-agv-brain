@@ -1,7 +1,6 @@
 package com.kunling.scheduling.workflow.order.domain;
 
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.annotation.Version;
 import com.kunling.scheduling.workflow.entity.BaseEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -48,8 +47,4 @@ public class CustomerOrder extends BaseEntity {
             example = "未找到在线机器人")
     private String errorMessage;
 
-    @Version
-    @Schema(description = "乐观锁版本号，用于防止订单状态和任务进度被并发覆盖",
-            example = "0")
-    private Integer version;
 }

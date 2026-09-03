@@ -63,6 +63,7 @@ public class FlowControlServiceImpl implements FlowControlService {
         //机器人不存在
         List<RobotSessionView> robotSessions = robotActionTransport.listSessions();
         if (CollectionUtils.isEmpty(robotSessions)) {
+            log.warn("当前没有可用的机器人会话:{}", request.getTaskId());
             task.setStatus(OrderTaskStatus.QUEUED);
             orderTaskMapper.updateById(task);
             return true;
@@ -205,7 +206,7 @@ public class FlowControlServiceImpl implements FlowControlService {
                         "流程节点未绑定 actionDefinitionId: " + activeNode.getActivityId());
             }
         }
-        String actionInstanceId = UUID.randomUUID().toString();
+        String actionInstanceId = String.valueOf(taskId);
 
         // 先保存流程节点和 Action 执行身份，最终报告才能只凭 actionInstanceId 找回节点。
         int count = flowNodeService.lambdaQuery().eq(FlowNode::getTaskId, taskId).count().intValue();

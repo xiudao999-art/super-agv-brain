@@ -164,7 +164,7 @@ public class OrderTaskOrchestrationService {
                 throw new IllegalStateException("流程启动或首节点下发失败: " + task.getId());
             }
             // FlowControlService.start已在同一张order_task表中保存流程实例和运行状态。
-            // 这里不再用启动前的旧version重复update，避免乐观锁冲突。
+            // 启动流程后重新查询任务，避免使用启动前的旧数据覆盖最新执行结果。
             //
             OrderTask startedTask = taskMapper.selectById(request.getTaskId());
             if (startedTask != null && startedTask.getStatus() == OrderTaskStatus.RUNNING){

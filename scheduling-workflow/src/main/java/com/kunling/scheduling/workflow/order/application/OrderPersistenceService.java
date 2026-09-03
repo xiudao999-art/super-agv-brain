@@ -57,7 +57,6 @@ public class OrderPersistenceService {
         order.setPriority(pulled.getPriority());
         order.setIssuedAt(pulled.getIssuedAt());
         order.setUpstreamUpdatedAt(pulled.getUpstreamUpdatedAt());
-        order.setVersion(0);
         order.setIsDeleted(0);
 
         if (!insertOrder(order)) {

@@ -120,7 +120,6 @@ public class OrderSyncService {
         state = new OrderSyncState();
         state.setSource(source);
         state.setLastStatus("NEVER");
-        state.setVersion(0);
         state.setCreateTime(LocalDateTime.now());
         state.setUpdateTime(state.getCreateTime());
         stateMapper.insert(state);

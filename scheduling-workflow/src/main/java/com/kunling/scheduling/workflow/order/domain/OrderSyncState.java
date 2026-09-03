@@ -3,7 +3,6 @@ package com.kunling.scheduling.workflow.order.domain;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.annotation.Version;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -35,10 +34,6 @@ public class OrderSyncState {
     @Schema(description = "最近一次同步失败信息；同步成功后清空",
             example = "客户订单接口连接超时")
     private String errorMessage;
-
-    @Version
-    @Schema(description = "乐观锁版本号，防止并发修改同步水位", example = "0")
-    private Integer version;
 
     @Schema(description = "同步水位记录创建时间", example = "2026-08-25T09:00:00")
     private LocalDateTime createTime;
