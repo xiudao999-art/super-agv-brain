@@ -51,4 +51,7 @@ public class RobotInfo extends BaseEntity {
 
     @Schema(description = "更新人ID")
     private Long updateBy;
+
+    @Schema(description = "订单编号")
+    private String orderNo;
 }

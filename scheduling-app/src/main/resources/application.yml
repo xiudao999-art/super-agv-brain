@@ -36,7 +36,7 @@ spring:
     name: kunling-scheduling
   profiles:
     # 当前固定使用开发环境；仍可通过--spring.profiles.active=prod覆盖。
-    active: prod
+    active: dev
   web:
     resources:
       cache:

@@ -6,10 +6,13 @@ import com.kunling.scheduling.action.robotbridge.application.RobotSessionView;
 import com.kunling.scheduling.workflow.dto.*;
 import com.kunling.scheduling.workflow.action.WorkflowActionCommandDispatcher;
 import com.kunling.scheduling.workflow.entity.FlowNode;
+import com.kunling.scheduling.workflow.entity.RobotInfo;
 import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
+import com.kunling.scheduling.workflow.order.domain.CustomerOrder;
 import com.kunling.scheduling.workflow.order.domain.OrderTask;
 import com.kunling.scheduling.workflow.order.domain.OrderTaskStatus;
+import com.kunling.scheduling.workflow.order.infrastructure.CustomerOrderMapper;
 import com.kunling.scheduling.workflow.order.infrastructure.OrderTaskMapper;
 import com.kunling.scheduling.workflow.service.*;
 import org.apache.commons.lang3.StringUtils;
@@ -41,6 +44,12 @@ public class FlowControlServiceImpl implements FlowControlService {
     @Resource
     private FlowNodeService flowNodeService;
 
+    @Resource
+    private RobotInfoService robotInfoService;
+
+    @Resource
+    private CustomerOrderMapper customerOrderMapper;
+
 
     @Override
     @Transactional
@@ -60,14 +69,18 @@ public class FlowControlServiceImpl implements FlowControlService {
         task.setErrorCode(null);
         task.setErrorMessage(null);
         task.setAttempt(task.getAttempt() == null ? 0 : task.getAttempt());
-        //机器人不存在
-        List<RobotSessionView> robotSessions = robotActionTransport.listSessions();
-        if (CollectionUtils.isEmpty(robotSessions)) {
+        //机器人不存在  查询空闲机器人,绑定当前的订单号
+        // List<RobotSessionView> robotSessions = robotActionTransport.listSessions();
+        RobotInfo robotInfo = robotInfoService.selectAbleUseRobot();
+        if (robotInfo == null) {
             log.warn("当前没有可用的机器人会话:{}", request.getTaskId());
             task.setStatus(OrderTaskStatus.QUEUED);
             orderTaskMapper.updateById(task);
             return true;
         }
+        CustomerOrder customerOrder = customerOrderMapper.selectById(task.getOrderId());
+        robotInfo.setOrderNo(customerOrder.getUpstreamOrderNo());
+        robotInfoService.updateById(robotInfo);
 
         String processDefinitionId = request.getProcessDefinitionId();
         Long businessKey = request.getBusinessKey();
@@ -186,16 +199,17 @@ public class FlowControlServiceImpl implements FlowControlService {
             return failAndClear(processInstanceId, "下游调度节点ID或执行ID为空");
         }
 
-        List<RobotSessionView> robotSessions = robotActionTransport.listSessions();
-        if (CollectionUtils.isEmpty(robotSessions)) {
-            if (startType == StartTypeEnum.START) {
-                return failAndClear(processInstanceId, "未找到在线机器人");
-            } else {
-                return suspendAndWait(processInstanceId, taskId, "未找到在线机器人，等待人工恢复");
-            }
+//        List<RobotSessionView> robotSessions = robotActionTransport.listSessions();
+        OrderTask task = orderTaskMapper.selectById(taskId);
+        if (task == null) {
+            throw new NoSuchElementException("订单任务不存在: " + taskId);
         }
-        String robotId = robotSessions.get(0).robotId();
+        CustomerOrder customerOrder = customerOrderMapper.selectById(task.getOrderId());
 
+        RobotInfoSearchDto dto = new RobotInfoSearchDto();
+        dto.setOrderNo(customerOrder.getUpstreamOrderNo());
+        List<RobotInfo> robotInfos = robotInfoService.selectListInfo(dto);
+        String robotId = robotInfos.get(0).getRobotCode();
         String actionDefinitionId = StringUtils.trimToNull(activeNode.getActionDefinitionId());
         if (actionDefinitionId == null) {
             if (startType == StartTypeEnum.START) {
@@ -223,10 +237,8 @@ public class FlowControlServiceImpl implements FlowControlService {
         if (!flowNodeService.save(flowNode)) {
             throw new IllegalStateException("流程节点执行身份保存失败: " + activeNode.getActivityId());
         }
-        OrderTask task = orderTaskMapper.selectById(taskId);
-        if (task == null) {
-            throw new NoSuchElementException("订单任务不存在: " + taskId);
-        }
+
+
         task.setProcessInstanceId(processInstanceId);
         task.setStatus(OrderTaskStatus.RUNNING);
         task.setErrorCode(null);

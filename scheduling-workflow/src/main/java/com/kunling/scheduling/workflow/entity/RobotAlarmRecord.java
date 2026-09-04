@@ -30,14 +30,17 @@ public class RobotAlarmRecord implements Serializable {
     @Schema(description = "异常分类编码")
     private String alarmCategoryCode;
 
+    @Schema(description = "处理规则id")
+    private Long handlingRuleId;
+
     @Schema(description = "处置级别：1-自动恢复，2-远程人工，3-现场人工")
     private Integer handlingLevel;
 
     @Schema(description = "流程节点ID")
     private Long nodeId;
 
-    @Schema(description = "异常发生位置编码")
-    private String locationId;
+    @Schema(description = "影响范围")
+    private String impactScope;
 
     @Schema(description = "处置状态：0-待处置，1-处置中，2-已恢复，3-处置失败，4-已关闭")
     private Integer handlingStatus;

@@ -2,6 +2,7 @@ package com.kunling.scheduling.workflow.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.kunling.scheduling.action.execution.domain.ActionExecutionReport;
+import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.NodeStateTransitionRule;
 
 
@@ -21,4 +22,6 @@ public interface NodeStateTransitionRuleService extends IService<NodeStateTransi
     void deleteRule(Long id);
 
     void statusChanged(ActionExecutionReport report);
+
+    void handleCritical(FlowNode currentNode);
 }

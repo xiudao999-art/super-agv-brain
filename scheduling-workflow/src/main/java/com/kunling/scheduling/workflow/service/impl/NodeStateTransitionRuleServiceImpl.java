@@ -11,12 +11,14 @@ import com.kunling.scheduling.workflow.dto.WorkflowResponses;
 import com.kunling.scheduling.workflow.entity.FlowNode;
 import com.kunling.scheduling.workflow.entity.NodeStateTransitionRule;
 import com.kunling.scheduling.workflow.entity.RobotAlarmRecord;
+import com.kunling.scheduling.workflow.entity.RobotInfo;
 import com.kunling.scheduling.workflow.enums.NodeState;
 import com.kunling.scheduling.workflow.enums.NodeStateEnum;
 import com.kunling.scheduling.workflow.enums.StartTypeEnum;
 import com.kunling.scheduling.workflow.mapper.FlowNodeMapper;
 import com.kunling.scheduling.workflow.mapper.NodeStateTransitionRuleMapper;
 import com.kunling.scheduling.workflow.mapper.RobotAlarmRecordMapper;
+import com.kunling.scheduling.workflow.mapper.RobotInfoMapper;
 import com.kunling.scheduling.workflow.order.application.OrderTaskOrchestrationService;
 import com.kunling.scheduling.workflow.order.domain.CustomerOrder;
 import com.kunling.scheduling.workflow.order.domain.OrderStatus;
@@ -71,6 +73,9 @@ public class NodeStateTransitionRuleServiceImpl
 
     @Resource
     private RobotAlarmRecordMapper robotAlarmRecordMapper;
+
+    @Resource
+    private RobotInfoMapper robotInfoMapper;
 
 
     @Override
@@ -204,7 +209,9 @@ public class NodeStateTransitionRuleServiceImpl
         }
     }
 
-    /** 串行流程也必须按 activityId 匹配，避免将回报推进到其他活动节点。 */
+    /**
+     * 串行流程也必须按 activityId 匹配，避免将回报推进到其他活动节点。
+     */
     private WorkflowResponses.ActiveNode requireCurrentActiveNode(FlowNode flowNode) {
         List<WorkflowResponses.ActiveNode> activeNodes =
                 workflowService.listActiveNodes(flowNode.getProcessInstanceId());
@@ -237,6 +244,11 @@ public class NodeStateTransitionRuleServiceImpl
                 customerOrder.setId(orderTask.getOrderId());
                 customerOrder.setStatus(OrderStatus.SUCCEEDED);
                 customerOrderMapper.updateById(customerOrder);
+                //更改机器人状态
+                RobotInfo robotInfo = robotInfoMapper.selectOne(Wrappers.<RobotInfo>lambdaQuery()
+                        .eq(RobotInfo::getOrderNo, customerOrder.getUpstreamOrderNo()).last("limit 1"));
+                robotInfo.setRunningStatus(0);
+                robotInfoMapper.updateById(robotInfo);
             } else {
                 //有下一个任务,执行新的流程
                 orderTaskOrchestrationService.dispatchNext();
@@ -286,7 +298,8 @@ public class NodeStateTransitionRuleServiceImpl
         // updateOrderTask(currentNode.getTaskId(), OrderTaskStatus.FAILED);
     }
 
-    private void handleCritical(FlowNode currentNode) {
+    @Override
+    public void handleCritical(FlowNode currentNode) {
         // 严重错误终止流程，尚未启动的节点统一取消。
         workflowStateService.terminate(currentNode.getProcessInstanceId(), "严重错误终止流程，尚未启动的节点统一取消");
         List<FlowNode> pendingNodes = flowNodeService.list(Wrappers.<FlowNode>lambdaQuery()
